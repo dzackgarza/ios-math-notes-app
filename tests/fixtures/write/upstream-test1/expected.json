@@ -1,0 +1,9 @@
+{
+"pages": [
+ {"elements": [
+  {"id": 0, "dx": 0, "dy": 40, "transform": [1, 0, 0, 1, 0, 40]},
+  {"id": 1, "dx": 0, "dy": 0, "transform": [1, 0, 0, 1, 0, 0]},
+  {"id": 2, "dx": 0, "dy": 40, "transform": [1, 0, 0, 1, 0, 40]}]}],
+"selected": [],
+"deleted": []
+}
