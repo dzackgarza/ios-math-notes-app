@@ -82,8 +82,8 @@ new engine code, specified by fixtures recorded from Write.
   printed page. A4 by default; the size is a notebook setting. There is no
   infinite canvas. Reflow and insert space that push ink past the bottom of
   a page move it onto the next page, adding a page when needed.
-- Pages are standalone SVG files in a notebook directory; Write documents
-  import. Storage and file format: [FORMAT.md](FORMAT.md).
+- Pages are standalone SVG files in a notebook directory.
+  Storage and file format: [FORMAT.md](FORMAT.md).
 - New features go in the engine or in a service, never in one host only.
   Layers belong to the document model; PDF import is an engine function.
 - Write fixtures: documents and input-event traces with their resulting SVG,
@@ -92,7 +92,8 @@ new engine code, specified by fixtures recorded from Write.
 
 ## Steps
 
-1. Run the Write app on Linux and record the fixtures and traces.
+1. Run the Write app on Linux and record the fixtures and traces, using the
+   comparison corpus in FORMAT.md as sample documents.
 2. Build spikes: ink-stroke-modeler, google/ink, Skia, MuPDF, Clipper2 for
    `wasm` and `ios-arm64` in CI (Linux runner for WASM, macOS runner for iOS).
 3. Engine: document model, fixed pages, strokes, selection, undo, rendering,
@@ -106,8 +107,10 @@ new engine code, specified by fixtures recorded from Write.
    void ink_redo(InkDocument *);
    void ink_render(InkCanvas *, InkRenderTarget *);
    ```
-5. Write import: converts Write `.svg`/`.svgz` documents into notebook
-   directories. Needed at launch; existing notes are in Write format.
+5. Local test deployment, used from step 6 on: a static build copied to `/var/www/math-notes`
+   and served by the local nginx at `http://localhost/math-notes/`. The
+   Firefox WebDAV bridge then runs with
+   `rclone serve webdav ~/Notes --addr 127.0.0.1:31415 --allow-origin http://localhost`.
 6. Web host: canvas, Pointer Events adapter, and the notebook-root access
    modes in FORMAT.md. Upload/download import and export always work.
 7. iPad host: Files/`UIDocument`, share sheet, lifecycle, and Pencil

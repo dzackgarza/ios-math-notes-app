@@ -16,7 +16,6 @@ These define the app. New features must not break them.
 - The pen draws; fingers pan and zoom.
 - Sync conflict copies of pages are detected and resolved side by side
   ([FORMAT.md](FORMAT.md)).
-- Import of existing Write documents.
 - Handwriting-aware reflow: line, word, and column structure of ink.
 - Insert horizontal and vertical space into existing ink.
 - Ruled erase and ruled select.
@@ -25,7 +24,7 @@ These define the app. New features must not break them.
 - Clippings library.
 - Split view of two documents.
 - SVG page backgrounds and templates.
-- Configurable pens.
+- Configurable pens, built on google/ink brushes.
 - Unlimited undo and redo.
 - PDF export.
 - Folders on the filesystem are the library. Sync is the filesystem's job (iCloud Drive,

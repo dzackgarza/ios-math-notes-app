@@ -1,4 +1,4 @@
-# ios-math-notes-app
+# math-notes-app
 
 Handwritten math notes: a C++ ink engine with a web app and an iPad app, all in this repo. Plan: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). The iPad app is developed on Linux, built by GitHub Actions, and installed with SideStore: no Mac, no App Store, free Apple Account.
 
@@ -36,7 +36,7 @@ On the iPad, open SideStore; the update shows in My Apps. Tap Update (SideStore 
 4. Open SideStore once; then Settings → Privacy & Security → Developer Mode → on, restart, Turn On.
 5. Install **LocalDevVPN** from the App Store and connect it. SideStore needs it for every install and refresh.
 6. SideStore → Settings → sign in with the same Apple Account.
-7. SideStore → Sources → + → `https://github.com/dzackgarza/ios-math-notes-app/releases/latest/download/source.json`, then install Math Notes.
+7. SideStore → Sources → + → `https://github.com/dzackgarza/math-notes-app/releases/latest/download/source.json`, then install Math Notes.
 
 For background signature refresh: Background App Refresh on for SideStore, LocalDevVPN connected.
 

@@ -84,29 +84,12 @@ a notebook directory (send, archive, download).
 
 OPFS and IndexedDB hold only caches, never notes.
 
-## Write import
+## Write comparison corpus
 
-Write's single-file `.svg`/`.svgz` documents import into a notebook
-directory. The app does not write that format. These rules come from the
-user's existing Write notes (format `write-v3`).
-
-- **Strokes.** Write already stores each stroke as a filled outline `path`
-  (`class` `write-flat-pen`, `write-chisel-pen`, `write-round-pen`, or
-  `write-stroke-pen`) with `__comx`, `__comy`, and `__timestamp` attributes
-  and no input samples. Import keeps the outline unchanged and maps those
-  attributes to the app's namespaced ones. Imported strokes keep their
-  shape; they cannot be re-modeled.
-- **Page size.** Write pages have a fixed width and grow downward, up to
-  several sheets tall. The notebook page size is the standard paper that
-  matches the Write width: 1530 px is US Letter at 180 px/in (1530 × 1980),
-  1240 px is A4 at 150 px/in (1240 × 1754).
-- **Tall pages.** A Write page taller than one sheet splits into as many
-  fixed pages as it needs. Each cut goes at the last gap between ink lines
-  above the sheet bottom, never through a stroke.
-- **Ruling.** The `write-content` group's `xruling`, `yruling`,
-  `marginLeft`, `papercolor`, and `rulecolor` become the page template.
-- **Thumbnail.** The embedded base64 `<image id="thumbnail">` is dropped;
-  thumbnails live in caches.
+The user's Write notes are in `~/Downloads/Original Notes.zip` (ten
+`write-v3` `.svgz` documents).
+They serve only to compare behavior against Write when recording fixtures,
+and stay out of this public repository.
 
 ## Conventions
 
