@@ -30,7 +30,7 @@ These define the app. New features must not break them.
 
 | # | Feature | Requirement | Mechanism |
 | --- | --- | --- | --- |
-| 1 | PDF annotation (as in Xournal++) | Open a PDF from Files or the share sheet. Its pages are page backgrounds; ink goes on top. The PDF file is never modified: the note stores a reference to it plus the annotations. Blank pages can be inserted between PDF pages. Export writes a new PDF with the original pages as vector content and the ink drawn over them. | MuPDF in the engine; share sheet and file picker in the hosts |
+| 1 | PDF annotation | Open a PDF from Files or the share sheet. Import renders each PDF page to a PNG at 2× the iPad screen resolution; that image is the page background, and ink goes on top. After import the app does not use the PDF. Blank pages can be inserted between imported pages. Export writes the pages, background images and ink, to a new PDF. | MuPDF at import; Skia PDF backend at export; share sheet and file picker in the hosts |
 | 2 | User-visible layers | Create, name, hide, show, reorder, and lock layers per document. Stored as SVG `<g>` groups. Export can include or exclude each layer. | SVG groups |
 | 3 | Shape recognition | Hold the pen at the end of a stroke to snap a rough line, circle, ellipse, rectangle, triangle, or arrow to its exact shape. Result is an SVG shape element. | Stroke classifier (for example the $1/$P recognizer family) |
 

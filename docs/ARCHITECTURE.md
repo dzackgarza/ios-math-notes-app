@@ -36,8 +36,8 @@ three targets before the engine depends on it.
 | --- | --- | --- |
 | Input smoothing and prediction | [google/ink-stroke-modeler](https://github.com/google/ink-stroke-modeler) | Apache-2.0, CMake, made for handwriting. |
 | Brush outline, stroke mesh, hit tests | [google/ink](https://github.com/google/ink) | Uses ink-stroke-modeler itself. Android-first, Bazel, unstable API: adopted only if the spike builds it for iOS and WASM. |
-| 2D rendering | [Skia](https://skia.org) | Linked into the engine on every target: Metal on iOS, WebGL/WebGPU in the WASM build. The web host calls the engine, not CanvasKit, so one render path serves both hosts. |
-| PDF render and export | [MuPDF](https://mupdf.com) | One C engine on every target, so PDF annotation and export behave the same on iPad and web. PDF pages are background references; the overlay (ink, shapes) stays app objects. |
+| 2D rendering and PDF export | [Skia](https://skia.org) | PDF export through its PDF backend. Linked into the engine on every target: Metal on iOS, WebGL/WebGPU in the WASM build. The web host calls the engine, not CanvasKit, so one render path serves both hosts. |
+| PDF import | [MuPDF](https://mupdf.com) | Renders PDF pages to PNG backgrounds at import. Used nowhere else. |
 | Polygon operations (lasso, erase regions) | [Clipper2](https://github.com/AngusJohnson/Clipper2) | Only where google/ink geometry does not cover it. |
 | Tests | Catch2 | Engine unit tests and trace tests, run on native and WASM builds. |
 
@@ -83,7 +83,7 @@ new engine code, specified by fixtures recorded from Write.
 - Pages are standalone SVG files in a notebook directory; Write documents import.
   Storage and file format: [FORMAT.md](FORMAT.md).
 - New features go in the engine or in a service, never in one host only.
-  PDF and layers belong to the document model.
+  Layers belong to the document model; PDF import is an engine function.
 - Write fixtures: documents and input-event traces with their resulting SVG,
   for reflow, ruled selection, free erase, line insertion, clipping, undo,
   and stroke serialization. The engine must reproduce the behavior.
@@ -111,7 +111,7 @@ new engine code, specified by fixtures recorded from Write.
 6. iPad host: Files/`UIDocument`, share sheet, lifecycle, and Pencil
    interactions. Replaces the current SwiftUI placeholder; the SideStore
    release pipeline stays.
-7. Services the hosts supply: Storage (the notebook root), Clipboard, PDF, Images.
+7. Services the hosts supply: Storage (the notebook root), Clipboard, Images.
 8. After Write parity, add the features in [FEATURES.md](FEATURES.md) in
    their listed order.
 
@@ -119,7 +119,7 @@ new engine code, specified by fixtures recorded from Write.
 
 ```text
 core/      document/ strokes/ reflow/ selection/ undo/ render/ io/
-services/  pdf/ storage/
+services/  storage/
 hosts/     web/{wasm,shell}/  ios/{Swift,CoreBridge}/  linux/
 tests/     documents/ input-traces/
 .github/workflows/  linux.yml wasm.yml ios.yml

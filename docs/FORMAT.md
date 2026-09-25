@@ -9,7 +9,7 @@ directory (Dropbox, iCloud Drive, Nextcloud, git, rsync) moves it from there.
 
 1. Every page is a valid standalone SVG file, and opening it in a browser
    with no app code shows the ink.
-2. Every other object is a file in a documented standard format (PDF, PNG,
+2. Every other object is a file in a documented standard format (PNG,
    JPEG, SVG, JSON).
 3. The notebook is fully rebuilt from its directory. Caches (thumbnails,
    render caches) are disposable, and deleting them loses nothing.
@@ -31,7 +31,7 @@ Notes/                         root the user picked
         │   ├── 0001.svg
         │   └── 0002.svg
         └── assets/
-            ├── paper.pdf
+            ├── p0017.png
             └── diagram.png
 ```
 
@@ -44,7 +44,7 @@ Notes/                         root the user picked
   "title": "Stable pairs",
   "pages": [
     { "id": "c718…", "file": "pages/0001.svg" },
-    { "id": "9a02…", "file": "pages/0002.svg", "pdf": { "file": "assets/paper.pdf", "page": 17 } }
+    { "id": "9a02…", "file": "pages/0002.svg" }
   ]
 }
 ```
@@ -66,10 +66,8 @@ conflict. Assets are separate files, not base64 inside SVG.
 - Deterministic serialization: fixed element and attribute order, fixed
   number formatting, no whitespace churn, no generated thumbnails in the
   file. Diffs, git, and sync history stay readable.
-- A PDF-backed page stores its PDF reference in `notebook.json`. The PDF is a
-  read-only underlay: the app draws it under the ink and never modifies,
-  converts, or copies it. Opened alone
-  in a browser, such a page shows the ink without the PDF page underneath.
+- An imported PDF page is an `<image>` of its PNG in `assets/`, below the
+  ink layers.
 
 Plain `.svg` only; `.svgz` is not written. ZIP is only a transport form of
 a notebook directory (send, archive, download).
