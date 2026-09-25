@@ -2,7 +2,7 @@ find_package(Catch2 3 CONFIG REQUIRED)
 include(Catch)
 
 add_executable(ink_tests test_version.cpp test_pdf.cpp test_ink.cpp test_document.cpp test_editor.cpp
-  test_render.cpp test_abi.cpp
+  test_render.cpp test_abi.cpp test_pages.cpp
   support/trace.cpp support/notebook_dir.cpp)
 target_include_directories(ink_tests PRIVATE . ../src)
 target_compile_definitions(ink_tests PRIVATE
@@ -28,5 +28,14 @@ target_include_directories(write_documents PRIVATE . ../src)
 target_link_libraries(write_documents PRIVATE ink)
 if(EMSCRIPTEN)
   target_link_options(write_documents PRIVATE
+    -sENVIRONMENT=node -sNODERAWFS=1 -sEXIT_RUNTIME=1 -sALLOW_MEMORY_GROWTH=1)
+endif()
+
+# Writes core/tests/fixtures/templates (just template-fixtures).
+add_executable(write_templates write_templates.cpp support/notebook_dir.cpp)
+target_include_directories(write_templates PRIVATE . ../src)
+target_link_libraries(write_templates PRIVATE ink)
+if(EMSCRIPTEN)
+  target_link_options(write_templates PRIVATE
     -sENVIRONMENT=node -sNODERAWFS=1 -sEXIT_RUNTIME=1 -sALLOW_MEMORY_GROWTH=1)
 endif()

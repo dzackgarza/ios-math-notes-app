@@ -70,7 +70,10 @@ class Renderer {
   // Brings the content surface up to date with `document` in `view`.
   // `live_changed` says the live stroke's geometry changed. Returns whether
   // the screen needs a new frame.
-  bool Update(const Document &document, const View &view, bool live_changed);
+  // `ghost`, when given, is drawn faded after the last page (Write draws the
+  // ghost page at 25 % opacity: syncscribble/scribblearea.cpp:2631).
+  bool Update(const Document &document, const View &view, bool live_changed,
+              const Page *ghost = nullptr);
 
   // Draws the content surface and then the live stroke onto `screen`.
   void Draw(SkCanvas *screen, const LiveInk *live);
@@ -109,6 +112,7 @@ class Renderer {
   std::map<const Element *, CachedElement> elements_;
   sk_sp<SkSurface> content_;
   std::optional<Document> document_;
+  std::optional<Page> ghost_;
   std::vector<PagePlacement> layout_;
   View view_;
   bool screen_stale_ = true;

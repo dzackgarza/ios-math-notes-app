@@ -12,13 +12,16 @@ import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 
 const root = resolve(import.meta.dirname, "../../..");
-const written = join(root, "core/tests/fixtures/documents");
-const sources = join(root, "tests/documents");
-const out = join(root, "core/tests/fixtures/render");
+// Written notebooks, the notebooks whose assets they reference, and where
+// their goldens go.
+const sets = [
+  { written: join(root, "core/tests/fixtures/documents"), sources: join(root, "tests/documents"), out: join(root, "core/tests/fixtures/render") },
+  { written: join(root, "core/tests/fixtures/templates"), sources: join(root, "core/tests/fixtures/templates"), out: join(root, "core/tests/fixtures/render/templates") },
+];
 
 const browser = await chromium.launch();
 const page = await browser.newPage({ deviceScaleFactor: 1 });
-for (const notebook of readdirSync(written)) {
+for (const { written, sources, out } of sets) for (const notebook of readdirSync(written)) {
   const pages = join(written, notebook, "pages");
   // Listed pages only: the engine lays out and draws no others.
   const listed = JSON.parse(readFileSync(join(written, notebook, "notebook.json"), "utf8")).pages;
@@ -36,7 +39,8 @@ for (const notebook of readdirSync(written)) {
         const canvas = document.createElement("canvas");
         canvas.width = Math.floor(width);
         canvas.height = Math.floor(height);
-        canvas.getContext("2d").drawImage(image, 0, 0, width, height);
+        // CPU rasterization, as the engine's raster surface.
+        canvas.getContext("2d", { willReadFrequently: true }).drawImage(image, 0, 0, width, height);
         return canvas.toDataURL("image/png").split(",")[1];
       },
       { svg: Buffer.from(svg).toString("base64"), width, height },

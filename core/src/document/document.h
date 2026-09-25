@@ -127,6 +127,7 @@ struct RulingPath {
   std::vector<Polyline> d;  // open polylines
   Rgb stroke;
   double stroke_width = 0;
+  bool round_caps = false;  // stroke-linecap="round": dots are zero-length subpaths
   bool operator==(const RulingPath &) const = default;
 };
 

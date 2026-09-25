@@ -28,6 +28,9 @@ struct Pen {
 // "pressure-pen", "marker", "highlighter": the family names in mn:brush.
 const char *BrushName(InkBrush brush);
 
+// A view point in content coordinates, through the inverse of `view`.
+Point ToContent(const Transform &view, double x, double y);
+
 // google/ink stock brush for a pen, epsilon 0.01 pt.
 ink::Brush MakeBrush(const Pen &pen);
 

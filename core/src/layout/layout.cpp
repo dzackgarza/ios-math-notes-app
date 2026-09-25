@@ -29,3 +29,14 @@ const PagePlacement *PageAt(const std::vector<PagePlacement> &layout, double y) 
 }
 
 }  // namespace ink_engine
+
+namespace ink_engine {
+
+PagePlacement GhostPlacement(const std::vector<PagePlacement> &layout, double width, double height) {
+  double content_width = layout.empty() ? width : 0, y = 0;
+  for (const PagePlacement &p : layout) content_width = std::max(content_width, p.width);
+  if (!layout.empty()) y = layout.back().y + layout.back().height + kPageGap;
+  return {layout.empty() ? 0 : layout.back().page + 1, (content_width - width) / 2, y, width, height};
+}
+
+}  // namespace ink_engine

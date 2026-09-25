@@ -8,24 +8,12 @@
 #include <nlohmann/json.hpp>
 
 #include "editor/canvas.h"
+#include "document/templates.h"
 #include "format/notebook.h"
+#include "format/page_svg.h"
 #include "layout/layout.h"
 #include "include/core/SkData.h"
 #include "include/core/SkSurface.h"
-
-namespace ink_engine {
-
-Document NewNotebook(IdGenerator &ids) {
-  Document document;
-  document.notebook.layers.push_back({.id = ids.LayerId(), .name = "Ink"});
-  Page page{.id = ids.PageId(), .file = "pages/0001.svg", .width = 595.28, .height = 841.89};
-  page.background.y_ruling = 28.8;  // Write's blankYRuling
-  page.layers.push_back({.layer_id = document.notebook.layers[0].id});
-  document.pages = document.pages.push_back(immer::box<Page>(std::move(page)));
-  return document;
-}
-
-}  // namespace ink_engine
 
 namespace {
 
@@ -56,6 +44,19 @@ InkStatus NullArgument(const char *name) {
 
 std::string_view Bytes(const uint8_t *bytes, size_t size) {
   return {reinterpret_cast<const char *>(bytes), size};
+}
+
+InkStatus BadPageIndex() { return Fail(INK_ERROR_ARGUMENT, "page index out of range"); }
+
+// The page a new page would be: drawn as the ghost page after the last one.
+ink_engine::Page GhostPage(const InkDocument &document) {
+  return ink_engine::NewPage(document.history.current(), document.template_page);
+}
+
+ink_engine::PagePlacement GhostPlacement(const InkDocument &document,
+                                         const std::vector<ink_engine::PagePlacement> &layout) {
+  ink_engine::Page ghost = GhostPage(document);
+  return ink_engine::GhostPlacement(layout, ghost.width, ghost.height);
 }
 
 InkStatus AttachSurface(InkDocument *document, std::unique_ptr<ink_engine::HostSurface> surface,
@@ -133,10 +134,14 @@ InkStatus ink_document_dirty_files(InkDocument *document, const InkFile **files,
     const ink_engine::DocumentHistory &history = document->history;
     ink_engine::NotebookFiles changed = ink_engine::ChangedFiles(history.current(), history.saved());
     document->dirty.assign(changed.begin(), changed.end());
+    document->dirty_removed = ink_engine::RemovedFiles(history.current(), history.saved());
     document->dirty_view.clear();
     for (const auto &[path, bytes] : document->dirty) {
       document->dirty_view.push_back({path.c_str(), reinterpret_cast<const uint8_t *>(bytes.data()),
-                                      bytes.size()});
+                                      bytes.size(), INK_FILE_WRITE});
+    }
+    for (const std::string &path : document->dirty_removed) {
+      document->dirty_view.push_back({path.c_str(), nullptr, 0, INK_FILE_DELETE});
     }
     *files = document->dirty_view.data();
     *count = document->dirty_view.size();
@@ -158,9 +163,123 @@ InkStatus ink_document_content_size(InkDocument *document, double *width, double
     if (!width || !height) return NullArgument("width or height");
     std::vector<ink_engine::PagePlacement> layout =
         ink_engine::LayoutPages(document->history.current());
-    *width = 0;
-    *height = layout.empty() ? 0 : layout.back().y + layout.back().height;
+    ink_engine::PagePlacement ghost = GhostPlacement(*document, layout);
+    *width = ghost.width;
     for (const auto &page : layout) *width = std::max(*width, page.width);
+    *height = ghost.y + ghost.height;
+    return INK_OK;
+  });
+}
+
+// ---- Pages and templates -------------------------------------------------
+
+InkStatus ink_document_page_count(InkDocument *document, size_t *count) {
+  return Call([&] {
+    if (!document) return NullArgument("document");
+    if (!count) return NullArgument("count");
+    *count = ink_engine::ListedPageCount(document->history.current());
+    return INK_OK;
+  });
+}
+
+InkStatus ink_document_insert_page(InkDocument *document, size_t index) {
+  return Call([&] {
+    if (!document) return NullArgument("document");
+    ink_engine::DocumentHistory &history = document->history;
+    if (index > ink_engine::ListedPageCount(history.current())) return BadPageIndex();
+    history.Push(ink_engine::InsertPage(history.current(), index, history.ids(),
+                                        document->template_page));
+    return INK_OK;
+  });
+}
+
+InkStatus ink_document_delete_page(InkDocument *document, size_t index) {
+  return Call([&] {
+    if (!document) return NullArgument("document");
+    ink_engine::DocumentHistory &history = document->history;
+    if (index >= ink_engine::ListedPageCount(history.current())) return BadPageIndex();
+    history.Push(ink_engine::DeletePage(history.current(), index));
+    return INK_OK;
+  });
+}
+
+InkStatus ink_document_move_page(InkDocument *document, size_t from, size_t to) {
+  return Call([&] {
+    if (!document) return NullArgument("document");
+    ink_engine::DocumentHistory &history = document->history;
+    size_t count = ink_engine::ListedPageCount(history.current());
+    if (from >= count || to >= count) return BadPageIndex();
+    if (from != to) history.Push(ink_engine::MovePage(history.current(), from, to));
+    return INK_OK;
+  });
+}
+
+InkStatus ink_document_set_page_size(InkDocument *document, InkPageSize size, double width,
+                                     double height) {
+  return Call([&] {
+    if (!document) return NullArgument("document");
+    ink_engine::PageSize page_size;
+    switch (size) {
+      case INK_PAGE_A4: page_size = std::string("A4"); break;
+      case INK_PAGE_LETTER: page_size = std::string("Letter"); break;
+      case INK_PAGE_CUSTOM:
+        if (!(width > 0 && height > 0)) return Fail(INK_ERROR_ARGUMENT, "non-positive page size");
+        page_size = std::array<double, 2>{width, height};
+        break;
+      default: return Fail(INK_ERROR_ARGUMENT, "unknown page size");
+    }
+    ink_engine::DocumentHistory &history = document->history;
+    if (history.current().notebook.page_size == page_size) return INK_OK;
+    history.Push(ink_engine::SetPageSize(history.current(), std::move(page_size)));
+    return INK_OK;
+  });
+}
+
+InkStatus ink_document_set_template(InkDocument *document, const char *name, const uint8_t *svg,
+                                    size_t size) {
+  return Call([&] {
+    if (!document) return NullArgument("document");
+    if (!name) return NullArgument("name");
+    if (!svg && size) return NullArgument("svg");
+    ink_engine::Page page = ink_engine::ReadPage(Bytes(svg, size), "pages/0001.svg", {});
+    if (page.error) return Fail(INK_ERROR_PARSE, std::string(name) + ": " + *page.error);
+    document->template_page = std::move(page);
+    ink_engine::DocumentHistory &history = document->history;
+    if (history.current().notebook.template_name != name) {
+      ink_engine::Document next = history.current();
+      next.notebook.template_name = name;
+      history.Push(std::move(next));
+    }
+    return INK_OK;
+  });
+}
+
+InkStatus ink_builtin_template_count(size_t *count) {
+  return Call([&] {
+    if (!count) return NullArgument("count");
+    *count = ink_engine::BuiltinTemplates().size();
+    return INK_OK;
+  });
+}
+
+InkStatus ink_builtin_template_name(size_t index, const char **name) {
+  return Call([&] {
+    if (!name) return NullArgument("name");
+    const auto &templates = ink_engine::BuiltinTemplates();
+    if (index >= templates.size()) return Fail(INK_ERROR_ARGUMENT, "no such built-in template");
+    *name = templates[index].name;
+    return INK_OK;
+  });
+}
+
+InkStatus ink_builtin_template_create(const char *name, uint64_t seed, InkDocument **out) {
+  return Call([&] {
+    if (!name) return NullArgument("name");
+    if (!out) return NullArgument("out");
+    ink_engine::IdGenerator ids(seed);
+    std::optional<ink_engine::Document> document = ink_engine::BuiltinTemplateNotebook(name, ids);
+    if (!document) return Fail(INK_ERROR_ARGUMENT, std::string("no built-in template ") + name);
+    *out = new InkDocument{ink_engine::DocumentHistory(std::move(*document), seed + 1)};
     return INK_OK;
   });
 }
@@ -243,6 +362,25 @@ InkStatus ink_canvas_set_utc_offset(InkCanvas *canvas, double utc_minus_host_ms)
   });
 }
 
+InkStatus ink_canvas_page_at(InkCanvas *canvas, double x, double y, int32_t *page) {
+  return Call([&] {
+    if (!canvas) return NullArgument("canvas");
+    if (!page) return NullArgument("page");
+    ink_engine::Point at = ink_engine::ToContent(canvas->editor.view(), x, y);
+    auto contains = [&](const ink_engine::PagePlacement &p) {
+      return at.x >= p.x && at.x <= p.x + p.width && at.y >= p.y && at.y <= p.y + p.height;
+    };
+    std::vector<ink_engine::PagePlacement> layout =
+        ink_engine::LayoutPages(canvas->document->history.current());
+    *page = -1;
+    for (size_t i = 0; i < layout.size(); ++i) {
+      if (contains(layout[i])) *page = int32_t(i);
+    }
+    if (contains(GhostPlacement(*canvas->document, layout))) *page = int32_t(layout.size());
+    return INK_OK;
+  });
+}
+
 InkStatus ink_canvas_free(InkCanvas *canvas) {
   return Call([&] {
     delete canvas;
@@ -285,7 +423,8 @@ InkStatus ink_render(InkCanvas *canvas, int32_t *drew) {
     bool live_changed = !editor.TakeUpdatedRegion().IsEmpty() || drawing != canvas->was_drawing;
     canvas->was_drawing = drawing;
     ink_engine::View view{editor.view(), canvas->pixel_ratio, canvas->width, canvas->height};
-    if (!canvas->renderer->Update(editor.document(), view, live_changed)) return INK_OK;
+    ink_engine::Page ghost = GhostPage(*canvas->document);
+    if (!canvas->renderer->Update(editor.document(), view, live_changed, &ghost)) return INK_OK;
     SkSurface *screen = canvas->surface->BeginFrame(canvas->width, canvas->height);
     if (!screen) return Fail(INK_ERROR_GPU, "the host surface gave no frame");
     std::optional<ink_engine::LiveInk> live;
@@ -346,7 +485,7 @@ InkStatus ink_struct_layout(InkStruct which, uint32_t *out, size_t capacity, siz
         break;
       case INK_STRUCT_FILE:
         layout = {sizeof(InkFile), offsetof(InkFile, path), offsetof(InkFile, bytes),
-                  offsetof(InkFile, size)};
+                  offsetof(InkFile, size), offsetof(InkFile, kind)};
         break;
       default:
         return Fail(INK_ERROR_ARGUMENT, "unknown struct");

@@ -23,6 +23,11 @@ struct PagePlacement {
 // Listed pages in order; unlisted pages are not laid out.
 std::vector<PagePlacement> LayoutPages(const Document &document);
 
+// The ghost page after the last page, `width` × `height`, centered on the
+// widest page (Write syncscribble/scribblearea.cpp:196-214 with
+// pagenum == numPages(), and :1891-1900).
+PagePlacement GhostPlacement(const std::vector<PagePlacement> &layout, double width, double height);
+
 // The placement a pen-down at content height y draws on: the page whose
 // band, including half the gap on each side, holds y; the first or last page
 // beyond the ends.

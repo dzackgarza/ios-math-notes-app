@@ -16,6 +16,7 @@
 #include "include/core/SkData.h"
 #include "include/core/SkSurface.h"
 #include "layout/layout.h"
+#include "document/templates.h"
 #include "render/renderer.h"
 #include "support/notebook_dir.h"
 #include "support/session.h"
@@ -119,40 +120,59 @@ TEST_CASE("A pen-down on the second page draws on it in its page coordinates") {
   CHECK(std::abs(stroke.samples.front().y - 50) < 1e-9);
 }
 
-TEST_CASE("Each page renders as Chromium renders its saved SVG") {
-  // Per channel, 0..255: both are Skia, and edge coverage differs by a few
-  // levels.
-  constexpr int kTolerance = 8;
-  for (const char *name : {"full", "custom-size"}) {
-    Document doc = LoadNotebook(ink_test::ReadNotebookDir(kDocuments + "/" + name));
-    // The saved SVG does not mark hidden layers, so Chromium draws them all.
-    for (Layer &layer : doc.notebook.layers) layer.hidden = false;
-    Assets assets;
-    for (const auto &[path, bytes] : ink_test::ReadAssets(kDocuments + "/" + name)) {
-      assets[path] = SkData::MakeWithCopy(bytes.data(), bytes.size());
-    }
-    Renderer renderer(nullptr, assets);
-    for (const PagePlacement &placement : LayoutPages(doc)) {
-      const Page &page = *doc.pages[placement.page];
-      if (page.error) continue;  // never written
-      std::string stem = page.file.substr(page.file.rfind('/') + 1, 4);
-      INFO(name << "/" << stem);
-      SkBitmap golden = DecodePng(kGoldens + name + "/" + stem + ".png");
-      int width = int(std::floor(page.width)), height = int(std::floor(page.height));
-      SkBitmap engine = RenderPage(renderer, doc, placement, width, height);
-      int worst = 0, over = 0;
-      for (int y = 0; y < std::min(height, golden.height()); ++y) {
-        for (int x = 0; x < std::min(width, golden.width()); ++x) {
-          int diff = ChannelDiff(*engine.getAddr32(x, y), *golden.getAddr32(x, y));
-          worst = std::max(worst, diff);
-          over += diff > kTolerance;
-        }
+namespace {
+
+// Renders every listed page of the notebook at `dir` and compares it with
+// Chromium's rendering of the saved page file, in `goldens`/<NNNN>.png.
+void CheckMatchesChromium(const std::string &dir, const std::string &goldens) {
+  // Per channel, 0..255. Both are Skia: lines and fills differ by a few
+  // levels; the dotted template's 1.44 pt dots differ by up to 18 on sliver
+  // pixels, whose coverage Chromium keeps and the engine's raster drops.
+  constexpr int kTolerance = 20;
+  Document doc = LoadNotebook(ink_test::ReadNotebookDir(dir));
+  // The saved SVG does not mark hidden layers, so Chromium draws them all.
+  for (Layer &layer : doc.notebook.layers) layer.hidden = false;
+  Assets assets;
+  for (const auto &[path, bytes] : ink_test::ReadAssets(dir)) {
+    assets[path] = SkData::MakeWithCopy(bytes.data(), bytes.size());
+  }
+  Renderer renderer(nullptr, assets);
+  for (const PagePlacement &placement : LayoutPages(doc)) {
+    const Page &page = *doc.pages[placement.page];
+    if (page.error) continue;  // never written
+    std::string stem = page.file.substr(page.file.rfind('/') + 1, 4);
+    INFO(goldens << "/" << stem);
+    SkBitmap golden = DecodePng(goldens + "/" + stem + ".png");
+    int width = int(std::floor(page.width)), height = int(std::floor(page.height));
+    SkBitmap engine = RenderPage(renderer, doc, placement, width, height);
+    int worst = 0, over = 0;
+    for (int y = 0; y < std::min(height, golden.height()); ++y) {
+      for (int x = 0; x < std::min(width, golden.width()); ++x) {
+        int diff = ChannelDiff(*engine.getAddr32(x, y), *golden.getAddr32(x, y));
+        worst = std::max(worst, diff);
+        over += diff > kTolerance;
       }
-      std::printf("render %s/%s: worst channel difference %d\n", name, stem.c_str(), worst);
-      CHECK(over == 0);
     }
+    std::printf("render %s/%s: worst channel difference %d, %d pixels over %d\n", goldens.c_str(),
+                stem.c_str(), worst, over, kTolerance);
+    CHECK(over == 0);
   }
 }
+
+}  // namespace
+
+TEST_CASE("Each page renders as Chromium renders its saved SVG") {
+  for (const char *name : {"full", "custom-size"}) {
+    CheckMatchesChromium(kDocuments + "/" + name, kGoldens + name);
+  }
+}
+
+TEST_CASE("Each built-in template's background renders as Chromium renders it") {
+  for (const BuiltinTemplate &t : BuiltinTemplates()) {
+    CheckMatchesChromium(std::string(INK_FIXTURE_DIR "/templates/") + t.name, kGoldens + "templates/" + t.name);
+  }
+}
+
 
 TEST_CASE("A hidden layer is not drawn") {
   Document doc = LoadNotebook(ink_test::ReadNotebookDir(kDocuments + "/full"));

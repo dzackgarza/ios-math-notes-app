@@ -48,7 +48,7 @@ Notes/                         root the user picked
   "version": 1,
   "title": "Stable pairs",
   "pageSize": "A4",
-  "template": "ruled-medium",
+  "template": "lined-medium",
   "layers": [
     { "id": "l-8f3kq0", "name": "Ink", "hidden": false, "locked": false }
   ],
@@ -64,7 +64,7 @@ Notes/                         root the user picked
 - `layers` is the notebook's layer list, bottom to top. A notebook has at
   least one layer.
 - `pages` gives the page order. Moving a page reorders this array; files
-  are never renamed.
+  are never renamed. Deleting a page removes its entry and its file.
 - Keys are written in the order shown, two-space indent, one trailing
   newline.
 
@@ -197,9 +197,11 @@ a notebook directory (send, archive, download).
   `{ "id", "name", "brush", "brushVersion", "color", "size" }`, in toolbar
   order.
 - `Notes/.templates/<name>/`: a notebook directory. Page 1's background is
-  the template. The app creates `blank`, `lined` (wide, medium, narrow:
-  y-ruling 21.6, 19.2, 16.8 pt; margin 48 pt), `grid` (16.8, 14.4, 9.6 pt)
-  and `dotted` templates on first use, from Write's ruling presets.
+  the template. The app creates `blank`, `lined-wide`, `lined-medium`,
+  `lined-narrow` (y-ruling 21.6, 19.2, 16.8 pt; margin 48 pt),
+  `grid-coarse`, `grid-medium`, `grid-fine` (16.8, 14.4, 9.6 pt) and
+  `dotted` (16.8 pt) on first use, from Write's ruling presets. Rules are
+  0.48 pt wide; dots are zero-length subpaths with `stroke-linecap="round"`.
 - `Notes/.clippings/`: a notebook directory; each page is one clipping,
   sized to its content.
 

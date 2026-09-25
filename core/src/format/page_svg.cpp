@@ -290,7 +290,8 @@ Background ReadBackground(const pugi::xml_node &g) {
       bg.fill = ReadColor(node.attribute("fill").value());
     } else if (tag == "path") {
       bg.lines.push_back({ReadPathData(node.attribute("d").value()),
-                          ReadColor(node.attribute("stroke").value()), Num(node, "stroke-width")});
+                          ReadColor(node.attribute("stroke").value()), Num(node, "stroke-width"),
+                          std::string_view(node.attribute("stroke-linecap").value()) == "round"});
     }
   }
   return bg;
@@ -586,6 +587,7 @@ std::string WritePage(const Page &page) {
     Set(path, "fill", "none");
     Set(path, "stroke", WriteColor(line.stroke));
     Set(path, "stroke-width", Coord(line.stroke_width));
+    if (line.round_caps) Set(path, "stroke-linecap", "round");
   }
 
   for (const LayerContent &layer : page.layers) {

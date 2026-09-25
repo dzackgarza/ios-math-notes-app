@@ -123,6 +123,17 @@ NotebookFiles ChangedFiles(const Document &current, const Document *saved) {
   return changed;
 }
 
+std::vector<std::string> RemovedFiles(const Document &current, const Document *saved) {
+  std::vector<std::string> removed;
+  if (!saved) return removed;
+  std::set<std::string> kept;
+  for (const auto &page : current.pages) kept.insert(page->file);
+  for (const auto &page : saved->pages) {
+    if (!page->error && !kept.contains(page->file)) removed.push_back(page->file);
+  }
+  return removed;
+}
+
 NotebookFiles AllFiles(const Document &document) { return ChangedFiles(document, nullptr); }
 
 std::string NextPageFile(const Document &document) {

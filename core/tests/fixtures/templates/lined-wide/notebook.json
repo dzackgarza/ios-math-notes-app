@@ -1,0 +1,21 @@
+{
+  "format": "math-notes",
+  "version": 1,
+  "title": "lined-wide",
+  "pageSize": "A4",
+  "template": "lined-wide",
+  "layers": [
+    {
+      "id": "l-io2oyj",
+      "name": "Ink",
+      "hidden": false,
+      "locked": false
+    }
+  ],
+  "pages": [
+    {
+      "id": "p-ujaqa3",
+      "file": "pages/0001.svg"
+    }
+  ]
+}
