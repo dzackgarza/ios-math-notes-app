@@ -39,40 +39,50 @@ PageSize ReadPageSize(const Json &json) {
 
 }  // namespace
 
-Document LoadNotebook(const NotebookFiles &files) {
+Document ReadNotebookJson(std::string_view bytes) {
   Document document;
-  std::vector<std::pair<std::string, std::string>> listed;  // id, file
-  auto notebook_json = files.find("notebook.json");
-  if (notebook_json != files.end()) {
-    Json json = Json::parse(notebook_json->second);
-    Notebook &nb = document.notebook;
-    nb.title = json.value("title", "");
-    nb.page_size = ReadPageSize(json.value("pageSize", Json("A4")));
-    nb.template_name = json.value("template", "");
-    for (const Json &layer : json.value("layers", Json::array())) {
-      nb.layers.push_back({layer.value("id", ""), layer.value("name", ""),
-                           layer.value("hidden", false), layer.value("locked", false)});
-    }
-    for (const Json &page : json.value("pages", Json::array())) {
-      listed.push_back({page.value("id", ""), page.value("file", "")});
-    }
+  Json json = Json::parse(bytes);
+  Notebook &nb = document.notebook;
+  nb.title = json.value("title", "");
+  nb.page_size = ReadPageSize(json.value("pageSize", Json("A4")));
+  nb.template_name = json.value("template", "");
+  for (const Json &layer : json.value("layers", Json::array())) {
+    nb.layers.push_back({layer.value("id", ""), layer.value("name", ""),
+                         layer.value("hidden", false), layer.value("locked", false)});
   }
+  for (const Json &page : json.value("pages", Json::array())) {
+    Page listed{.id = page.value("id", ""), .file = page.value("file", ""),
+                .error = "missing file"};
+    document.pages = std::move(document.pages).push_back(immer::box<Page>(std::move(listed)));
+  }
+  return document;
+}
 
-  std::vector<std::string> layer_ids = LayerIds(document.notebook);
-  std::set<std::string> listed_files;
-  for (const auto &[id, file] : listed) {
-    listed_files.insert(file);
-    auto bytes = files.find(file);
-    Page page = bytes == files.end() ? Page{.id = id, .file = file, .error = "missing file"}
-                                     : ReadPage(bytes->second, file, layer_ids);
-    if (page.id.empty()) page.id = id;
-    document.pages = std::move(document.pages).push_back(immer::box<Page>(std::move(page)));
+const Page &AddPage(Document &document, const std::string &file, std::string_view bytes) {
+  Page page = ReadPage(bytes, file, LayerIds(document.notebook));
+  for (size_t i = 0; i < document.pages.size(); ++i) {
+    const Page &listed = *document.pages[i];
+    if (listed.unlisted || listed.file != file) continue;
+    if (page.id.empty()) page.id = listed.id;
+    document.pages = document.pages.set(i, immer::box<Page>(std::move(page)));
+    return *document.pages[i];
   }
-  for (const auto &[path, bytes] : files) {  // std::map: sorted by name
-    if (!IsPageFile(path) || listed_files.contains(path)) continue;
-    Page page = ReadPage(bytes, path, layer_ids);
-    page.unlisted = true;
-    document.pages = std::move(document.pages).push_back(immer::box<Page>(std::move(page)));
+  // Unlisted pages follow the listed ones, sorted by file name.
+  page.unlisted = true;
+  size_t at = document.pages.size();
+  while (at > 0 && document.pages[at - 1]->unlisted && document.pages[at - 1]->file > file) --at;
+  document.pages = document.pages.insert(at, immer::box<Page>(std::move(page)));
+  return *document.pages[at];
+}
+
+Document LoadNotebook(const NotebookFiles &files) {
+  auto notebook_json = files.find("notebook.json");
+  Document document =
+      notebook_json == files.end() ? Document{} : ReadNotebookJson(notebook_json->second);
+  std::set<std::string> listed;
+  for (const auto &page : document.pages) listed.insert(page->file);
+  for (const auto &[path, bytes] : files) {
+    if (listed.contains(path) || IsPageFile(path)) AddPage(document, path, bytes);
   }
   return document;
 }

@@ -31,6 +31,7 @@ add_library(ink STATIC
   src/format/notebook.cpp
   src/strokes/outline.cpp
   src/editor/editor.cpp
+  src/editor/history.cpp
   src/layout/layout.cpp
   src/render/renderer.cpp)
 target_include_directories(ink PUBLIC include src)

@@ -93,10 +93,6 @@ ink::Brush MakeBrush(const Pen &pen) {
   return *ink::Brush::Create(family, color, pen.size, kBrushEpsilon);
 }
 
-Editor::Editor(Document document, uint64_t id_seed) : ids_(id_seed) {
-  history_.push_back(std::move(document));
-}
-
 Point ToContent(const Transform &view, double x, double y) {
   Transform inverse = Inverse(view);
   return {inverse.a * x + inverse.c * y + inverse.e, inverse.b * x + inverse.d * y + inverse.f};
@@ -199,7 +195,7 @@ void Editor::Commit() {
                                : live.stroke.CopyToStroke();
   if (ink_stroke.GetInputs().IsEmpty()) return;
 
-  std::string id = ids_.StrokeId();
+  std::string id = history_->ids().StrokeId();
   Stroke element = MakeElement(id, ink_stroke, live.pen, live.t0, live.real);
   Document next = document();
   Page page = *next.pages[page_];
@@ -210,7 +206,7 @@ void Editor::Commit() {
   elements = live.pen.brush == INK_BRUSH_HIGHLIGHTER ? std::move(elements).push_front(box)
                                                      : std::move(elements).push_back(box);
   next.pages = next.pages.set(page_, immer::box<Page>(std::move(page)));
-  Push(std::move(next));
+  history_->Push(std::move(next));
   committed_.push_back({id, page_, layer_, live.t0, live.pen, live.origin, std::move(live.real)});
 }
 
@@ -270,7 +266,7 @@ void Editor::InputUpdate(const InkPenSample *samples, size_t count) {
     if (!ReplaceStroke(page.layers[c.layer].elements, c.id, element)) continue;
     next.pages = next.pages.set(c.page, immer::box<Page>(std::move(page)));
   }
-  Push(std::move(next));
+  history_->Push(std::move(next));
 }
 
 std::vector<Polyline> Editor::LiveOutline() const {
@@ -282,12 +278,6 @@ ink::Envelope Editor::TakeUpdatedRegion() {
   ink::Envelope region = live_->stroke.GetUpdatedRegion();
   live_->stroke.ResetUpdatedRegion();
   return region;
-}
-
-void Editor::Push(Document next) {
-  history_.resize(index_ + 1);  // a new step drops the redo branch
-  history_.push_back(std::move(next));
-  index_ = history_.size() - 1;
 }
 
 }  // namespace ink_engine

@@ -120,25 +120,18 @@ void CollectElements(const Elements &elements, std::unordered_set<const Element 
 
 }  // namespace
 
-void Renderer::SetAsset(const std::string &path, sk_sp<SkData> bytes) {
-  asset_bytes_[path] = std::move(bytes);
-  images_.erase(path);
-}
-
 sk_sp<SkImage> Renderer::Asset(const std::string &page_file, const std::string &href) {
   std::string path = NotebookPath(page_file, href);
-  auto cached = images_.find(path);
-  if (cached != images_.end()) return cached->second;
-  sk_sp<SkImage> image;
-  auto bytes = asset_bytes_.find(path);
-  if (bytes != asset_bytes_.end()) {
-    if (auto codec = SkPngDecoder::Decode(bytes->second, nullptr, nullptr)) {
-      image = std::get<0>(codec->getImage());
-    }
-  }
+  auto bytes = assets_->find(path);
   // A missing or undecodable file draws nothing, as in an SVG viewer.
-  images_[path] = image;
-  return image;
+  if (bytes == assets_->end()) return nullptr;
+  DecodedAsset &decoded = images_[path];
+  if (decoded.bytes != bytes->second) {
+    decoded.bytes = bytes->second;
+    auto codec = SkPngDecoder::Decode(bytes->second, nullptr, nullptr);
+    decoded.image = codec ? std::get<0>(codec->getImage()) : nullptr;
+  }
+  return decoded.image;
 }
 
 const Renderer::CachedElement &Renderer::Cached(const immer::box<Element> &box) {
@@ -178,8 +171,9 @@ bool Renderer::Update(const Document &document, const View &view, bool live_chan
   std::vector<PagePlacement> layout = LayoutPages(document);
   bool document_changed = !document_ || !(document_->pages == document.pages) ||
                           !(document_->notebook == document.notebook);
-  bool full = !content_ || !(view == view_) || layout != layout_ ||
+  bool full = !content_ || invalidated_ || !(view == view_) || layout != layout_ ||
               !(document_->notebook == document.notebook);
+  invalidated_ = false;
   SkRegion dirty;
   if (!full && document_changed) dirty = DirtyRegion(document);
 

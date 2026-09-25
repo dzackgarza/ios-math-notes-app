@@ -8,6 +8,7 @@
 #include <cmath>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include "editor/canvas.h"
@@ -31,7 +32,38 @@ void Finish() {
   glReadPixels(0, 0, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, rgba);
 }
 
-std::unique_ptr<InkCanvas> gCanvas;
+// A document and a canvas on `#canvas`.
+struct Scene {
+  InkDocument *document = nullptr;
+  InkCanvas *canvas = nullptr;
+  ~Scene() {
+    ink_canvas_free(canvas);
+    ink_document_free(document);
+  }
+};
+
+// A scene on a new notebook, or on `document` when given; null when WebGL2
+// fails.
+std::unique_ptr<Scene> MakeScene(std::optional<Document> document = std::nullopt) {
+  auto scene = std::make_unique<Scene>();
+  ink_document_create(1, &scene->document);
+  if (document) scene->document->history.Reset(std::move(*document));
+  if (ink_canvas_create_webgl(scene->document, "#canvas", &scene->canvas) != INK_OK) return nullptr;
+  return scene;
+}
+
+void SetTool(InkCanvas *canvas, InkBrush brush, float size) {
+  InkToolSettings tool{uint32_t(brush), 0x1A1A1A, size};
+  ink_canvas_set_tool(canvas, &tool);
+}
+
+int Render(InkCanvas *canvas) {
+  int32_t drew = 0;
+  if (ink_render(canvas, &drew) != INK_OK) return -1;
+  return drew;
+}
+
+std::unique_ptr<Scene> gScene;
 double gWorstMs = 0;
 
 }  // namespace
@@ -39,26 +71,27 @@ double gWorstMs = 0;
 extern "C" {
 
 // A canvas on `#canvas` (width × height pixels, view = content), with one
-// pressure-pen stroke from (40, 50) to (140, 50). Returns ink_render's result
-// for the frame after the stroke, or -1 when WebGL2 fails.
+// marker stroke from (40, 50) to (140, 50). Returns ink_render's `drew` for
+// the frame after the stroke, or -1 on an error.
 EMSCRIPTEN_KEEPALIVE int render_stroke(int width, int height) {
-  gCanvas.reset(ink_canvas_create(1));
-  if (ink_canvas_attach_webgl(gCanvas.get(), "#canvas") != 0) return -1;
-  ink_canvas_set_surface_size(gCanvas.get(), width, height, 1);
-  ink_canvas_set_pen(gCanvas.get(), INK_BRUSH_MARKER, 0x1A1A1A, 6);
-  ink_render(gCanvas.get());
+  gScene = MakeScene();
+  if (!gScene) return -1;
+  InkCanvas *canvas = gScene->canvas;
+  ink_canvas_set_surface_size(canvas, width, height, 1);
+  SetTool(canvas, INK_BRUSH_MARKER, 6);
+  Render(canvas);
   std::vector<InkPenSample> samples;
   for (int i = 0; i <= 20; ++i) {
     InkPhase phase = i == 0 ? INK_PHASE_BEGIN : i == 20 ? INK_PHASE_END : INK_PHASE_MOVE;
     samples.push_back({.x = 40.0 + 5 * i, .y = 50, .time = 4.0 * i, .id = uint32_t(i),
                        .tool = INK_TOOL_PEN, .phase = uint8_t(phase)});
   }
-  ink_input(gCanvas.get(), samples.data(), samples.size());
-  return ink_render(gCanvas.get());
+  ink_input(canvas, samples.data(), samples.size());
+  return Render(canvas);
 }
 
 // ink_render with nothing changed.
-EMSCRIPTEN_KEEPALIVE int render_again() { return ink_render(gCanvas.get()); }
+EMSCRIPTEN_KEEPALIVE int render_again() { return Render(gScene->canvas); }
 
 // RGBA of one pixel of the drawing buffer, top-left origin, as 0xRRGGBBAA.
 EMSCRIPTEN_KEEPALIVE uint32_t canvas_pixel(int x, int y, int height) {
@@ -70,8 +103,9 @@ EMSCRIPTEN_KEEPALIVE uint32_t canvas_pixel(int x, int y, int height) {
 // Mean milliseconds of one 16-sample ink_input event, over a 320-sample
 // spiral drawn with the pressure pen.
 EMSCRIPTEN_KEEPALIVE double stroke_frame_ms() {
-  InkCanvas *canvas = ink_canvas_create(1);
-  ink_canvas_set_pen(canvas, INK_BRUSH_PRESSURE_PEN, 0x1A1A1A, 5);
+  std::unique_ptr<Scene> scene = MakeScene();
+  if (!scene) return -1;
+  SetTool(scene->canvas, INK_BRUSH_PRESSURE_PEN, 5);
   constexpr int kEvents = 20, kSamples = 16;
   double total_ms = 0;
   for (int e = 0; e < kEvents; ++e) {
@@ -85,10 +119,9 @@ EMSCRIPTEN_KEEPALIVE double stroke_frame_ms() {
                        .phase = uint8_t(n == 0 ? INK_PHASE_BEGIN : INK_PHASE_MOVE)});
     }
     double start = Now();
-    ink_input(canvas, event.data(), event.size());
+    ink_input(scene->canvas, event.data(), event.size());
     total_ms += Now() - start;
   }
-  ink_canvas_destroy(canvas);
   return total_ms / kEvents;
 }
 
@@ -136,9 +169,10 @@ EMSCRIPTEN_KEEPALIVE double zoom_frame_ms(int width, int height) {
     document.pages = document.pages.push_back(immer::box<Page>(std::move(page)));
   }
 
-  std::unique_ptr<InkCanvas> canvas(new InkCanvas{Editor(std::move(document), 9)});
-  if (ink_canvas_attach_webgl(canvas.get(), "#canvas") != 0) return -1;
-  ink_canvas_set_surface_size(canvas.get(), width, height, 1);
+  std::unique_ptr<Scene> scene = MakeScene(std::move(document));
+  if (!scene) return -1;
+  InkCanvas *canvas = scene->canvas;
+  ink_canvas_set_surface_size(canvas, width, height, 1);
   double center_x = 595.28 / 2, center_y = 841.89 + 9.6 + 841.89 / 2;  // page 2
   // The zoom, as log2 of the scale per frame: 1× -> 0.5× -> 2× -> 1×, 20 frames each.
   constexpr int kLeg = 20;
@@ -149,10 +183,10 @@ EMSCRIPTEN_KEEPALIVE double zoom_frame_ms(int width, int height) {
     int leg = std::min(f / kLeg, 2);
     double t = (f - leg * kLeg) / double(kLeg);
     double scale = std::exp2(kKeys[leg] + t * (kKeys[leg + 1] - kKeys[leg]));
-    ink_canvas_set_view(canvas.get(), scale, 0, 0, scale, width / 2.0 - scale * center_x,
+    ink_canvas_set_view(canvas, scale, 0, 0, scale, width / 2.0 - scale * center_x,
                         height / 2.0 - scale * center_y);
     double start = Now();
-    ink_render(canvas.get());
+    Render(canvas);
     Finish();
     double ms = Now() - start;
     if (f == 0) continue;  // opening the notebook, before the zoom

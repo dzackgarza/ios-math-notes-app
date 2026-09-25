@@ -18,6 +18,7 @@
 #include "layout/layout.h"
 #include "render/renderer.h"
 #include "support/notebook_dir.h"
+#include "support/session.h"
 
 using namespace ink_engine;
 
@@ -105,13 +106,13 @@ TEST_CASE("Listed pages stack with a 9.6 pt gap, centered on the widest") {
 
 TEST_CASE("A pen-down on the second page draws on it in its page coordinates") {
   Document doc = LoadNotebook(ink_test::ReadNotebookDir(kDocuments + "/full"));
-  std::unique_ptr<InkCanvas> canvas(new InkCanvas{Editor(doc, 7)});
+  ink_test::Session canvas(doc, 7);
   std::vector<PagePlacement> layout = LayoutPages(doc);
   size_t elements = doc.pages[1]->layers[0].elements.size();
   for (auto &event : StrokeEvents(layout[1].x + 200, layout[1].y + 50, 0)) {
     ink_input(canvas.get(), event.data(), event.size());
   }
-  const Page &page = *canvas->editor.document().pages[1];
+  const Page &page = *canvas.doc().pages[1];
   REQUIRE(page.layers[0].elements.size() == elements + 1);
   const Stroke &stroke = std::get<Stroke>(page.layers[0].elements.back()->value);
   CHECK(std::abs(stroke.samples.front().x - 200) < 1e-9);
@@ -126,10 +127,11 @@ TEST_CASE("Each page renders as Chromium renders its saved SVG") {
     Document doc = LoadNotebook(ink_test::ReadNotebookDir(kDocuments + "/" + name));
     // The saved SVG does not mark hidden layers, so Chromium draws them all.
     for (Layer &layer : doc.notebook.layers) layer.hidden = false;
-    Renderer renderer(nullptr);
+    Assets assets;
     for (const auto &[path, bytes] : ink_test::ReadAssets(kDocuments + "/" + name)) {
-      renderer.SetAsset(path, SkData::MakeWithCopy(bytes.data(), bytes.size()));
+      assets[path] = SkData::MakeWithCopy(bytes.data(), bytes.size());
     }
+    Renderer renderer(nullptr, assets);
     for (const PagePlacement &placement : LayoutPages(doc)) {
       const Page &page = *doc.pages[placement.page];
       if (page.error) continue;  // never written
@@ -155,7 +157,8 @@ TEST_CASE("Each page renders as Chromium renders its saved SVG") {
 TEST_CASE("A hidden layer is not drawn") {
   Document doc = LoadNotebook(ink_test::ReadNotebookDir(kDocuments + "/full"));
   PagePlacement page2 = LayoutPages(doc)[1];
-  Renderer renderer(nullptr);
+  Assets assets;
+  Renderer renderer(nullptr, assets);
   // s-secondlayer1 on layer l-notesb covers (400..430, 700..703).
   SkBitmap hidden = RenderPage(renderer, doc, page2, 595, 841);
   CHECK(*hidden.getAddr32(415, 701) == 0xFFF0FFFF);  // paper #FFFFF0, RGBA in memory
@@ -165,9 +168,9 @@ TEST_CASE("A hidden layer is not drawn") {
 }
 
 TEST_CASE("While a stroke is drawn only the dirty regions are redrawn") {
-  std::unique_ptr<InkCanvas> canvas(ink_canvas_create(3));
-  Editor &editor = canvas->editor;
-  Renderer renderer(nullptr);
+  ink_test::Session canvas(3);
+  Editor &editor = canvas.canvas->editor;
+  Renderer renderer(nullptr, canvas.document->assets);
   const View view{{}, 1, 596, 842};
   sk_sp<SkSurface> screen = Screen(view.width, view.height);
   auto frame = [&] {
@@ -211,7 +214,7 @@ TEST_CASE("While a stroke is drawn only the dirty regions are redrawn") {
   CHECK(after.redrawn_pixels - before.redrawn_pixels < 70 * 20);
 
   // The partially redrawn frame equals a full redraw of the same document.
-  Renderer fresh(nullptr);
+  Renderer fresh(nullptr, canvas.document->assets);
   sk_sp<SkSurface> reference = Screen(view.width, view.height);
   REQUIRE(fresh.Update(editor.document(), view, false));
   fresh.Draw(reference->getCanvas(), nullptr);

@@ -24,8 +24,10 @@ class HostSurface {
 std::unique_ptr<HostSurface> MakeWebGLSurface(const char *selector);
 #endif
 #ifdef __APPLE__
-// `ca_metal_layer` is a CAMetalLayer; null when Metal fails.
-std::unique_ptr<HostSurface> MakeMetalSurface(void *ca_metal_layer);
+// An MTLDevice, its MTLCommandQueue, and a CAMetalLayer; null when Skia
+// cannot make a Metal context.
+std::unique_ptr<HostSurface> MakeMetalSurface(void *mtl_device, void *mtl_queue,
+                                              void *ca_metal_layer);
 #endif
 
 }  // namespace ink_engine

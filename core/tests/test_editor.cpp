@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "editor/canvas.h"
+#include "support/session.h"
 #include "ink/strokes/stroke.h"
 #include "strokes/outline.h"
 #include "support/trace.h"
@@ -19,16 +20,6 @@ namespace {
 
 constexpr uint32_t kAll = INK_HAS_PRESSURE | INK_HAS_ALTITUDE | INK_HAS_AZIMUTH;
 
-struct CanvasDeleter {
-  void operator()(InkCanvas *c) const { ink_canvas_destroy(c); }
-};
-using Canvas = std::unique_ptr<InkCanvas, CanvasDeleter>;
-
-Canvas MakeCanvas(InkBrush brush) {
-  Canvas canvas(ink_canvas_create(1));
-  ink_canvas_set_pen(canvas.get(), brush, 0x1A1A1A, 5);
-  return canvas;
-}
 
 InkPenSample PenSample(double x, double y, double ms, InkPhase phase, uint32_t id = 0) {
   return {.x = x, .y = y, .time = ms, .pressure = 0.5f, .has = INK_HAS_PRESSURE, .id = id,
@@ -111,10 +102,11 @@ TEST_CASE("A recorded trace through ink_input commits the stroke built directly"
   auto frames = ink_test::ReadTrace(INK_FIXTURE_DIR "/ink/spring_shape.trace");
   for (auto [brush, tolerance] : {std::pair{INK_BRUSH_MARKER, 1e-3}, {INK_BRUSH_PRESSURE_PEN, 0.2}}) {
     INFO(BrushName(brush));
-    Canvas canvas = MakeCanvas(brush);
+    ink_test::Session canvas;
+    ink_test::SetTool(canvas.get(), brush, 0x1A1A1A, 5);
     std::vector<InkPenSample> sent = Replay(canvas.get(), frames);
-    REQUIRE_FALSE(canvas->editor.Drawing());
-    REQUIRE(canvas->editor.HistorySize() == 2);
+    REQUIRE_FALSE(canvas.canvas->editor.Drawing());
+    REQUIRE(canvas.document->history.size() == 2);
 
     ink::Stroke direct(MakeBrush({.brush = brush, .color = {26, 26, 26}, .size = 5}),
                        DirectInputs(sent));
@@ -126,7 +118,8 @@ TEST_CASE("A recorded trace through ink_input commits the stroke built directly"
 }
 
 TEST_CASE("Predicted samples show in the live stroke and not in the committed one") {
-  Canvas canvas = MakeCanvas(INK_BRUSH_MARKER);
+  ink_test::Session canvas;
+  ink_test::SetTool(canvas.get(), INK_BRUSH_MARKER, 0x1A1A1A, 5);
   std::vector<InkPenSample> event;
   for (int i = 0; i <= 10; ++i) event.push_back(PenSample(i * 10, 100, i * 8, i ? INK_PHASE_MOVE : INK_PHASE_BEGIN));
   for (int i = 1; i <= 5; ++i) {
@@ -135,8 +128,8 @@ TEST_CASE("Predicted samples show in the live stroke and not in the committed on
     event.push_back(p);
   }
   ink_input(canvas.get(), event.data(), event.size());
-  REQUIRE(canvas->editor.Drawing());
-  CHECK(MaxX(canvas->editor.LiveOutline()) >= 145);
+  REQUIRE(canvas.canvas->editor.Drawing());
+  CHECK(MaxX(canvas.canvas->editor.LiveOutline()) >= 145);
 
   InkPenSample end = PenSample(100, 100, 90, INK_PHASE_END);
   ink_input(canvas.get(), &end, 1);
@@ -146,14 +139,15 @@ TEST_CASE("Predicted samples show in the live stroke and not in the committed on
 }
 
 TEST_CASE("ink_input_update after the end phase rebuilds the committed stroke") {
-  Canvas canvas = MakeCanvas(INK_BRUSH_PRESSURE_PEN);
+  ink_test::Session canvas;
+  ink_test::SetTool(canvas.get(), INK_BRUSH_PRESSURE_PEN, 0x1A1A1A, 5);
   std::vector<InkPenSample> event;
   for (uint32_t i = 0; i <= 20; ++i) {
     InkPhase phase = i == 0 ? INK_PHASE_BEGIN : i == 20 ? INK_PHASE_END : INK_PHASE_MOVE;
     event.push_back(PenSample(i * 10, 100, i * 8, phase, i));
   }
   ink_input(canvas.get(), event.data(), event.size());
-  REQUIRE(canvas->editor.HistorySize() == 2);
+  REQUIRE(canvas.document->history.size() == 2);
   std::vector<Polyline> before = OnlyStroke(canvas.get()).outline;
 
   // UIKit's final force arrives after touchesEnded.
@@ -164,14 +158,15 @@ TEST_CASE("ink_input_update after the end phase rebuilds the committed stroke") 
     updates.push_back(u);
   }
   ink_input_update(canvas.get(), updates.data(), updates.size());
-  CHECK(canvas->editor.HistorySize() == 3);
+  CHECK(canvas.document->history.size() == 3);
   const Stroke &after = OnlyStroke(canvas.get());
   CHECK(after.outline != before);
   CHECK(after.samples[10].force == 1.0);
 }
 
 TEST_CASE("Touch samples during a pen stroke do not reach it") {
-  Canvas canvas = MakeCanvas(INK_BRUSH_MARKER);
+  ink_test::Session canvas;
+  ink_test::SetTool(canvas.get(), INK_BRUSH_MARKER, 0x1A1A1A, 5);
   InkPenSample begin = PenSample(0, 100, 0, INK_PHASE_BEGIN);
   ink_input(canvas.get(), &begin, 1);
   for (int i = 1; i <= 10; ++i) {
@@ -181,27 +176,29 @@ TEST_CASE("Touch samples during a pen stroke do not reach it") {
     InkPenSample event[] = {touch, pen};
     ink_input(canvas.get(), event, 2);
   }
-  CHECK(canvas->editor.HistorySize() == 2);
+  CHECK(canvas.document->history.size() == 2);
   const Stroke &committed = OnlyStroke(canvas.get());
   CHECK(committed.samples.size() == 11);
   CHECK(MaxX(committed.outline) < 105);
 }
 
 TEST_CASE("A highlighter stroke goes under the ink of its layer") {
-  Canvas canvas = MakeCanvas(INK_BRUSH_MARKER);
+  ink_test::Session canvas;
+  ink_test::SetTool(canvas.get(), INK_BRUSH_MARKER, 0x1A1A1A, 5);
   InkPenSample line[] = {PenSample(0, 100, 0, INK_PHASE_BEGIN), PenSample(50, 100, 10, INK_PHASE_END)};
   ink_input(canvas.get(), line, 2);
-  ink_canvas_set_pen(canvas.get(), INK_BRUSH_HIGHLIGHTER, 0xFFEE00, 10);
+  ink_test::SetTool(canvas.get(), INK_BRUSH_HIGHLIGHTER, 0xFFEE00, 10);
   InkPenSample mark[] = {PenSample(0, 200, 100, INK_PHASE_BEGIN), PenSample(50, 200, 110, INK_PHASE_END)};
   ink_input(canvas.get(), mark, 2);
-  const Elements &elements = canvas->editor.document().pages[0]->layers[0].elements;
+  const Elements &elements = canvas.canvas->editor.document().pages[0]->layers[0].elements;
   REQUIRE(elements.size() == 2);
   CHECK(std::get<Stroke>(elements[0]->value).brush == "highlighter");
   CHECK(std::get<Stroke>(elements[1]->value).brush == "marker");
 }
 
 TEST_CASE("One 16-sample event through ink_input") {
-  Canvas canvas = MakeCanvas(INK_BRUSH_PRESSURE_PEN);
+  ink_test::Session canvas;
+  ink_test::SetTool(canvas.get(), INK_BRUSH_PRESSURE_PEN, 0x1A1A1A, 5);
   double total = 0, worst = 0;
   constexpr int kEvents = 20;
   for (int e = 0; e < kEvents; ++e) {
@@ -219,5 +216,5 @@ TEST_CASE("One 16-sample event through ink_input") {
     worst = std::max(worst, ms);
   }
   std::printf("16-sample ink_input event: mean %.3f ms, worst %.3f ms\n", total / kEvents, worst);
-  CHECK(canvas->editor.Drawing());
+  CHECK(canvas.canvas->editor.Drawing());
 }
