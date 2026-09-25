@@ -10,6 +10,10 @@ targets:
     deploymentTarget: "18.0"
     sources:
       - Sources
+    dependencies:
+      - framework: build/InkEngine.xcframework
+        embed: false
+      - sdk: libc++.tbd
     info:
       path: Sources/Info.plist
       properties:
@@ -28,3 +32,22 @@ targets:
         TARGETED_DEVICE_FAMILY: "2"
         MARKETING_VERSION: "0.1.0"
         CURRENT_PROJECT_VERSION: "1"
+    scheme:
+      testTargets:
+        - MathNotesTests
+
+  MathNotesTests:
+    type: bundle.unit-test
+    platform: iOS
+    deploymentTarget: "18.0"
+    sources:
+      - Tests
+    dependencies:
+      - target: MathNotes
+      - framework: build/InkEngine.xcframework
+        embed: false
+      - sdk: libc++.tbd
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        TARGETED_DEVICE_FAMILY: "2"

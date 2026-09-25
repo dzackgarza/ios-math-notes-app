@@ -6,6 +6,8 @@ on:
     branches: [main]
     paths:
       - Sources/**
+      - Tests/**
+      - core/**
       - project.yml
       - sidestore-source.jq
       - .github/workflows/ios.yml
@@ -26,15 +28,73 @@ env:
 jobs:
   build:
     runs-on: macos-26
-    timeout-minutes: 30
+    timeout-minutes: 150
+
+    env:
+      SKIA_DIR: ${{ github.workspace }}/.ci/skia
+      VCPKG_ROOT: ${{ github.workspace }}/.ci/vcpkg
+      VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}/.ci/vcpkg-bin,readwrite
 
     steps:
       - uses: actions/checkout@v7
 
-      - name: Generate Xcode project
+      - name: Install tools
+        run: brew install xcodegen ninja
+
+      # Restore and save are separate so a later failing step keeps the build.
+      - name: Restore iOS Skia build
+        id: skia-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: &skia-paths |
+            ${{ env.SKIA_DIR }}/include
+            ${{ env.SKIA_DIR }}/modules
+            ${{ env.SKIA_DIR }}/src
+            ${{ env.SKIA_DIR }}/out/device/libskia.a
+            ${{ env.SKIA_DIR }}/out/simulator/libskia.a
+          key: skia-ios-${{ hashFiles('core/scripts/build-skia-ios.sh') }}
+
+      - name: Build Skia for iOS
+        if: steps.skia-cache.outputs.cache-hit != 'true'
         run: |
-          brew install xcodegen
-          xcodegen generate
+          core/scripts/build-skia-ios.sh "$SKIA_DIR" device
+          core/scripts/build-skia-ios.sh "$SKIA_DIR" simulator
+
+      - name: Save iOS Skia build
+        if: steps.skia-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: *skia-paths
+          key: ${{ steps.skia-cache.outputs.cache-primary-key }}
+
+      - name: Restore vcpkg binary cache
+        uses: actions/cache@v6
+        with:
+          path: ${{ github.workspace }}/.ci/vcpkg-bin
+          key: vcpkg-ios-${{ hashFiles('core/vcpkg.json', 'core/triplets/**') }}
+
+      - name: Set up vcpkg
+        run: |
+          git clone -q https://github.com/microsoft/vcpkg "$VCPKG_ROOT"
+          mkdir -p "$(dirname "$VCPKG_ROOT")/vcpkg-bin"
+          "$VCPKG_ROOT/bootstrap-vcpkg.sh" -disableMetrics
+
+      - name: Build engine xcframework
+        run: core/scripts/build-ios-xcframework.sh "$SKIA_DIR" "$VCPKG_ROOT"
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Test engine on the iPad Simulator
+        run: |
+          set -o pipefail
+          udid=$(xcrun simctl list devices available -j \
+            | jq -r '[.devices[][] | select(.name | startswith("iPad"))][0].udid')
+          xcodebuild test \
+            -project MathNotes.xcodeproj \
+            -scheme MathNotes \
+            -destination "platform=iOS Simulator,id=$udid" \
+            CODE_SIGNING_ALLOWED=NO
 
       - name: Build unsigned archive
         run: |
@@ -79,6 +139,7 @@ jobs:
 
       # Re-running a run reuses its number, so replace that release's assets.
       - name: Publish IPA and source as a release
+        if: github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -91,6 +152,7 @@ jobs:
           fi
 
       - name: Check published source serves this build
+        if: github.ref == 'refs/heads/main'
         run: |
           url="https://github.com/$GITHUB_REPOSITORY/releases/latest/download/source.json"
           test "$(curl -fsSL "$url" | jq -r '.apps[0].versions[0].buildVersion')" = "$BUILD"

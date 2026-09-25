@@ -1,0 +1,16 @@
+{
+  "name": "ink-engine",
+  "version-string": "0.1.0",
+  "builtin-baseline": "10541e317a660f4165ba4ac2851ab54a8d4577b1",
+  "dependencies": [
+    "fast-float",
+    "immer",
+    "pugixml"
+  ],
+  "features": {
+    "tests": {
+      "description": "Catch2 test suite",
+      "dependencies": ["catch2"]
+    }
+  }
+}
