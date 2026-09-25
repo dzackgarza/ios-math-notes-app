@@ -6,6 +6,7 @@
 
 #include "document/templates.h"
 #include "format/notebook.h"
+#include "format/page_svg.h"
 #include "ink.h"
 #include "support/session.h"
 
@@ -171,7 +172,7 @@ TEST_CASE("A notebook created from a template has page 1 on its background") {
   InkDocument *dotted = nullptr;
   REQUIRE(ink_builtin_template_create("dotted", 3, &dotted) == INK_OK);
   const std::string page1 = AllFiles(dotted->history.current()).at("pages/0001.svg");
-  const Background expected = dotted->history.current().pages[0]->background;
+  const Background expected = ReadPage(page1, "pages/0001.svg", {}).background;
   ink_document_free(dotted);
 
   InkDocument *document = nullptr;
