@@ -29,8 +29,9 @@ class SkCanvas;
 
 namespace ink_engine {
 
-// Behind the scroll view's pages: Write's ScribbleArea::BACKGROUND_COLOR.
-inline constexpr uint32_t kDeskColor = 0xFF444444;
+// Behind the scroll view's pages: the web UI's --desk token, a light gray as
+// in Noteful (docs/specs/tablet-ui.md, "Visual style").
+inline constexpr uint32_t kDeskColor = 0xFFE9EBEF;
 
 // Counts of the work done, for tests and the frame-time check.
 struct RenderStats {
