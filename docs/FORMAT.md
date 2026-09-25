@@ -126,7 +126,10 @@ conflict. Assets are separate files, not base64 inside SVG.
   `inkml:traceFormat` per channel set that its strokes use. Channels, in
   this order when present: `X`, `Y` (pt), `T` (ms from `mn:time`), `F`
   (force 0..1), `OE` (altitude, rad), `OA` (azimuth, rad), `OR` (roll, rad).
-  Values after the first point use InkML first-difference encoding (`'`).
+  Every value is written in full: points separated by `,`, channels by one
+  space. This is the form that existing InkML readers take, among them
+  microsoft/InkMLjs and the CROHME handwritten-math tools, so external
+  scripts can read the samples of any page.
 - Stroke attributes, in this order: `id`, `class` (only for shape elements),
   `transform`, `fill`, `fill-opacity`, `mn:brush`, `mn:brush-version`,
   `mn:size`, `mn:time`, `d`. `mn:brush` names a google/ink stock brush

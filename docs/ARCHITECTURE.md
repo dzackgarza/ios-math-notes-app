@@ -81,8 +81,9 @@ Work order and milestones: the GitHub issue tree rooted at
 - New features go in the engine or in a host service that both hosts
   supply, never in one host only. Layers belong to the document model.
 - Each port of reference code cites the source file, symbol, and pinned
-  commit in a comment. Hand-written code with no reference needs the user's
-  approval first.
+  commit in a comment. A work unit's specification approves the new code
+  that it describes. Other code that no library or reference covers needs
+  the user's approval first.
 
 ## Dependencies
 
@@ -146,6 +147,7 @@ are in each work-unit issue; this table is the index.
 | Lasso select | google/ink `geometry_internal::CreateClosedShape`, `CreateMeshFromPolyline`, `PartitionedMesh::CoverageIsGreaterThan`, as in `ink/strokes/internal/jni/mesh_creation_native.cc`; lasso point handling from Write `LassoSelector::addPoint` | Apache-2.0, AGPL-3.0 |
 | Move, resize, rotate a selection | Write `selection.cpp` `Selection::translate`/`scale`/`commitTransform`, `RectSelector::scaleHandleHit`/`rotHandleHit` | AGPL-3.0 |
 | Stroke outline to SVG `d` and `SkPath` | google/ink `ink/rendering/skia/native/internal/path_drawable.cc`; Chromium `pdf/pdfium/pdfium_ink_writer.cc` (outline walk, nonzero fill) | Apache-2.0, BSD-3 |
+| InkML trace text and `traceFormat` | microsoft/InkMLjs `InkMLjs/inkml.js` (`InkTrace`, `InkTraceFormat`); W3C InkML Recommendation §3 | Apache-2.0 |
 | google/ink without Bazel | Chromium `third_party/ink/BUILD.gn` (source list) | BSD-3 |
 | Undo history | lager `doc/modularity.rst` `history_model` (about 40 lines; lager itself is not a dependency) | MIT |
 | Page ruling and templates | Write `page.cpp` `Page::generateRuleLayer`, `rulingdialog.cpp` presets | AGPL-3.0 |
