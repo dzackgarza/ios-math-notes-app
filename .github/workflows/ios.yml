@@ -6,7 +6,7 @@ on:
     branches: [main]
     paths:
       - Sources/**
-      - Tests/**
+      - AppTests/**
       - core/**
       - tests/documents/**
       - project.yml
