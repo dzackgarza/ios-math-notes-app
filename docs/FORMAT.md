@@ -66,7 +66,9 @@ conflict. Assets are separate files, not base64 inside SVG.
 - Deterministic serialization: fixed element and attribute order, fixed
   number formatting, no whitespace churn, no generated thumbnails in the
   file. Diffs, git, and sync history stay readable.
-- A PDF-backed page stores its PDF reference in `notebook.json`. Opened alone
+- A PDF-backed page stores its PDF reference in `notebook.json`. The PDF is a
+  read-only underlay: the app draws it under the ink and never modifies,
+  converts, or copies it. Opened alone
   in a browser, such a page shows the ink without the PDF page underneath.
 
 Plain `.svg` only; `.svgz` is not written. ZIP is only a transport form of
