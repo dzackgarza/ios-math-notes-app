@@ -25,19 +25,27 @@ describe("penSamples", () => {
     });
     const [s] = penSamples(e, origin, pen, { next: 7 });
     expect(s).toMatchObject({ x: 100, y: 50, pressure: 0.625, buttons: 1, id: 7 });
-    // Browsers with altitudeAngle compute it from the tilts, as the adapter does without it.
-    const angles = tiltToSpherical(30, 20);
+    // The angles of the tilts the event reports: Chromium and Firefox keep the
+    // init's tilts and compute altitudeAngle from them; Playwright's WebKit
+    // reports tiltX 90, tiltY 0 and no altitudeAngle (TRAPS.md).
+    const angles = tiltToSpherical(e.tiltX, e.tiltY);
     expect(s.altitude).toBeCloseTo(angles.altitude, 6);
     expect(s.azimuth).toBeCloseTo(angles.azimuth, 6);
     expect(s.roll).toBeCloseTo(Math.PI / 2, 6);
     expect(s).toMatchObject({ tool: Tool.pen, phase: Phase.move, predicted: false, has: pen });
   });
 
-  test("tiltX alone gives the altitude and azimuth of Pointer Events Level 3", () => {
-    const e = event("pointermove", { clientX: 10, clientY: 20, buttons: 1, tiltX: 30, tiltY: 0 });
-    const [s] = penSamples(e, origin, pen, { next: 0 });
-    expect(s.altitude).toBeCloseTo(Math.PI / 2 - Math.PI / 6, 6);
-    expect(s.azimuth).toBeCloseTo(0, 6);
+  test("tilts convert to altitude and azimuth as in Pointer Events Level 3", () => {
+    const deg = Math.PI / 180;
+    expect(tiltToSpherical(30, 0).altitude).toBeCloseTo(60 * deg, 12);
+    expect(tiltToSpherical(30, 0).azimuth).toBe(0);
+    expect(tiltToSpherical(-30, 0).azimuth).toBeCloseTo(Math.PI, 12);
+    expect(tiltToSpherical(0, -45)).toEqual({ altitude: 45 * deg, azimuth: 1.5 * Math.PI });
+    expect(tiltToSpherical(0, 0)).toEqual({ altitude: Math.PI / 2, azimuth: 0 });
+    expect(tiltToSpherical(90, 20)).toEqual({ altitude: 0, azimuth: 0 });
+    const both = tiltToSpherical(45, 45);
+    expect(both.altitude).toBeCloseTo(Math.atan(1 / Math.SQRT2), 12);
+    expect(both.azimuth).toBeCloseTo(Math.PI / 4, 12);
   });
 
   test("a move without buttons is hover", () => {

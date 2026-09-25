@@ -66,7 +66,11 @@ web-build: engine-module
 web-deploy: web-build
     rsync -a --delete hosts/web/dist/ /var/www/math-notes/
 
-# Vitest Browser Mode (Chromium and Firefox here; CI adds WebKit), then Playwright against the deployment.
+# Vitest Browser Mode in Chromium and Firefox, WebKit in the Playwright container (its Linux
+# build needs Ubuntu libraries), then Playwright against the deployment.
 web-test: web-deploy
     cd hosts/web && bunx vitest run --project chromium --project firefox
+    docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -e PLAYWRIGHT_BROWSERS_PATH=/ms-playwright \
+      -v "$PWD/hosts/web":/web -w /web mcr.microsoft.com/playwright:v1.63.0-noble \
+      node node_modules/vitest/vitest.mjs run --project webkit
     cd hosts/web && bunx playwright test
