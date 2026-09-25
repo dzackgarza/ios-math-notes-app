@@ -1,0 +1,32 @@
+<svg class="write-page" color-interpolation="linearRGB" width="700px" height="800px" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+  <g class="write-content write-v3" xruling="0" yruling="40" marginLeft="100" papercolor="#FFFFFF" rulecolor="#FF0000FF">
+    <g class="ruleline write-std-ruling write-scale-down" fill="none" stroke="#0000FF" stroke-width="1" shape-rendering="crispEdges" vector-effect="non-scaling-stroke">
+      <rect class="pagerect" fill="#FFFFFF" stroke="none" x="0" y="0" width="700" height="800" />
+      <path class="yrule_1" d="M0 40 L700 40" />
+      <path d="M0 80 L700 80" />
+      <path d="M0 120 L700 120" />
+      <path d="M0 160 L700 160" />
+      <path d="M0 200 L700 200" />
+      <path d="M0 240 L700 240" />
+      <path d="M0 280 L700 280" />
+      <path d="M0 320 L700 320" />
+      <path d="M0 360 L700 360" />
+      <path d="M0 400 L700 400" />
+      <path d="M0 440 L700 440" />
+      <path d="M0 480 L700 480" />
+      <path d="M0 520 L700 520" />
+      <path d="M0 560 L700 560" />
+      <path d="M0 600 L700 600" />
+      <path d="M0 640 L700 640" />
+      <path d="M0 680 L700 680" />
+      <path d="M0 720 L700 720" />
+      <path d="M0 760 L700 760" />
+      <path class="leftmargin" stroke="#FF0000" d="M100 0 L100 800" />
+    </g>
+    <path class="write-stroke-pen" fill="none" stroke="#000000" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" __comx="200.05" __comy="370.011" d="M210 365.2 L190.1 380.1 209.8 395.1" />
+    <path class="write-stroke-pen" fill="none" stroke="#000000" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" __comx="600.05" __comy="410.011" d="M610 405.2 L590.1 420.1 609.8 435.1" />
+    <path class="write-stroke-pen" fill="none" stroke="#000000" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" __comx="200.05" __comy="450.011" d="M210 445.2 L190.1 460.1 209.8 475.1" />
+    <path class="write-stroke-pen" fill="none" stroke="#000000" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" __comx="200.05" __comy="50.011" d="M210 45.2 L190.1 60.1 209.8 75.1" />
+    <path class="write-stroke-pen" fill="none" stroke="#000000" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" __comx="250.05" __comy="90.011" d="M260 85.2 L240.1 100.1 259.8 115.1" />
+  </g>
+</svg>
