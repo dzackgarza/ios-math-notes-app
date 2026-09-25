@@ -1,0 +1,43 @@
+name: Build iPad IPA
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: macos-26
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Generate Xcode project
+        run: |
+          brew install xcodegen
+          xcodegen generate
+
+      - name: Build unsigned archive
+        run: |
+          xcodebuild archive \
+            -project MathNotes.xcodeproj \
+            -scheme MathNotes \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/MathNotes.xcarchive" \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Make unsigned IPA
+        run: |
+          mkdir Payload
+          cp -R "$RUNNER_TEMP/MathNotes.xcarchive/Products/Applications/"*.app Payload/
+          zip -r MathNotes.ipa Payload
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: MathNotes-unsigned
+          path: MathNotes.ipa
