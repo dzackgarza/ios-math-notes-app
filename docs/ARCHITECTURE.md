@@ -1,52 +1,52 @@
 # Architecture plan
 
 One portable document and ink engine (C++), with thin platform hosts.
-[Stylus Labs Write](https://github.com/styluslabs/Write) is the reference
-implementation and the behavioral oracle. Its app layer and UI are not reused.
+[Stylus Labs Write](https://github.com/styluslabs/Write) is the behavioral
+reference: it shows which behaviors to build and supplies test fixtures for
+them. No Write code is used.
 
 ```text
                    ink engine (C++, also built to WASM)
-   document/page model, SVG ink geometry, stroke building,
+   document/page model, stroke modeling, geometry,
    selection, reflow, undo/redo, rendering, import/export
                          │  stable C ABI
           ┌──────────────┼──────────────────┐
      Web host        iPadOS host         Linux dev host
      JS + WASM       Swift/UIKit         SDL, libinput
-   primary on        full Apple Pencil   reference build,
-   Linux/Win/macOS   and lowest latency  tests, raw tablet axes
+   primary on        full Apple Pencil   tests, raw
+   Linux/Win/macOS   and lowest latency  tablet axes
 ```
 
 | Host | Role |
 | --- | --- |
 | Web (WASM, PWA) | Primary product on desktop. Pointer Events give pen type, pressure, tilt, altitude/azimuth, buttons, hover, coalesced and predicted samples; Safari 18.2+ gives coalesced/predicted and altitude/azimuth, Safari 26.2 gives subpixel coordinates. |
 | iPadOS (UIKit) | Native host, not a WKWebView. Needed for Pencil double-tap, Pencil Pro squeeze, barrel roll, hover pose and distance, haptics, and the shortest input-to-display path. WebKit still reports `twist` as 0 for Pencil Pro. |
-| Linux native | Development and reference executable: runs the oracle tests, and reads libinput/Wayland tablet axes (distance, rotation) that the web does not expose. Not a user-facing UI. |
+| Linux native | Development executable: runs the fixture tests, and reads libinput/Wayland tablet axes (distance, rotation) that the web does not expose. Not a user-facing UI. |
 
-## Reuse or rewrite
+## Dependencies
 
-Measured on Write `master` (2026-06-23). The decision is per layer.
+Write's stack is its own and about ten years old (`usvg`, `ulib`, `ugui`,
+`nanovgXC`, a patched SDL), and its UI patterns are dated. The engine uses
+mature libraries instead. Each one is confirmed by a build spike on all
+three targets before the engine depends on it.
 
-| Layer | Write source | Coupling | Decision |
-| --- | --- | --- | --- |
-| Document model | `document`, `page`, `element`, `selection`, `strokebuilder`, `syncundo` (~5.4k lines) | Includes only pugixml, `ulib`, `usvg`. No ugui, no SDL, no `ScribbleApp`. | Take as the engine core. Already portable. |
-| SVG and rendering | `usvg` (~6.9k), `ulib` (~5.8k), `nanovgXC` (~14.9k) | Standalone libraries. | Use as dependencies from their upstream repos. |
-| Editing operations | `scribblearea` (~3k: reflow, insert space, ruled select/erase), `scribbledoc` (~1k), `scribbleview`, `scribblemode` | Include `scribbleapp.h` or `scribblewidget.h`; `scribbledoc` calls `ScribbleApp::openURL`. | Move into the engine and cut the app calls behind the C ABI. Reflow is the hardest behavior to reproduce; do not rewrite it. |
-| Input | `scribbleinput` | Depends on `ugui`. | Rewrite against the `PenSample` record below. |
-| App and UI | `scribbleapp` (~3k), `mainwindow`, `documentlist`, dialogs, toolbars, `ugui` | UI toolkit and platform. | Do not reuse. Each host builds its own UI. |
+| Concern | Library | Notes |
+| --- | --- | --- |
+| Stroke modeling, brushes, stroke geometry, hit tests | [google/ink](https://github.com/google/ink) (C++, Apache-2.0) | Core of Android Jetpack Ink: smoothing, prediction, brush behaviors, mesh output, protobuf stroke storage. Android-first, Bazel build; iOS and WASM builds are unproven, and the API is not yet stable. |
+| 2D rendering, text layout, SVG and PDF output | [Skia](https://skia.org) | Builds for Linux, iOS (Metal), and WASM (CanvasKit). |
+| PDF page rendering | PDFium | Chromium's PDF renderer; draws through Skia. |
+| Polygon operations (lasso, erase regions) | [Clipper2](https://github.com/AngusJohnson/Clipper2) | Only where google/ink geometry does not cover it. |
 
-Result: neither "fork and gut" nor "rewrite". Start a new repository
-structure, copy the engine-layer files from Write into `core/` with their
-history reference, and write the hosts new. Copied files are owned code, not
-a vendored library, so they are edited freely.
+Reflow, insert space, and ruled select and erase have no library. They are
+new engine code, specified by fixtures recorded from Write.
 
 ## Rules
 
 - `core/` calls no platform API: no UIKit, SDL, browser JS, X11.
 - Swift and JS see only the C ABI: opaque handles plus plain structs. No C++
   classes cross the boundary.
-- One renderer: `usvg` + nanovgXC. The host supplies a drawable surface
-  (WebGL canvas, `MTKView`/GL layer, SDL window). A Metal renderer comes only
-  if iPad latency measurements require it.
+- One renderer: Skia. The host supplies a drawable surface (WebGL canvas,
+  Metal layer, SDL window).
 - One input record. Every host fills what its platform gives and sets a
   capability bit for it; missing values are absent, never invented.
   ```c
@@ -63,27 +63,24 @@ a vendored library, so they are edited freely.
   Sources: web `PointerEvent` + `getCoalescedEvents()`/`getPredictedEvents()`;
   UIKit `UITouch` coalesced/predicted touches, `UIPencilInteraction`,
   `UIPencilHoverPose`; Linux libinput / Wayland `tablet-v2`.
-- Document format is Write's SVG, round-trip compatible with Write, until
-  the engine boundary is stable. A later container wraps the same pages:
-  `Note.note/{manifest.json, pages/*.svg, assets/, index/}`.
+- Pages are SVG, so notes stay open vector files. Write documents import.
+  A note is a directory: `Note.note/{manifest.json, pages/*.svg, assets/, index/}`.
 - New features go in the engine or in a service, never in one host only.
   PDF and layers belong to the document model. OCR belongs to an indexing
   service. Scanner and microphone are host services.
-- Write is the behavioral oracle. Record fixture documents and input-event
-  traces with their resulting SVG from Write for reflow, ruled selection,
-  free erase, line insertion, clipping, undo, and stroke serialization. The
-  engine must reproduce them.
+- Write fixtures: documents and input-event traces with their resulting SVG,
+  for reflow, ruled selection, free erase, line insertion, clipping, undo,
+  and stroke serialization. The engine must reproduce the behavior.
 
 ## Steps
 
-1. Build Write unchanged on the Linux dev host and record the oracle
-   fixtures and traces.
-2. Create `core/` from the engine-layer files and the `usvg`, `ulib`,
-   `nanovgXC` dependencies. Build it for `linux-x86_64`, `wasm`, and
-   `ios-arm64` in CI (Linux runners for Linux and WASM, macOS runner for iOS).
-3. Move the editing operations out of `scribblearea`/`scribbledoc` into the
-   engine, and pass the oracle tests.
-4. Define the C ABI:
+1. Build Write on the Linux dev host and record the fixtures and traces.
+2. Build spikes: google/ink, Skia, PDFium, Clipper2 for `linux-x86_64`,
+   `wasm`, and `ios-arm64`, in CI (Linux runners for Linux and WASM, macOS
+   runner for iOS).
+3. Engine: document model, strokes, selection, undo, rendering, then reflow
+   and ruled operations against the fixtures.
+4. C ABI:
    ```c
    InkDocument *ink_document_open(...);
    void ink_document_save(...);
@@ -107,7 +104,7 @@ a vendored library, so they are edited freely.
 ## Target layout
 
 ```text
-core/      document/ ink/ reflow/ selection/ undo/ svg/ render/
+core/      document/ strokes/ reflow/ selection/ undo/ render/ io/
 services/  pdf/ search/ sync/
 hosts/     web/{wasm,shell}/  ios/{Swift,CoreBridge}/  linux/
 tests/     documents/ input-traces/
