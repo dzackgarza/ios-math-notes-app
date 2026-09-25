@@ -64,8 +64,8 @@ InkStatus ink_document_load_asset(InkDocument *document, const char *path, const
 InkStatus ink_document_dirty_files(InkDocument *document, const InkFile **files, size_t *count);
 /* The host wrote the dirty files. */
 InkStatus ink_document_mark_saved(InkDocument *document);
-/* The laid-out pages' extent in content coordinates (pt), the ghost page
-   after the last page included (ink_canvas_set_view). */
+/* The laid-out pages' extent in content coordinates (pt), for
+   ink_canvas_set_view. */
 InkStatus ink_document_content_size(InkDocument *document, double *width, double *height);
 /* Frees the document. Free its canvases first. */
 InkStatus ink_document_free(InkDocument *document);
@@ -178,8 +178,7 @@ InkStatus ink_canvas_set_tool(InkCanvas *canvas, const InkToolSettings *tool);
 /* UTC ms since the Unix epoch minus the host's sample clock, for mn:time. */
 InkStatus ink_canvas_set_utc_offset(InkCanvas *canvas, double utc_minus_host_ms);
 InkStatus ink_canvas_free(InkCanvas *canvas);
-/* The page under view point (x, y): its index, the page count for the ghost
-   page after the last one, or -1 for none. */
+/* The page under view point (x, y): its index, or -1 for none. */
 InkStatus ink_canvas_page_at(InkCanvas *canvas, double x, double y, int32_t *page);
 
 /* One batch of samples per platform event. */

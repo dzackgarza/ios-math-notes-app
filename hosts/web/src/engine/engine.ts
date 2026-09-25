@@ -358,7 +358,7 @@ export class InkDocument {
     });
   }
 
-  // The laid-out pages' extent in content coordinates (pt), the ghost page included.
+  // The laid-out pages' extent in content coordinates (pt).
   contentSize(): { width: number; height: number } {
     const e = this.engine;
     return e.withScratch(16, (out) => {
@@ -463,8 +463,7 @@ export class Canvas {
     this.engine.check(this.engine.module._ink_input_update(this.pointer, at, samples.length));
   }
 
-  // The page under view point (x, y): its index, the page count for the
-  // ghost page, or -1.
+  // The page under view point (x, y): its index, or -1.
   pageAt(x: number, y: number): number {
     const e = this.engine;
     return e.withScratch(4, (out) => {

@@ -133,7 +133,7 @@ TEST_CASE("A new page copies the template's background, regenerated for another 
                                   bad.size()) == INK_ERROR_PARSE);
 }
 
-TEST_CASE("The page under a view point, and the ghost page after the last") {
+TEST_CASE("The page under a view point, and the pages' extent") {
   ink_test::Session session;
   ink_document_insert_page(session.document, 1);
   InkCanvas *canvas = session.get();
@@ -141,15 +141,15 @@ TEST_CASE("The page under a view point, and the ghost page after the last") {
   int32_t page = 0;
   ink_canvas_page_at(canvas, 100, 100, &page);
   CHECK(page == 0);
-  ink_canvas_page_at(canvas, 100, (841.89 + 9.6 + 100) * 0.5, &page);
+  ink_canvas_page_at(canvas, 100, (841.89 + 100) * 0.5, &page);
   CHECK(page == 1);
-  ink_canvas_page_at(canvas, 100, (2 * (841.89 + 9.6) + 100) * 0.5, &page);
-  CHECK(page == 2);  // the ghost page
+  ink_canvas_page_at(canvas, 100, (2 * 841.89 + 100) * 0.5, &page);
+  CHECK(page == -1);  // below the last page
   ink_canvas_page_at(canvas, 400, 100, &page);
   CHECK(page == -1);  // beside the page
   double width = 0, height = 0;
   ink_document_content_size(session.document, &width, &height);
-  CHECK(height == 3 * 841.89 + 2 * 9.6);
+  CHECK(height == 2 * 841.89);
 }
 
 TEST_CASE("Built-in templates are the Write presets") {
