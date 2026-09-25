@@ -1,6 +1,9 @@
 #include "ink.h"
 
+#include <optional>
+
 #include "editor/canvas.h"
+#include "include/core/SkSurface.h"
 
 namespace ink_engine {
 
@@ -49,6 +52,49 @@ void ink_input(InkCanvas *canvas, const InkPenSample *samples, size_t count) {
 
 void ink_input_update(InkCanvas *canvas, const InkPenSample *samples, size_t count) {
   canvas->editor.InputUpdate(samples, count);
+}
+
+static int Attach(InkCanvas *canvas, std::unique_ptr<ink_engine::HostSurface> surface) {
+  if (!surface) return 1;
+  canvas->renderer.reset();
+  canvas->surface = std::move(surface);
+  canvas->renderer = std::make_unique<ink_engine::Renderer>(canvas->surface->context());
+  return 0;
+}
+
+#ifdef __EMSCRIPTEN__
+int ink_canvas_attach_webgl(InkCanvas *canvas, const char *selector) {
+  return Attach(canvas, ink_engine::MakeWebGLSurface(selector));
+}
+#endif
+
+#ifdef __APPLE__
+int ink_canvas_attach_metal(InkCanvas *canvas, void *ca_metal_layer) {
+  return Attach(canvas, ink_engine::MakeMetalSurface(ca_metal_layer));
+}
+#endif
+
+void ink_canvas_set_surface_size(InkCanvas *canvas, int width, int height, float pixel_ratio) {
+  canvas->width = width;
+  canvas->height = height;
+  canvas->pixel_ratio = pixel_ratio;
+}
+
+int ink_render(InkCanvas *canvas) {
+  if (!canvas->renderer || canvas->width <= 0 || canvas->height <= 0) return 0;
+  ink_engine::Editor &editor = canvas->editor;
+  bool drawing = editor.Drawing();
+  bool live_changed = !editor.TakeUpdatedRegion().IsEmpty() || drawing != canvas->was_drawing;
+  canvas->was_drawing = drawing;
+  ink_engine::View view{editor.view(), canvas->pixel_ratio, canvas->width, canvas->height};
+  if (!canvas->renderer->Update(editor.document(), view, live_changed)) return 0;
+  SkSurface *screen = canvas->surface->BeginFrame(canvas->width, canvas->height);
+  if (!screen) return 0;
+  std::optional<ink_engine::LiveInk> live;
+  if (drawing) live = {editor.LivePage(), editor.LiveOutline(), editor.LivePen().color};
+  canvas->renderer->Draw(screen->getCanvas(), live ? &*live : nullptr);
+  canvas->surface->EndFrame();
+  return 1;
 }
 
 }  // extern "C"

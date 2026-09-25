@@ -10,6 +10,7 @@
 #include "ink/brush/stock_brushes.h"
 #include "ink/color/color.h"
 #include "ink/strokes/stroke.h"
+#include "layout/layout.h"
 #include "strokes/outline.h"
 
 namespace ink_engine {
@@ -96,11 +97,15 @@ Editor::Editor(Document document, uint64_t id_seed) : ids_(id_seed) {
   history_.push_back(std::move(document));
 }
 
-InkPenSample Editor::ToPage(InkPenSample sample) const {
-  Transform inverse = Inverse(view_);
-  double x = sample.x, y = sample.y;
-  sample.x = inverse.a * x + inverse.c * y + inverse.e;
-  sample.y = inverse.b * x + inverse.d * y + inverse.f;
+Point ToContent(const Transform &view, double x, double y) {
+  Transform inverse = Inverse(view);
+  return {inverse.a * x + inverse.c * y + inverse.e, inverse.b * x + inverse.d * y + inverse.f};
+}
+
+InkPenSample Editor::ToPage(InkPenSample sample, const Point &origin) const {
+  Point content = ToContent(view_, sample.x, sample.y);
+  sample.x = content.x - origin.x;
+  sample.y = content.y - origin.y;
   return sample;
 }
 
@@ -139,7 +144,13 @@ void Editor::Input(const InkPenSample *samples, size_t count) {
     // Fingers pan and zoom (the host's job); while a pen is down they never draw.
     if (s.tool == INK_TOOL_TOUCH || s.phase == INK_PHASE_HOVER) continue;
     if (s.phase == INK_PHASE_BEGIN) {
-      live_.emplace(LiveStroke{.tool = InkTool(s.tool), .t0 = s.time, .pen = pen_});
+      Point at = ToContent(view_, s.x, s.y);
+      const std::vector<PagePlacement> layout = LayoutPages(document());
+      const PagePlacement *placement = PageAt(layout, at.y);
+      if (!placement) continue;
+      page_ = placement->page;
+      live_.emplace(LiveStroke{.tool = InkTool(s.tool), .t0 = s.time, .pen = pen_,
+                               .origin = {placement->x, placement->y}});
       live_->stroke.Start(MakeBrush(pen_));
     }
     if (!live_ || s.tool != live_->tool) continue;
@@ -147,7 +158,7 @@ void Editor::Input(const InkPenSample *samples, size_t count) {
       cancelled = true;
       break;
     }
-    InkPenSample page = ToPage(s);
+    InkPenSample page = ToPage(s, live_->origin);
     if (s.predicted) {
       predicted.push_back(page);
     } else {
@@ -200,7 +211,7 @@ void Editor::Commit() {
                                                      : std::move(elements).push_back(box);
   next.pages = next.pages.set(page_, immer::box<Page>(std::move(page)));
   Push(std::move(next));
-  committed_.push_back({id, page_, layer_, live.t0, live.pen, std::move(live.real)});
+  committed_.push_back({id, page_, layer_, live.t0, live.pen, live.origin, std::move(live.real)});
 }
 
 Stroke Editor::MakeElement(const std::string &id, const ink::Stroke &ink_stroke, const Pen &pen,
@@ -225,8 +236,8 @@ Stroke Editor::MakeElement(const std::string &id, const ink::Stroke &ink_stroke,
 void Editor::InputUpdate(const InkPenSample *samples, size_t count) {
   std::map<size_t, bool> changed;  // committed stroke index
   for (size_t i = 0; i < count; ++i) {
-    InkPenSample update = ToPage(samples[i]);
-    auto replace = [&](std::vector<InkPenSample> &list) {
+    auto replace = [&](std::vector<InkPenSample> &list, const Point &origin) {
+      InkPenSample update = ToPage(samples[i], origin);
       for (InkPenSample &s : list) {
         if (s.id != update.id) continue;
         update.time = s.time;  // the sample keeps its place in time
@@ -236,12 +247,12 @@ void Editor::InputUpdate(const InkPenSample *samples, size_t count) {
       }
       return false;
     };
-    if (live_ && replace(live_->real)) {
+    if (live_ && replace(live_->real, live_->origin)) {
       live_->updated = true;
       continue;
     }
     for (size_t k = committed_.size(); k-- > 0;) {
-      if (replace(committed_[k].real)) {
+      if (replace(committed_[k].real, committed_[k].origin)) {
         changed[k] = true;
         break;
       }

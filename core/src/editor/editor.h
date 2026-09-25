@@ -35,8 +35,9 @@ class Editor {
  public:
   Editor(Document document, uint64_t id_seed);
 
-  // page -> view affine transform, SVG matrix order.
-  void SetView(const Transform &page_to_view) { view_ = page_to_view; }
+  // content -> view affine transform, SVG matrix order. Content coordinates
+  // are those of the page layout (layout/layout.h).
+  void SetView(const Transform &content_to_view) { view_ = content_to_view; }
   void SetPen(const Pen &pen) { pen_ = pen; }
   // Added to host sample times (ms) to get UTC ms since the Unix epoch.
   void SetUtcOffset(double utc_minus_host_ms) { utc_offset_ms_ = utc_minus_host_ms; }
@@ -45,11 +46,15 @@ class Editor {
   void InputUpdate(const InkPenSample *samples, size_t count);
 
   const Document &document() const { return history_[index_]; }
+  const Transform &view() const { return view_; }
   size_t HistorySize() const { return history_.size(); }
 
-  // The stroke being drawn, if any: its outline in page coordinates and the
-  // page-space area its geometry changed in since the last call.
+  // The stroke being drawn, if any: its page and pen, its outline in page
+  // coordinates, and the page-space area its geometry changed in since the
+  // last call.
   bool Drawing() const { return live_.has_value(); }
+  size_t LivePage() const { return page_; }
+  const Pen &LivePen() const { return live_->pen; }
   std::vector<Polyline> LiveOutline() const;
   ink::Envelope TakeUpdatedRegion();
 
@@ -59,6 +64,7 @@ class Editor {
     InkTool tool;
     double t0 = 0;
     Pen pen;
+    Point origin;                    // content position of the page
     std::vector<InkPenSample> real;  // page coordinates in x, y
     bool updated = false;            // ink_input_update changed a real sample
   };
@@ -67,12 +73,13 @@ class Editor {
     size_t page = 0, layer = 0;
     double t0 = 0;
     Pen pen;
+    Point origin;
     std::vector<InkPenSample> real;
   };
 
   ink::StrokeInput ToStrokeInput(const InkPenSample &sample, double t0) const;
   ink::StrokeInputBatch Batch(const std::vector<InkPenSample> &samples, double t0) const;
-  InkPenSample ToPage(InkPenSample sample) const;
+  InkPenSample ToPage(InkPenSample sample, const Point &origin) const;
   void Commit();
   Stroke MakeElement(const std::string &id, const ink::Stroke &ink_stroke, const Pen &pen,
                      double t0, const std::vector<InkPenSample> &real) const;

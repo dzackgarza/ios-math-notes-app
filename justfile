@@ -35,3 +35,11 @@ ink-fixtures:
 # Rewrites core/tests/fixtures/documents: the engine's output for each notebook in tests/documents.
 document-fixtures: engine-wasm
     node {{build}}/tests/write_documents.js tests/documents core/tests/fixtures/documents full custom-size
+
+# Rewrites core/tests/fixtures/render: Chromium's rendering of each page in core/tests/fixtures/documents.
+render-goldens:
+    cd core/tests/webgl && bun install --frozen-lockfile && bun run render-goldens.mjs
+
+# Zoom and input timings in Chromium on this machine's GPU (not run in CI, which has none).
+frame-times: engine-wasm
+    cd core/tests/webgl && bun install --frozen-lockfile && WEBGL_CHECK_DIR=$PWD/../../build/wasm/tests/webgl bunx playwright test frame.spec.mjs -c playwright.config.mjs --project chromium-gpu --reporter list
