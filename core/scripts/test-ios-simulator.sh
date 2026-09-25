@@ -26,4 +26,5 @@ cmake --build "$dir" --target ink_tests
 
 xcrun simctl bootstatus "$udid" -b
 cd "$dir/tests"
-xcrun simctl spawn "$udid" "$dir/tests/ink_tests" | tee "$dir/ink_tests.log"
+# CMake builds iOS executables as app bundles.
+xcrun simctl spawn "$udid" "$dir/tests/ink_tests.app/ink_tests" | tee "$dir/ink_tests.log"
