@@ -1,0 +1,6 @@
+{
+  "name": "ink-host-fixtures",
+  "version-string": "0.1.0",
+  "builtin-baseline": "10541e317a660f4165ba4ac2851ab54a8d4577b1",
+  "dependencies": ["abseil", "libtess2", "protobuf"]
+}

@@ -25,6 +25,13 @@ test-commit:
 
 test-push: test-commit
 
+# Rewrites core/tests/fixtures/ink (traces and host outline goldens) on the Linux host.
+ink-fixtures:
+    cmake -S core/tools/ink-host -B core/build/ink-host -G Ninja -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_TOOLCHAIN_FILE={{vcpkg}}/scripts/buildsystems/vcpkg.cmake
+    cmake --build core/build/ink-host
+    core/build/ink-host/ink_host_fixtures core/build/ink-host/_deps/google_ink-src core/tests/fixtures/ink
+
 # Stylus Labs Write fork with the replay harness (dzackgarza/Write, branch replay-harness).
 write_dir := env_var_or_default("WRITE_DIR", env_var("HOME") / ".cache/math-notes/Write")
 write_rev := "876de97"
