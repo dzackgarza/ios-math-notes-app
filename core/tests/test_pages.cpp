@@ -166,3 +166,23 @@ TEST_CASE("Built-in templates are the Write presets") {
   InkDocument *unknown = nullptr;
   CHECK(ink_builtin_template_create("plaid", 1, &unknown) == INK_ERROR_ARGUMENT);
 }
+
+TEST_CASE("A notebook created from a template has page 1 on its background") {
+  InkDocument *dotted = nullptr;
+  REQUIRE(ink_builtin_template_create("dotted", 3, &dotted) == INK_OK);
+  const std::string page1 = AllFiles(dotted->history.current()).at("pages/0001.svg");
+  const Background expected = dotted->history.current().pages[0]->background;
+  ink_document_free(dotted);
+
+  InkDocument *document = nullptr;
+  const auto *svg = reinterpret_cast<const uint8_t *>(page1.data());
+  REQUIRE(ink_document_create_from_template(5, "dotted", svg, page1.size(), &document) == INK_OK);
+  const Document &doc = document->history.current();
+  CHECK(doc.notebook.template_name == "dotted");
+  REQUIRE(doc.pages.size() == 1);
+  CHECK(doc.pages[0]->background == expected);
+  int32_t moved = 1, page = 0;
+  ink_undo(document, &moved, &page);
+  CHECK(moved == 0);
+  ink_document_free(document);
+}

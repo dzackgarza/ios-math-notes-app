@@ -49,6 +49,11 @@ typedef struct InkFile {
 /* A new notebook with one blank A4 page and one layer. `seed` seeds the id
    generator. */
 InkStatus ink_document_create(uint64_t seed, InkDocument **out);
+/* A new notebook as ink_document_create, with template `name` set as by
+   ink_document_set_template and page 1 on that template's background. The
+   document starts with no undo step. */
+InkStatus ink_document_create_from_template(uint64_t seed, const char *name, const uint8_t *svg,
+                                            size_t size, InkDocument **out);
 /* Replaces the document with the notebook of notebook.json. Its listed pages
    are error pages ("missing file") until ink_document_load_page loads them. */
 InkStatus ink_document_load_notebook(InkDocument *document, const uint8_t *json, size_t size);

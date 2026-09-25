@@ -92,6 +92,26 @@ InkStatus ink_document_create(uint64_t seed, InkDocument **out) {
   });
 }
 
+InkStatus ink_document_create_from_template(uint64_t seed, const char *name, const uint8_t *svg,
+                                            size_t size, InkDocument **out) {
+  return Call([&] {
+    if (!name) return NullArgument("name");
+    if (!svg && size) return NullArgument("svg");
+    if (!out) return NullArgument("out");
+    ink_engine::Page template_page = ink_engine::ReadPage(Bytes(svg, size), "pages/0001.svg", {});
+    if (template_page.error) return Fail(INK_ERROR_PARSE, std::string(name) + ": " + *template_page.error);
+    ink_engine::IdGenerator ids(seed);
+    ink_engine::Document document = ink_engine::NewNotebook(ids);
+    document.notebook.template_name = name;
+    ink_engine::Page page = *document.pages[0];
+    page.background = ink_engine::NewPage(document, template_page).background;
+    document.pages = document.pages.set(0, immer::box<ink_engine::Page>(std::move(page)));
+    *out = new InkDocument{ink_engine::DocumentHistory(std::move(document), seed + 1)};
+    (*out)->template_page = std::move(template_page);
+    return INK_OK;
+  });
+}
+
 InkStatus ink_document_load_notebook(InkDocument *document, const uint8_t *json, size_t size) {
   return Call([&] {
     if (!document) return NullArgument("document");
