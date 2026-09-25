@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:mn="https://github.com/dzackgarza/math-notes-app/ns/1" xmlns:inkml="http://www.w3.org/2003/InkML" id="p-grid22" width="210mm" height="297mm" viewBox="0 0 595.28 841.89">
+  <metadata>
+    <inkml:traceFormat xml:id="xytfoeoaor">
+      <inkml:channel name="X" type="decimal" units="pt"/>
+      <inkml:channel name="Y" type="decimal" units="pt"/>
+      <inkml:channel name="T" type="integer" units="ms"/>
+      <inkml:channel name="F" type="decimal"/>
+      <inkml:channel name="OE" type="decimal" units="rad"/>
+      <inkml:channel name="OA" type="decimal" units="rad"/>
+      <inkml:channel name="OR" type="decimal" units="rad"/>
+    </inkml:traceFormat>
+  </metadata>
+  <g id="background" mn:ruling="grid" mn:y-ruling="14.4" mn:y-offset="14.4" mn:x-ruling="14.4" mn:margin-left="0">
+    <rect width="595.28" height="841.89" fill="#FFFFF0"/>
+    <path d="M0 14.4l595.28 0" fill="none" stroke="#C8C8C8" stroke-width="0.3"/>
+    <path d="M14.4 0l0 841.89" fill="none" stroke="#C8C8C8" stroke-width="0.3"/>
+  </g>
+  <g id="l-inkaaa">
+    <g id="b-bookmark0001" class="mn-bookmark">
+      <path id="s-bookmarked01" fill="#1A1A1A" mn:brush="pressure-pen" mn:brush-version="1" mn:size="1.6" mn:time="2026-09-25T18:00:00.000Z" d="M80 80l20 0 0 3 -20 0Z">
+        <metadata><inkml:trace contextRef="#xytfoeoaor">80 81.5 0 0.4 1.1 0.25 0,100 81.5 40 0.45 1.05 0.3 0.123</inkml:trace></metadata>
+      </path>
+    </g>
+    <a href="0001.svg#b-bookmark0001">
+      <path id="s-linkedink01" fill="#0000CC" mn:brush="marker" mn:brush-version="1" mn:size="1" mn:time="2026-09-25T18:01:00.000Z" d="M80 120l40 0 0 2 -40 0Z"/>
+    </a>
+    <a href="../../other/notebook/pages/0001.svg#b-2kq9aaaaaaaa">
+      <ellipse id="s-shapeellip3" class="mn-shape" fill="none" stroke="#008800" stroke-width="1.5" cx="300" cy="200" rx="50" ry="25.5"/>
+    </a>
+    <polygon id="s-shapepoly004" class="mn-shape" fill="none" stroke="#1A1A1A" stroke-width="1" points="100,500 150,450 200,500"/>
+    <path id="s-shapearrow05" class="mn-shape" fill="none" stroke="#1A1A1A" stroke-width="1" d="M300 500l100 0M390 495l10 5 -10 5"/>
+  </g>
+  <g id="l-notesb">
+    <path id="s-secondlayer1" fill="#990099" mn:brush="marker" mn:brush-version="1" mn:size="3" mn:time="2026-09-25T18:02:00.000Z" d="M400 700l30 0 0 3 -30 0Z">
+      <metadata><inkml:trace contextRef="#xytfoeoaor">400 701.5 0 0.5 0.9 -1.2 0.5, 430 701.5 50 0.5 0.9 -1.2 0.5</inkml:trace></metadata>
+    </path>
+  </g>
+</svg>

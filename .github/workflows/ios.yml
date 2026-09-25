@@ -8,6 +8,7 @@ on:
       - Sources/**
       - Tests/**
       - core/**
+      - tests/documents/**
       - project.yml
       - sidestore-source.jq
       - .github/workflows/ios.yml

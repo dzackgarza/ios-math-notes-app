@@ -31,3 +31,7 @@ ink-fixtures:
       -DCMAKE_TOOLCHAIN_FILE={{vcpkg}}/scripts/buildsystems/vcpkg.cmake
     cmake --build core/build/ink-host
     core/build/ink-host/ink_host_fixtures core/build/ink-host/_deps/google_ink-src core/tests/fixtures/ink
+
+# Rewrites core/tests/fixtures/documents: the engine's output for each notebook in tests/documents.
+document-fixtures: engine-wasm
+    node {{build}}/tests/write_documents.js tests/documents core/tests/fixtures/documents full custom-size

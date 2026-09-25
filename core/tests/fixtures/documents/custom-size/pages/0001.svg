@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:mn="https://github.com/dzackgarza/math-notes-app/ns/1" xmlns:inkml="http://www.w3.org/2003/InkML" id="p-custom" width="176.39mm" height="247.12mm" viewBox="0 0 500 700.5">
+  <metadata />
+  <g id="background" mn:ruling="lined" mn:y-ruling="21.6" mn:y-offset="43.2" mn:x-ruling="0" mn:margin-left="48">
+    <rect width="500" height="700.5" fill="#FFFFFF" />
+  </g>
+  <g id="l-onlyly">
+    <path id="s-negativezero" fill="#1A1A1A" mn:brush="marker" mn:brush-version="1" mn:size="1.5" mn:time="2026-09-25T22:00:00.000Z" d="M0 0l1.5 0 0 1 -1.5 0Z" />
+  </g>
+</svg>

@@ -6,10 +6,12 @@ on:
     branches: [main]
     paths:
       - core/**
+      - tests/documents/**
       - .github/workflows/engine.yml
   pull_request:
     paths:
       - core/**
+      - tests/documents/**
       - .github/workflows/engine.yml
 
 env:
@@ -27,7 +29,7 @@ jobs:
       - uses: actions/checkout@v5
 
       - name: Install tools
-        run: sudo apt-get update && sudo apt-get install -y ninja-build wabt qpdf brotli
+        run: sudo apt-get update && sudo apt-get install -y ninja-build wabt qpdf brotli libxml2-utils
 
       - uses: emscripten-core/setup-emsdk@v16
         with:
@@ -73,6 +75,15 @@ jobs:
       - name: Check the PDF
         working-directory: ${{ env.BUILD_DIR }}/tests
         run: qpdf --check a4.pdf
+
+      - uses: astral-sh/setup-uv@v7
+
+      - name: Check written pages with xmllint and an InkML reader
+        run: |
+          out="$BUILD_DIR/documents"
+          node "$BUILD_DIR/tests/write_documents.js" tests/documents "$out" full custom-size
+          xmllint --noout "$out"/*/pages/*.svg
+          uvx --with universal-ink-library==2.1.1 python core/tests/inkml_check.py "$out"/*
 
       - name: Check the wasm uses no threads
         run: |

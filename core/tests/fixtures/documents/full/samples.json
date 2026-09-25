@@ -1,0 +1,67 @@
+[
+  {
+    "file": "pages/0001.svg",
+    "id": "s-abcdefghijkl",
+    "count": 4,
+    "first": [
+      100.0,
+      50.0
+    ],
+    "last": [
+      120.0,
+      50.0
+    ]
+  },
+  {
+    "file": "pages/0001.svg",
+    "id": "s-transl8ted22",
+    "count": 2,
+    "first": [
+      200.0,
+      104.0
+    ],
+    "last": [
+      250.0,
+      104.0
+    ]
+  },
+  {
+    "file": "pages/0002.svg",
+    "id": "s-bookmarked01",
+    "count": 2,
+    "first": [
+      80.0,
+      81.5
+    ],
+    "last": [
+      100.0,
+      81.5
+    ]
+  },
+  {
+    "file": "pages/0002.svg",
+    "id": "s-secondlayer1",
+    "count": 2,
+    "first": [
+      400.0,
+      701.5
+    ],
+    "last": [
+      430.0,
+      701.5
+    ]
+  },
+  {
+    "file": "pages/0003.svg",
+    "id": "s-mouseonly001",
+    "count": 3,
+    "first": [
+      10.0,
+      10.0
+    ],
+    "last": [
+      110.0,
+      110.0
+    ]
+  }
+]

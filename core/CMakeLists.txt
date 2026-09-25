@@ -20,12 +20,19 @@ include(cmake/Skia.cmake)
 find_package(pugixml CONFIG REQUIRED)
 find_package(FastFloat CONFIG REQUIRED)
 find_package(Immer CONFIG REQUIRED)
+find_package(nlohmann_json CONFIG REQUIRED)
 include(third_party/ink.cmake)
 
-add_library(ink STATIC src/ink.cpp src/geometry/hit_shapes.cpp)
-target_include_directories(ink PUBLIC include PRIVATE src)
+add_library(ink STATIC
+  src/ink.cpp
+  src/geometry/hit_shapes.cpp
+  src/format/numbers.cpp
+  src/format/page_svg.cpp
+  src/format/notebook.cpp)
+target_include_directories(ink PUBLIC include src)
 target_compile_definitions(ink PRIVATE INK_VERSION="${PROJECT_VERSION}")
-target_link_libraries(ink PUBLIC Skia::skia inkcore pugixml::pugixml FastFloat::fast_float immer)
+target_link_libraries(ink PUBLIC Skia::skia inkcore pugixml::pugixml FastFloat::fast_float immer
+  nlohmann_json::nlohmann_json)
 
 if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
   target_sources(ink PRIVATE src/render/metal_frame.mm)

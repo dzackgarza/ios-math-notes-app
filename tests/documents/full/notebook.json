@@ -1,0 +1,18 @@
+{
+  "format": "math-notes",
+  "version": 1,
+  "title": "Every element kind",
+  "pageSize": "A4",
+  "template": "ruled-medium",
+  "layers": [
+    { "id": "l-inkaaa", "name": "Ink", "hidden": false, "locked": false },
+    { "id": "l-notesb", "name": "Notes", "hidden": true, "locked": true }
+  ],
+  "pages": [
+    { "id": "p-lined1", "file": "pages/0001.svg" },
+    { "id": "p-grid22", "file": "pages/0002.svg" },
+    { "id": "p-dots33", "file": "pages/0003.svg" },
+    { "id": "p-blank4", "file": "pages/0004.svg" },
+    { "id": "p-merge6", "file": "pages/0006.svg" }
+  ]
+}
