@@ -29,6 +29,8 @@ add_library(ink STATIC
   src/format/numbers.cpp
   src/format/page_svg.cpp
   src/format/notebook.cpp
+  src/document/pages.cpp
+  src/document/templates.cpp
   src/strokes/outline.cpp
   src/editor/editor.cpp
   src/editor/history.cpp
@@ -63,8 +65,11 @@ if(EMSCRIPTEN)
     _ink_document_create _ink_document_load_notebook _ink_document_load_page
     _ink_document_load_asset _ink_document_dirty_files _ink_document_mark_saved
     _ink_document_free _ink_document_content_size
+    _ink_document_page_count _ink_document_insert_page _ink_document_delete_page
+    _ink_document_move_page _ink_document_set_page_size _ink_document_set_template
+    _ink_builtin_template_count _ink_builtin_template_name _ink_builtin_template_create
     _ink_canvas_create_webgl _ink_canvas_set_view _ink_canvas_set_surface_size
-    _ink_canvas_set_tool _ink_canvas_set_utc_offset _ink_canvas_free
+    _ink_canvas_set_tool _ink_canvas_set_utc_offset _ink_canvas_free _ink_canvas_page_at
     _ink_input _ink_input_update _ink_render _ink_undo _ink_redo _ink_struct_layout
     _malloc _free)
   list(JOIN INK_EXPORTS "," INK_EXPORTS_FLAG)

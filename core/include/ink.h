@@ -32,12 +32,18 @@ const char *ink_last_error(void);
 
 typedef struct InkDocument InkDocument;
 
+typedef enum InkFileKind {
+  INK_FILE_WRITE = 0, /* write `bytes` to `path` */
+  INK_FILE_DELETE = 1 /* delete `path` (a deleted page); `bytes` is null */
+} InkFileKind;
+
 /* One file of a notebook directory. `path` is relative to the notebook,
    e.g. "pages/0001.svg". */
 typedef struct InkFile {
   const char *path;
   const uint8_t *bytes;
   size_t size;
+  uint32_t kind; /* InkFileKind */
 } InkFile;
 
 /* A new notebook with one blank A4 page and one layer. `seed` seeds the id
@@ -58,11 +64,39 @@ InkStatus ink_document_load_asset(InkDocument *document, const char *path, const
 InkStatus ink_document_dirty_files(InkDocument *document, const InkFile **files, size_t *count);
 /* The host wrote the dirty files. */
 InkStatus ink_document_mark_saved(InkDocument *document);
-/* The laid-out pages' extent in content coordinates (pt): the widest page
-   and the stack's height (ink_canvas_set_view). */
+/* The laid-out pages' extent in content coordinates (pt), the ghost page
+   after the last page included (ink_canvas_set_view). */
 InkStatus ink_document_content_size(InkDocument *document, double *width, double *height);
 /* Frees the document. Free its canvases first. */
 InkStatus ink_document_free(InkDocument *document);
+
+/* ---- Pages and templates ---------------------------------------------- */
+
+/* Listed pages, in notebook.json order. Page indices below count these. */
+InkStatus ink_document_page_count(InkDocument *document, size_t *count);
+/* A new page before page `index` (the count appends), in the notebook's page
+   size, with the template's background. One history step each. */
+InkStatus ink_document_insert_page(InkDocument *document, size_t index);
+/* Removes a page; ink_document_dirty_files then lists its file for deletion. */
+InkStatus ink_document_delete_page(InkDocument *document, size_t index);
+/* Moves page `from` to position `to`. Page files keep their names. */
+InkStatus ink_document_move_page(InkDocument *document, size_t from, size_t to);
+
+typedef enum InkPageSize { INK_PAGE_A4 = 0, INK_PAGE_LETTER = 1, INK_PAGE_CUSTOM = 2 } InkPageSize;
+/* The size of new pages: A4, Letter, or `width` × `height` pt. */
+InkStatus ink_document_set_page_size(InkDocument *document, InkPageSize size, double width,
+                                     double height);
+
+/* The notebook's template: `name` under Notes/.templates/, and the bytes of
+   that template notebook's pages/0001.svg, whose background new pages copy. */
+InkStatus ink_document_set_template(InkDocument *document, const char *name, const uint8_t *svg,
+                                    size_t size);
+/* The built-in templates the host writes to Notes/.templates/ on first use. */
+InkStatus ink_builtin_template_count(size_t *count);
+InkStatus ink_builtin_template_name(size_t index, const char **name);
+/* A document of the built-in template `name`, never saved: its dirty files
+   are the template notebook's files. */
+InkStatus ink_builtin_template_create(const char *name, uint64_t seed, InkDocument **out);
 
 /* ---- Input ------------------------------------------------------------ */
 
@@ -144,6 +178,9 @@ InkStatus ink_canvas_set_tool(InkCanvas *canvas, const InkToolSettings *tool);
 /* UTC ms since the Unix epoch minus the host's sample clock, for mn:time. */
 InkStatus ink_canvas_set_utc_offset(InkCanvas *canvas, double utc_minus_host_ms);
 InkStatus ink_canvas_free(InkCanvas *canvas);
+/* The page under view point (x, y): its index, the page count for the ghost
+   page after the last one, or -1 for none. */
+InkStatus ink_canvas_page_at(InkCanvas *canvas, double x, double y, int32_t *page);
 
 /* One batch of samples per platform event. */
 InkStatus ink_input(InkCanvas *canvas, const InkPenSample *samples, size_t count);
@@ -203,7 +240,8 @@ static_assert(sizeof(InkToolSettings) == 12);
 static_assert(offsetof(InkFile, path) == 0);
 static_assert(offsetof(InkFile, bytes) == sizeof(void *));
 static_assert(offsetof(InkFile, size) == 2 * sizeof(void *));
-static_assert(sizeof(InkFile) == 3 * sizeof(void *));
+static_assert(offsetof(InkFile, kind) == 3 * sizeof(void *));
+static_assert(sizeof(InkFile) == 4 * sizeof(void *));
 #endif
 
 #endif

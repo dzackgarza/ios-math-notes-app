@@ -1,31 +1,48 @@
 import { Button } from "@kobalte/core/button";
-import { onCleanup, onMount } from "solid-js";
+import { DropdownMenu } from "@kobalte/core/dropdown-menu";
+import { For, createResource, onCleanup, onMount } from "solid-js";
 
-import { Brush, type Canvas } from "../engine/engine.ts";
+import { Brush, PageSize, type Canvas } from "../engine/engine.ts";
+import { ViewController, type View } from "../input/gestures.ts";
 import { browserEngine, capabilities, penSamples } from "../input/pointer.ts";
-import type { OpenNotebook } from "./notebook.ts";
+import { listTemplates } from "../storage/folder.ts";
+import { applyTemplate, type OpenNotebook } from "./notebook.ts";
 
 const MARGIN = 16; // CSS px around the pages
+const DOUBLE_TAP_MS = 350;
+const DOUBLE_TAP_PX = 24;
 
 export function Editor(props: { notebook: OpenNotebook; onClose: () => void }) {
   let area!: HTMLDivElement;
   let element!: HTMLCanvasElement;
   let canvas: Canvas | undefined;
   let frame = 0;
-  let scrollY = MARGIN;
   const ids = { next: 0 };
   const engineName = browserEngine();
-  const { document: doc, saver } = props.notebook;
+  const { document: doc, saver, root } = props.notebook;
+  const [templates] = createResource(() => listTemplates(root));
 
-  // Fits the widest page to the width; scrolls vertically.
-  const updateView = () => {
-    if (!canvas) return;
+  // Keeps some page in view: the content may not scroll past the margins.
+  const clampView = (view: View): View => {
     const content = doc.contentSize();
-    const width = element.clientWidth;
-    const scale = Math.min((width - 2 * MARGIN) / content.width, 2);
-    const bottom = element.clientHeight - MARGIN - content.height * scale;
-    scrollY = Math.max(Math.min(scrollY, MARGIN), Math.min(bottom, MARGIN));
-    canvas.setView(scale, 0, 0, scale, (width - content.width * scale) / 2, scrollY);
+    const width = content.width * view.scale, height = content.height * view.scale;
+    const clampAxis = (at: number, size: number, viewport: number) =>
+      size + 2 * MARGIN <= viewport ? (viewport - size) / 2 : Math.min(MARGIN, Math.max(viewport - MARGIN - size, at));
+    return {
+      scale: view.scale,
+      x: clampAxis(view.x, width, element.clientWidth),
+      y: clampAxis(view.y, height, element.clientHeight),
+    };
+  };
+  const controller = new ViewController({ scale: 1, x: MARGIN, y: MARGIN }, (view) => {
+    const clamped = clampView(view);
+    controller.view = clamped;
+    canvas?.setView(clamped.scale, 0, 0, clamped.scale, clamped.x, clamped.y);
+  });
+
+  const fitWidth = () => {
+    const content = doc.contentSize();
+    controller.set({ scale: (element.clientWidth - 2 * MARGIN) / content.width, x: MARGIN, y: MARGIN });
   };
 
   const resize = () => {
@@ -34,7 +51,7 @@ export function Editor(props: { notebook: OpenNotebook; onClose: () => void }) {
     element.width = Math.round(element.clientWidth * ratio);
     element.height = Math.round(element.clientHeight * ratio);
     canvas.setSurfaceSize(element.width, element.height, ratio);
-    updateView();
+    controller.set(controller.view);
   };
 
   const loop = () => {
@@ -42,30 +59,61 @@ export function Editor(props: { notebook: OpenNotebook; onClose: () => void }) {
     frame = requestAnimationFrame(loop);
   };
 
-  let panFrom: number | undefined;
-  const onPointer = (e: PointerEvent) => {
-    if (!canvas) return;
-    if (e.pointerType === "touch") {
-      // Fingers scroll; they never draw.
-      if (e.type === "pointerdown") panFrom = e.clientY;
-      if (e.type === "pointermove" && panFrom !== undefined) {
-        scrollY += e.clientY - panFrom;
-        panFrom = e.clientY;
-        updateView();
-      }
-      if (e.type === "pointerup" || e.type === "pointercancel") panFrom = undefined;
+  const origin = () => {
+    const rect = element.getBoundingClientRect();
+    return { x: rect.left, y: rect.top };
+  };
+
+  // Double tap on the ghost page after the last page adds a page (Write
+  // syncscribble/scribblearea.cpp:1891-1900, scribbledoc.cpp:381-385).
+  let lastTap: { time: number; x: number; y: number } | undefined;
+  let onGhost = false;
+  const onGhostTap = (x: number, y: number, time: number) => {
+    if (lastTap && time - lastTap.time < DOUBLE_TAP_MS && Math.hypot(x - lastTap.x, y - lastTap.y) < DOUBLE_TAP_PX) {
+      lastTap = undefined;
+      edit(() => doc.insertPage(doc.pageCount()));
       return;
     }
-    if (e.type === "pointerdown") element.setPointerCapture(e.pointerId);
-    const rect = element.getBoundingClientRect();
-    canvas.input(penSamples(e, { x: rect.left, y: rect.top }, capabilities(engineName, e.pointerType), ids));
+    lastTap = { time, x, y };
+  };
+
+  const onPointer = (e: PointerEvent) => {
+    if (!canvas) return;
+    const at = origin();
+    if (controller.pointer(e, at)) {
+      if (e.type === "pointerdown") element.setPointerCapture(e.pointerId);
+      return;
+    }
+    const x = e.clientX - at.x, y = e.clientY - at.y;
+    if (e.type === "pointerdown") {
+      element.setPointerCapture(e.pointerId);
+      onGhost = canvas.pageAt(x, y) === doc.pageCount();
+    }
+    if (onGhost) {
+      if (e.type === "pointerup") onGhostTap(x, y, e.timeStamp);
+      if (e.type === "pointerup" || e.type === "pointercancel") onGhost = false;
+      return;
+    }
+    canvas.input(penSamples(e, at, capabilities(engineName, e.pointerType), ids));
     if (e.type === "pointerup" || e.type === "pointercancel") saver.schedule();
   };
 
   const onWheel = (e: WheelEvent) => {
     e.preventDefault();
-    scrollY -= e.deltaY;
-    updateView();
+    controller.wheel(e, origin());
+  };
+
+  // The page at the middle of the view; the last page below the pages.
+  const currentPage = () => {
+    const page = canvas?.pageAt(element.clientWidth / 2, element.clientHeight / 2) ?? 0;
+    const count = doc.pageCount();
+    return page < 0 || page >= count ? count - 1 : page;
+  };
+
+  const edit = (change: () => void) => {
+    change();
+    controller.set(controller.view);
+    saver.schedule();
   };
 
   onMount(() => {
@@ -75,6 +123,7 @@ export function Editor(props: { notebook: OpenNotebook; onClose: () => void }) {
     const observer = new ResizeObserver(resize);
     observer.observe(area);
     resize();
+    fitWidth();
     frame = requestAnimationFrame(loop);
     onCleanup(() => {
       observer.disconnect();
@@ -97,6 +146,69 @@ export function Editor(props: { notebook: OpenNotebook; onClose: () => void }) {
           Library
         </Button>
         <span>{props.notebook.name}</span>
+        <DropdownMenu>
+          <DropdownMenu.Trigger class="button">Page</DropdownMenu.Trigger>
+          <DropdownMenu.Portal>
+            <DropdownMenu.Content class="menu">
+              <DropdownMenu.Item class="menu-item" onSelect={() => edit(() => doc.insertPage(currentPage()))}>
+                Insert page before
+              </DropdownMenu.Item>
+              <DropdownMenu.Item class="menu-item" onSelect={() => edit(() => doc.insertPage(currentPage() + 1))}>
+                Insert page after
+              </DropdownMenu.Item>
+              <DropdownMenu.Item
+                class="menu-item"
+                onSelect={() => edit(() => doc.pageCount() > 1 && doc.deletePage(currentPage()))}
+              >
+                Delete page
+              </DropdownMenu.Item>
+              <DropdownMenu.Item
+                class="menu-item"
+                onSelect={() => edit(() => currentPage() > 0 && doc.movePage(currentPage(), currentPage() - 1))}
+              >
+                Move page up
+              </DropdownMenu.Item>
+              <DropdownMenu.Item
+                class="menu-item"
+                onSelect={() =>
+                  edit(() => currentPage() < doc.pageCount() - 1 && doc.movePage(currentPage(), currentPage() + 1))
+                }
+              >
+                Move page down
+              </DropdownMenu.Item>
+              <DropdownMenu.Sub>
+                <DropdownMenu.SubTrigger class="menu-item">Page size</DropdownMenu.SubTrigger>
+                <DropdownMenu.Portal>
+                  <DropdownMenu.SubContent class="menu">
+                    <DropdownMenu.Item class="menu-item" onSelect={() => edit(() => doc.setPageSize(PageSize.a4))}>
+                      A4
+                    </DropdownMenu.Item>
+                    <DropdownMenu.Item class="menu-item" onSelect={() => edit(() => doc.setPageSize(PageSize.letter))}>
+                      Letter
+                    </DropdownMenu.Item>
+                  </DropdownMenu.SubContent>
+                </DropdownMenu.Portal>
+              </DropdownMenu.Sub>
+              <DropdownMenu.Sub>
+                <DropdownMenu.SubTrigger class="menu-item">Template</DropdownMenu.SubTrigger>
+                <DropdownMenu.Portal>
+                  <DropdownMenu.SubContent class="menu">
+                    <For each={templates()}>
+                      {(name) => (
+                        <DropdownMenu.Item
+                          class="menu-item"
+                          onSelect={() => void applyTemplate(root, doc, name).then(() => edit(() => {}))}
+                        >
+                          {name}
+                        </DropdownMenu.Item>
+                      )}
+                    </For>
+                  </DropdownMenu.SubContent>
+                </DropdownMenu.Portal>
+              </DropdownMenu.Sub>
+            </DropdownMenu.Content>
+          </DropdownMenu.Portal>
+        </DropdownMenu>
       </div>
       <div class="canvas-area" ref={area}>
         <canvas

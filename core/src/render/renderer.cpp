@@ -167,12 +167,14 @@ SkMatrix Renderer::ContentMatrix() const {
          ToSkMatrix(view_.content_to_view);
 }
 
-bool Renderer::Update(const Document &document, const View &view, bool live_changed) {
+bool Renderer::Update(const Document &document, const View &view, bool live_changed,
+                      const Page *ghost) {
+  std::optional<Page> next_ghost = ghost ? std::optional<Page>(*ghost) : std::nullopt;
   std::vector<PagePlacement> layout = LayoutPages(document);
   bool document_changed = !document_ || !(document_->pages == document.pages) ||
                           !(document_->notebook == document.notebook);
   bool full = !content_ || invalidated_ || !(view == view_) || layout != layout_ ||
-              !(document_->notebook == document.notebook);
+              ghost_ != next_ghost || !(document_->notebook == document.notebook);
   invalidated_ = false;
   SkRegion dirty;
   if (!full && document_changed) dirty = DirtyRegion(document);
@@ -191,6 +193,7 @@ bool Renderer::Update(const Document &document, const View &view, bool live_chan
                         : SkSurfaces::Raster(info);
   }
   document_ = document;
+  ghost_ = std::move(next_ghost);
   layout_ = std::move(layout);
   view_ = view;
 
@@ -263,6 +266,17 @@ void Renderer::Redraw(const SkRegion &region) {
       DrawPage(canvas, *document_->pages[placement.page],
                clip_content.makeOffset(-page_rect.x(), -page_rect.y()));
     }
+    if (ghost_) {
+      PagePlacement at = GhostPlacement(layout_, ghost_->width, ghost_->height);
+      SkRect rect = SkRect::MakeXYWH(float(at.x), float(at.y), float(at.width), float(at.height));
+      if (SkRect::Intersects(rect, clip_content)) {
+        canvas->setMatrix(content * SkMatrix::Translate(rect.x(), rect.y()));
+        SkRect bounds = SkRect::MakeWH(rect.width(), rect.height());
+        canvas->saveLayerAlphaf(&bounds, 0.25f);
+        DrawPage(canvas, *ghost_, clip_content.makeOffset(-rect.x(), -rect.y()));
+        canvas->restore();
+      }
+    }
   }
   canvas->restore();
   for (SkRegion::Iterator it(region); !it.done(); it.next()) {
@@ -277,6 +291,25 @@ void Renderer::DrawPage(SkCanvas *canvas, const Page &page, const SkRect &cull) 
   canvas->drawRect(SkRect::MakeWH(float(page.width), float(page.height)), FillPaint(bg.fill));
   if (bg.image) DrawImage(canvas, page, *bg.image);
   for (const RulingPath &line : bg.lines) {
+    if (line.round_caps) {
+      // SVG 2 §13.6.3 (zero-length subpaths): a round cap paints a circle
+      // whose diameter is the stroke width. Filled, as browsers paint it.
+      SkPathBuilder dots;
+      std::vector<Polyline> strokes;
+      for (const Polyline &p : line.d) {
+        bool zero = !p.empty() && std::all_of(p.begin(), p.end(), [&](const Point &q) { return q == p[0]; });
+        if (zero) {
+          dots.addCircle(float(p[0].x), float(p[0].y), float(line.stroke_width / 2));
+        } else {
+          strokes.push_back(p);
+        }
+      }
+      canvas->drawPath(dots.detach(), FillPaint(line.stroke));
+      SkPaint paint = StrokePaint(line.stroke, line.stroke_width);
+      paint.setStrokeCap(SkPaint::kRound_Cap);
+      canvas->drawPath(OpenPath(strokes), paint);
+      continue;
+    }
     canvas->drawPath(OpenPath(line.d), StrokePaint(line.stroke, line.stroke_width));
   }
   const std::vector<Layer> &layers = document_->notebook.layers;

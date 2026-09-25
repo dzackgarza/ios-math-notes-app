@@ -36,7 +36,12 @@ ink-fixtures:
 document-fixtures: engine-wasm
     node {{build}}/tests/write_documents.js tests/documents core/tests/fixtures/documents full custom-size
 
-# Rewrites core/tests/fixtures/render: Chromium's rendering of each page in core/tests/fixtures/documents.
+# Rewrites core/tests/fixtures/templates: the notebook of each built-in template.
+template-fixtures: engine-wasm
+    node {{build}}/tests/write_templates.js core/tests/fixtures/templates
+
+# Rewrites core/tests/fixtures/render: Chromium's rendering of each listed page in
+# core/tests/fixtures/documents and core/tests/fixtures/templates.
 render-goldens:
     cd core/tests/webgl && bun install --frozen-lockfile && bun run render-goldens.mjs
 

@@ -1,0 +1,21 @@
+{
+  "format": "math-notes",
+  "version": 1,
+  "title": "grid-fine",
+  "pageSize": "A4",
+  "template": "grid-fine",
+  "layers": [
+    {
+      "id": "l-io2oyj",
+      "name": "Ink",
+      "hidden": false,
+      "locked": false
+    }
+  ],
+  "pages": [
+    {
+      "id": "p-ujaqa3",
+      "file": "pages/0001.svg"
+    }
+  ]
+}

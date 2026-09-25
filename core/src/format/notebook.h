@@ -32,6 +32,10 @@ const Page &AddPage(Document &document, const std::string &file, std::string_vie
 // written. `saved` is null for a notebook that was never saved.
 NotebookFiles ChangedFiles(const Document &current, const Document *saved);
 
+// Page files of `saved` that `current` no longer has: deleted pages, whose
+// files the host removes. Error pages are never removed (FORMAT.md).
+std::vector<std::string> RemovedFiles(const Document &current, const Document *saved);
+
 // Every file of the notebook, for a first save.
 NotebookFiles AllFiles(const Document &document);
 

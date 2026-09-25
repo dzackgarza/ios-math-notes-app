@@ -1,14 +1,15 @@
 // A notebook open in the engine, and its saving: the files that
 // ink_document_dirty_files returns, written 1 s after the last committed edit.
-import type { Engine, InkDocument } from "../engine/engine.ts";
+import type { Engine, FileChange, InkDocument } from "../engine/engine.ts";
 import { EngineError, Status } from "../engine/engine.ts";
-import { readNotebook, writeFiles } from "../storage/folder.ts";
+import { ensureTemplates, readNotebook, readTemplatePage, writeFiles } from "../storage/folder.ts";
 
 export const SAVE_DELAY_MS = 1000;
 
 export interface OpenNotebook {
   engine: Engine;
   document: InkDocument;
+  root: FileSystemDirectoryHandle;
   dir: FileSystemDirectoryHandle;
   name: string;
   saver: Saver;
@@ -17,8 +18,8 @@ export interface OpenNotebook {
 export class Saver {
   private readonly document: InkDocument;
   private readonly dir: FileSystemDirectoryHandle;
-  // Files taken from the engine and not yet written, newest bytes per path.
-  private readonly pending = new Map<string, Uint8Array<ArrayBuffer>>();
+  // Changes taken from the engine and not yet written, newest per path.
+  private readonly pending = new Map<string, FileChange>();
   private timer: ReturnType<typeof setTimeout> | undefined;
   private writing: Promise<void> = Promise.resolve();
 
@@ -37,35 +38,43 @@ export class Saver {
   // falls between; a failed write keeps them pending for the next save.
   save(): Promise<void> {
     clearTimeout(this.timer);
-    for (const file of this.document.dirtyFiles()) this.pending.set(file.path, file.bytes);
+    for (const change of this.document.dirtyFiles()) this.pending.set(change.path, change);
     this.document.markSaved();
     this.writing = this.writing.then(async () => {
-      const files = [...this.pending].map(([path, bytes]) => ({ path, bytes }));
-      if (files.length === 0) return;
-      await writeFiles(this.dir, files);
-      for (const file of files) {
-        if (this.pending.get(file.path) === file.bytes) this.pending.delete(file.path);
+      const changes = [...this.pending.values()];
+      if (changes.length === 0) return;
+      await writeFiles(this.dir, changes);
+      for (const change of changes) {
+        if (this.pending.get(change.path) === change) this.pending.delete(change.path);
+        if (change.kind === "write") window.mathNotesWrites?.push({ path: change.path, bytes: change.bytes });
       }
-      window.mathNotesWrites?.push(...files);
     });
     return this.writing;
   }
 }
 
 function randomSeed(): bigint {
-  const words = crypto.getRandomValues(new BigUint64Array(1));
-  return words[0];
+  return crypto.getRandomValues(new BigUint64Array(1))[0];
+}
+
+// Gives the document its template's page 1 from Notes/.templates/.
+export async function applyTemplate(root: FileSystemDirectoryHandle, document: InkDocument, name: string): Promise<void> {
+  const page1 = await readTemplatePage(root, name);
+  if (page1) document.setTemplate(name, page1);
 }
 
 export async function createNotebook(engine: Engine, root: FileSystemDirectoryHandle, name: string): Promise<OpenNotebook> {
+  await ensureTemplates(root, engine);
   const dir = await root.getDirectoryHandle(name, { create: true });
   const document = engine.createDocument(randomSeed());
+  await applyTemplate(root, document, "blank");
   const saver = new Saver(document, dir);
   await saver.save();
-  return { engine, document, dir, name, saver };
+  return { engine, document, root, dir, name, saver };
 }
 
 export async function openNotebook(engine: Engine, root: FileSystemDirectoryHandle, name: string): Promise<OpenNotebook> {
+  await ensureTemplates(root, engine);
   const dir = await root.getDirectoryHandle(name);
   const files = await readNotebook(dir);
   const document = engine.createDocument(randomSeed());
@@ -79,5 +88,7 @@ export async function openNotebook(engine: Engine, root: FileSystemDirectoryHand
     }
   }
   for (const asset of files.assets) document.loadAsset(asset.path, asset.bytes);
-  return { engine, document, dir, name, saver: new Saver(document, dir) };
+  const { template } = JSON.parse(new TextDecoder().decode(files.notebookJson)) as { template?: string };
+  if (template) await applyTemplate(root, document, template);
+  return { engine, document, root, dir, name, saver: new Saver(document, dir) };
 }
