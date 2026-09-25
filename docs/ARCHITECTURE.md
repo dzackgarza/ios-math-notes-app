@@ -9,6 +9,13 @@ ports those algorithms from Write's source onto its own data model and
 libraries (google/ink, Skia, immer) and checks them against fixtures recorded
 from Write.
 
+Write is a source of algorithms, code patterns, features and extension
+points, and fixtures check behavior, never appearance. The look and the
+everyday interaction patterns (page layout, scrolling, adding pages, tool
+chrome, colors, paper) follow GoodNotes and Noteful and the tablet spec
+([specs/tablet-ui.md](specs/tablet-ui.md)); nothing visual is taken from
+Write.
+
 Work order and milestones: the GitHub issue tree rooted at
 [#11](https://github.com/dzackgarza/math-notes-app/issues/11)
 (`itree next dzackgarza/math-notes-app` gives the next work unit).

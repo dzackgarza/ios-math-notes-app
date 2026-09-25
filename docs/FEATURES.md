@@ -1,8 +1,10 @@
 # Feature spec
 
-Math Notes is a vector handwriting app for mathematics notes and talks. The
-behavioral model is [Stylus Labs Write](https://github.com/styluslabs/write):
-notes are SVG files on the ordinary filesystem, and ink is reflowable. Because
+Math Notes is a vector handwriting app for mathematics notes and talks. Its
+features come from [Stylus Labs Write](https://github.com/styluslabs/write):
+notes are SVG files on the ordinary filesystem, and ink is reflowable. Its
+look and everyday interaction follow GoodNotes and Noteful, as specified in
+[specs/tablet-ui.md](specs/tablet-ui.md); nothing visual comes from Write. Because
 the files are plain SVG, external programs can process them; the app does not
 need to interpret the ink.
 

@@ -4,7 +4,8 @@ The target interface for the web app and the iPad app on a tablet-sized
 screen. The four mockups below are the reference for layout, controls and
 visual style. They are illustrations: the handwriting, names, counts and dates
 in them are sample content, and the app is Math Notes. Phone layouts are not
-specified.
+specified. Where the mockups leave something open, GoodNotes and Noteful
+are the reference for look and interaction.
 
 ## Screens
 
