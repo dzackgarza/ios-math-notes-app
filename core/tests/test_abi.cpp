@@ -110,16 +110,16 @@ TEST_CASE("Undo and redo move through the document values") {
   DrawLine(session.get(), 200);
   auto strokes = [&] { return session.doc().pages[0]->layers[0].elements.size(); };
   REQUIRE(strokes() == 2);
-  int32_t moved = 0;
-  REQUIRE(ink_undo(session.document, &moved) == INK_OK);
+  int32_t moved = 0, page = 0;
+  REQUIRE(ink_undo(session.document, &moved, &page) == INK_OK);
   CHECK((moved == 1 && strokes() == 1));
-  ink_undo(session.document, &moved);
-  ink_undo(session.document, &moved);
+  ink_undo(session.document, &moved, &page);
+  ink_undo(session.document, &moved, &page);
   CHECK((moved == 0 && strokes() == 0));
-  ink_redo(session.document, &moved);
+  ink_redo(session.document, &moved, &page);
   CHECK((moved == 1 && strokes() == 1));
   // A new stroke after an undo drops the redo branch.
   DrawLine(session.get(), 300);
-  ink_redo(session.document, &moved);
+  ink_redo(session.document, &moved, &page);
   CHECK((moved == 0 && strokes() == 2));
 }

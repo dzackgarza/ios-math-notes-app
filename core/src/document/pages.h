@@ -45,3 +45,13 @@ Document MovePage(Document document, size_t from, size_t to);
 Document SetPageSize(Document document, PageSize size);
 
 }  // namespace ink_engine
+
+namespace ink_engine {
+
+// The first listed page of `after` whose value is not the one in `before`:
+// the page an undo or redo shows (Write syncscribble/syncundo.cpp:238-303
+// shows the page of the undone action). The last page when only pages
+// after it were removed; none when only notebook settings changed.
+std::optional<size_t> FirstChangedPage(const Document &before, const Document &after);
+
+}  // namespace ink_engine

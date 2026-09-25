@@ -116,7 +116,31 @@ export function Editor(props: { notebook: OpenNotebook; onClose: () => void }) {
     saver.schedule();
   };
 
+  // Scrolls page `index` into view when it is not already visible.
+  const showPage = (index: number) => {
+    if (index < 0) return;
+    const rect = doc.pageRect(index);
+    const { scale, x, y } = controller.view;
+    const top = y + rect.y * scale, bottom = top + rect.height * scale;
+    if (bottom > 0 && top < element.clientHeight) return;
+    controller.set({ scale, x, y: MARGIN - rect.y * scale });
+  };
+
+  const history = (step: "undo" | "redo") => {
+    const moved = step === "undo" ? doc.undo() : doc.redo();
+    if (!moved) return;
+    edit(() => showPage(moved.page));
+  };
+
+  const onKey = (e: KeyboardEvent) => {
+    if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== "z") return;
+    e.preventDefault();
+    history(e.shiftKey ? "redo" : "undo");
+  };
+
   onMount(() => {
+    window.addEventListener("keydown", onKey);
+    onCleanup(() => window.removeEventListener("keydown", onKey));
     canvas = doc.createCanvas("#ink-canvas");
     canvas.setTool({ brush: Brush.pressurePen, rgb: 0x1a1a1a, size: 1.6 });
     canvas.setUtcOffset(performance.timeOrigin);
@@ -146,6 +170,12 @@ export function Editor(props: { notebook: OpenNotebook; onClose: () => void }) {
           Library
         </Button>
         <span>{props.notebook.name}</span>
+        <Button class="button" aria-label="Undo" title="Undo (Ctrl+Z)" onClick={() => history("undo")}>
+          Undo
+        </Button>
+        <Button class="button" aria-label="Redo" title="Redo (Shift+Ctrl+Z)" onClick={() => history("redo")}>
+          Redo
+        </Button>
         <DropdownMenu>
           <DropdownMenu.Trigger class="button">Page</DropdownMenu.Trigger>
           <DropdownMenu.Portal>

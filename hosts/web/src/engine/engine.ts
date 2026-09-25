@@ -65,6 +65,11 @@ export interface PenSample {
   predicted: boolean;
 }
 
+// An undo or redo step: the page it changed, or -1 for none.
+export interface HistoryStep {
+  page: number;
+}
+
 export interface ToolSettings {
   brush: number;
   rgb: number;
@@ -367,19 +372,32 @@ export class InkDocument {
     this.engine.check(this.engine.module._ink_document_mark_saved(this.pointer));
   }
 
-  undo(): boolean {
-    return this.moveInHistory((out) => this.engine.module._ink_undo(this.pointer, out));
+  // One step back; null at the start of the history.
+  undo(): HistoryStep | null {
+    return this.step((moved, page) => this.engine.module._ink_undo(this.pointer, moved, page));
   }
 
-  redo(): boolean {
-    return this.moveInHistory((out) => this.engine.module._ink_redo(this.pointer, out));
+  redo(): HistoryStep | null {
+    return this.step((moved, page) => this.engine.module._ink_redo(this.pointer, moved, page));
   }
 
-  private moveInHistory(call: (out: number) => number): boolean {
+  private step(call: (moved: number, page: number) => number): HistoryStep | null {
     const e = this.engine;
-    return e.withScratch(4, (out) => {
-      e.check(call(out));
-      return e.view().getInt32(out, true) !== 0;
+    return e.withScratch(8, (out) => {
+      e.check(call(out, out + 4));
+      const view = e.view();
+      return view.getInt32(out, true) !== 0 ? { page: view.getInt32(out + 4, true) } : null;
+    });
+  }
+
+  // Listed page `index`'s rectangle in content coordinates (pt).
+  pageRect(index: number): { x: number; y: number; width: number; height: number } {
+    const e = this.engine;
+    return e.withScratch(32, (out) => {
+      e.check(e.module._ink_document_page_rect(this.pointer, index, out, out + 8, out + 16, out + 24));
+      const view = e.view();
+      const at = (i: number) => view.getFloat64(out + 8 * i, true);
+      return { x: at(0), y: at(1), width: at(2), height: at(3) };
     });
   }
 
