@@ -48,11 +48,6 @@ std::string_view Bytes(const uint8_t *bytes, size_t size) {
 
 InkStatus BadPageIndex() { return Fail(INK_ERROR_ARGUMENT, "page index out of range"); }
 
-// The page a new page would be: drawn as the ghost page after the last one.
-ink_engine::Page GhostPage(const InkDocument &document) {
-  return ink_engine::NewPage(document.history.current(), document.template_page);
-}
-
 // One undo or redo step: `*page` is the page the step changed, or -1.
 InkStatus Step(InkDocument *document, bool (ink_engine::DocumentHistory::*move)(), int32_t *moved,
                int32_t *page) {
@@ -63,12 +58,6 @@ InkStatus Step(InkDocument *document, bool (ink_engine::DocumentHistory::*move)(
   std::optional<size_t> changed = ink_engine::FirstChangedPage(before, document->history.current());
   *page = changed ? int32_t(*changed) : -1;
   return INK_OK;
-}
-
-ink_engine::PagePlacement GhostPlacement(const InkDocument &document,
-                                         const std::vector<ink_engine::PagePlacement> &layout) {
-  ink_engine::Page ghost = GhostPage(document);
-  return ink_engine::GhostPlacement(layout, ghost.width, ghost.height);
 }
 
 InkStatus AttachSurface(InkDocument *document, std::unique_ptr<ink_engine::HostSurface> surface,
@@ -99,6 +88,26 @@ InkStatus ink_document_create(uint64_t seed, InkDocument **out) {
     ink_engine::IdGenerator ids(seed);
     ink_engine::Document document = ink_engine::NewNotebook(ids);
     *out = new InkDocument{ink_engine::DocumentHistory(std::move(document), seed + 1)};
+    return INK_OK;
+  });
+}
+
+InkStatus ink_document_create_from_template(uint64_t seed, const char *name, const uint8_t *svg,
+                                            size_t size, InkDocument **out) {
+  return Call([&] {
+    if (!name) return NullArgument("name");
+    if (!svg && size) return NullArgument("svg");
+    if (!out) return NullArgument("out");
+    ink_engine::Page template_page = ink_engine::ReadPage(Bytes(svg, size), "pages/0001.svg", {});
+    if (template_page.error) return Fail(INK_ERROR_PARSE, std::string(name) + ": " + *template_page.error);
+    ink_engine::IdGenerator ids(seed);
+    ink_engine::Document document = ink_engine::NewNotebook(ids);
+    document.notebook.template_name = name;
+    ink_engine::Page page = *document.pages[0];
+    page.background = ink_engine::NewPage(document, template_page).background;
+    document.pages = document.pages.set(0, immer::box<ink_engine::Page>(std::move(page)));
+    *out = new InkDocument{ink_engine::DocumentHistory(std::move(document), seed + 1)};
+    (*out)->template_page = std::move(template_page);
     return INK_OK;
   });
 }
@@ -175,10 +184,9 @@ InkStatus ink_document_content_size(InkDocument *document, double *width, double
     if (!width || !height) return NullArgument("width or height");
     std::vector<ink_engine::PagePlacement> layout =
         ink_engine::LayoutPages(document->history.current());
-    ink_engine::PagePlacement ghost = GhostPlacement(*document, layout);
-    *width = ghost.width;
+    *width = 0;
     for (const auto &page : layout) *width = std::max(*width, page.width);
-    *height = ghost.y + ghost.height;
+    *height = layout.empty() ? 0 : layout.back().y + layout.back().height;
     return INK_OK;
   });
 }
@@ -388,7 +396,6 @@ InkStatus ink_canvas_page_at(InkCanvas *canvas, double x, double y, int32_t *pag
     for (size_t i = 0; i < layout.size(); ++i) {
       if (contains(layout[i])) *page = int32_t(i);
     }
-    if (contains(GhostPlacement(*canvas->document, layout))) *page = int32_t(layout.size());
     return INK_OK;
   });
 }
@@ -435,8 +442,7 @@ InkStatus ink_render(InkCanvas *canvas, int32_t *drew) {
     bool live_changed = !editor.TakeUpdatedRegion().IsEmpty() || drawing != canvas->was_drawing;
     canvas->was_drawing = drawing;
     ink_engine::View view{editor.view(), canvas->pixel_ratio, canvas->width, canvas->height};
-    ink_engine::Page ghost = GhostPage(*canvas->document);
-    if (!canvas->renderer->Update(editor.document(), view, live_changed, &ghost)) return INK_OK;
+    if (!canvas->renderer->Update(editor.document(), view, live_changed)) return INK_OK;
     SkSurface *screen = canvas->surface->BeginFrame(canvas->width, canvas->height);
     if (!screen) return Fail(INK_ERROR_GPU, "the host surface gave no frame");
     std::optional<ink_engine::LiveInk> live;

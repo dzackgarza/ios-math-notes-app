@@ -6,6 +6,7 @@
 
 #include "document/templates.h"
 #include "format/notebook.h"
+#include "format/page_svg.h"
 #include "ink.h"
 #include "support/session.h"
 
@@ -133,7 +134,7 @@ TEST_CASE("A new page copies the template's background, regenerated for another 
                                   bad.size()) == INK_ERROR_PARSE);
 }
 
-TEST_CASE("The page under a view point, and the ghost page after the last") {
+TEST_CASE("The page under a view point, and the pages' extent") {
   ink_test::Session session;
   ink_document_insert_page(session.document, 1);
   InkCanvas *canvas = session.get();
@@ -141,15 +142,15 @@ TEST_CASE("The page under a view point, and the ghost page after the last") {
   int32_t page = 0;
   ink_canvas_page_at(canvas, 100, 100, &page);
   CHECK(page == 0);
-  ink_canvas_page_at(canvas, 100, (841.89 + 9.6 + 100) * 0.5, &page);
+  ink_canvas_page_at(canvas, 100, (841.89 + 100) * 0.5, &page);
   CHECK(page == 1);
-  ink_canvas_page_at(canvas, 100, (2 * (841.89 + 9.6) + 100) * 0.5, &page);
-  CHECK(page == 2);  // the ghost page
+  ink_canvas_page_at(canvas, 100, (2 * 841.89 + 100) * 0.5, &page);
+  CHECK(page == -1);  // below the last page
   ink_canvas_page_at(canvas, 400, 100, &page);
   CHECK(page == -1);  // beside the page
   double width = 0, height = 0;
   ink_document_content_size(session.document, &width, &height);
-  CHECK(height == 3 * 841.89 + 2 * 9.6);
+  CHECK(height == 2 * 841.89);
 }
 
 TEST_CASE("Built-in templates are the Write presets") {
@@ -165,4 +166,24 @@ TEST_CASE("Built-in templates are the Write presets") {
                                           "grid-coarse", "grid-medium", "grid-fine", "dotted"});
   InkDocument *unknown = nullptr;
   CHECK(ink_builtin_template_create("plaid", 1, &unknown) == INK_ERROR_ARGUMENT);
+}
+
+TEST_CASE("A notebook created from a template has page 1 on its background") {
+  InkDocument *dotted = nullptr;
+  REQUIRE(ink_builtin_template_create("dotted", 3, &dotted) == INK_OK);
+  const std::string page1 = AllFiles(dotted->history.current()).at("pages/0001.svg");
+  const Background expected = ReadPage(page1, "pages/0001.svg", {}).background;
+  ink_document_free(dotted);
+
+  InkDocument *document = nullptr;
+  const auto *svg = reinterpret_cast<const uint8_t *>(page1.data());
+  REQUIRE(ink_document_create_from_template(5, "dotted", svg, page1.size(), &document) == INK_OK);
+  const Document &doc = document->history.current();
+  CHECK(doc.notebook.template_name == "dotted");
+  REQUIRE(doc.pages.size() == 1);
+  CHECK(doc.pages[0]->background == expected);
+  int32_t moved = 1, page = 0;
+  ink_undo(document, &moved, &page);
+  CHECK(moved == 0);
+  ink_document_free(document);
 }

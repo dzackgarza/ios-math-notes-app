@@ -11,6 +11,7 @@
 #include "ink/color/color.h"
 #include "ink/strokes/stroke.h"
 #include "layout/layout.h"
+#include "strokes/clip.h"
 #include "strokes/outline.h"
 
 namespace ink_engine {
@@ -195,19 +196,30 @@ void Editor::Commit() {
                                : live.stroke.CopyToStroke();
   if (ink_stroke.GetInputs().IsEmpty()) return;
 
-  std::string id = history_->ids().StrokeId();
-  Stroke element = MakeElement(id, ink_stroke, live.pen, live.t0, live.real);
+  // Only the parts on the page are kept, each its own stroke; a stroke
+  // entirely off the page commits nothing.
   Document next = document();
   Page page = *next.pages[page_];
+  std::vector<std::vector<InkPenSample>> pieces =
+      PiecesInside(live.real, {.right = page.width, .bottom = page.height});
+  if (pieces.empty()) return;
+  bool whole = pieces.size() == 1 && pieces[0].size() == live.real.size() &&
+               pieces[0].front().id != kInterpolatedSampleId &&
+               pieces[0].back().id != kInterpolatedSampleId;
   Elements &elements = page.layers[layer_].elements;
-  auto box = immer::box<Element>(Element{std::move(element)});
-  // A highlighter goes under the ink of its layer, as Write's DRAW_UNDER does
-  // (syncscribble/scribblearea.cpp:1975-1976, styluslabs/Write 401b65d).
-  elements = live.pen.brush == INK_BRUSH_HIGHLIGHTER ? std::move(elements).push_front(box)
-                                                     : std::move(elements).push_back(box);
+  for (std::vector<InkPenSample> &piece : pieces) {
+    double t0 = whole ? live.t0 : piece.front().time;
+    ink::Stroke piece_stroke = whole ? ink_stroke : ink::Stroke(MakeBrush(live.pen), Batch(piece, t0));
+    std::string id = history_->ids().StrokeId();
+    auto box = immer::box<Element>(Element{MakeElement(id, piece_stroke, live.pen, t0, piece)});
+    // A highlighter goes under the ink of its layer, as Write's DRAW_UNDER does
+    // (syncscribble/scribblearea.cpp:1975-1976, styluslabs/Write 401b65d).
+    elements = live.pen.brush == INK_BRUSH_HIGHLIGHTER ? std::move(elements).push_front(box)
+                                                       : std::move(elements).push_back(box);
+    committed_.push_back({id, page_, layer_, t0, live.pen, live.origin, std::move(piece)});
+  }
   next.pages = next.pages.set(page_, immer::box<Page>(std::move(page)));
   history_->Push(std::move(next));
-  committed_.push_back({id, page_, layer_, live.t0, live.pen, live.origin, std::move(live.real)});
 }
 
 Stroke Editor::MakeElement(const std::string &id, const ink::Stroke &ink_stroke, const Pen &pen,

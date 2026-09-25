@@ -21,7 +21,7 @@ struct RulingSpec {
   double margin_left = 0;  // pt; 0 without a margin line
 };
 
-// The background of a `width` × `height` page: white paper and the ruling.
+// The background of a `width` × `height` page: the paper and the ruling.
 // Lines start one spacing in from the top and left edges; a blank page has
 // Write's blankYRuling of 28.8 pt for the ruled tools.
 Background MakeBackground(const RulingSpec &spec, double width, double height);

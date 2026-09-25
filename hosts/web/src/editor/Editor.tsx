@@ -13,8 +13,6 @@ import { paperLabel } from "../ui/paper.tsx";
 import { applyTemplate, type OpenNotebook } from "./notebook.ts";
 
 const MARGIN = 16; // CSS px around the pages
-const DOUBLE_TAP_MS = 350;
-const DOUBLE_TAP_PX = 24;
 
 // The tool rail's pens (docs/specs/tablet-ui.md, Editor): brush and size in pt.
 const PENS = {
@@ -111,19 +109,6 @@ export function Editor(props: {
     return { x: rect.left, y: rect.top };
   };
 
-  // Double tap on the ghost page after the last page adds a page (Write
-  // syncscribble/scribblearea.cpp:1891-1900, scribbledoc.cpp:381-385).
-  let lastTap: { time: number; x: number; y: number } | undefined;
-  let onGhost = false;
-  const onGhostTap = (x: number, y: number, time: number) => {
-    if (lastTap && time - lastTap.time < DOUBLE_TAP_MS && Math.hypot(x - lastTap.x, y - lastTap.y) < DOUBLE_TAP_PX) {
-      lastTap = undefined;
-      edit(() => doc.insertPage(doc.pageCount()));
-      return;
-    }
-    lastTap = { time, x, y };
-  };
-
   const onPointer = (e: PointerEvent) => {
     if (!canvas) return;
     const at = origin();
@@ -131,16 +116,7 @@ export function Editor(props: {
       if (e.type === "pointerdown") element.setPointerCapture(e.pointerId);
       return;
     }
-    const x = e.clientX - at.x, y = e.clientY - at.y;
-    if (e.type === "pointerdown") {
-      element.setPointerCapture(e.pointerId);
-      onGhost = canvas.pageAt(x, y) === doc.pageCount();
-    }
-    if (onGhost) {
-      if (e.type === "pointerup") onGhostTap(x, y, e.timeStamp);
-      if (e.type === "pointerup" || e.type === "pointercancel") onGhost = false;
-      return;
-    }
+    if (e.type === "pointerdown") element.setPointerCapture(e.pointerId);
     canvas.input(penSamples(e, at, capabilities(engineName, e.pointerType), ids));
     if (e.type === "pointerup" || e.type === "pointercancel") saver.schedule();
   };

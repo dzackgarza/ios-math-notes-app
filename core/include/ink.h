@@ -49,6 +49,11 @@ typedef struct InkFile {
 /* A new notebook with one blank A4 page and one layer. `seed` seeds the id
    generator. */
 InkStatus ink_document_create(uint64_t seed, InkDocument **out);
+/* A new notebook as ink_document_create, with template `name` set as by
+   ink_document_set_template and page 1 on that template's background. The
+   document starts with no undo step. */
+InkStatus ink_document_create_from_template(uint64_t seed, const char *name, const uint8_t *svg,
+                                            size_t size, InkDocument **out);
 /* Replaces the document with the notebook of notebook.json. Its listed pages
    are error pages ("missing file") until ink_document_load_page loads them. */
 InkStatus ink_document_load_notebook(InkDocument *document, const uint8_t *json, size_t size);
@@ -64,8 +69,8 @@ InkStatus ink_document_load_asset(InkDocument *document, const char *path, const
 InkStatus ink_document_dirty_files(InkDocument *document, const InkFile **files, size_t *count);
 /* The host wrote the dirty files. */
 InkStatus ink_document_mark_saved(InkDocument *document);
-/* The laid-out pages' extent in content coordinates (pt), the ghost page
-   after the last page included (ink_canvas_set_view). */
+/* The laid-out pages' extent in content coordinates (pt), for
+   ink_canvas_set_view. */
 InkStatus ink_document_content_size(InkDocument *document, double *width, double *height);
 /* Frees the document. Free its canvases first. */
 InkStatus ink_document_free(InkDocument *document);
@@ -178,8 +183,7 @@ InkStatus ink_canvas_set_tool(InkCanvas *canvas, const InkToolSettings *tool);
 /* UTC ms since the Unix epoch minus the host's sample clock, for mn:time. */
 InkStatus ink_canvas_set_utc_offset(InkCanvas *canvas, double utc_minus_host_ms);
 InkStatus ink_canvas_free(InkCanvas *canvas);
-/* The page under view point (x, y): its index, the page count for the ghost
-   page after the last one, or -1 for none. */
+/* The page under view point (x, y): its index, or -1 for none. */
 InkStatus ink_canvas_page_at(InkCanvas *canvas, double x, double y, int32_t *page);
 
 /* One batch of samples per platform event. */
