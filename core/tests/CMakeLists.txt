@@ -1,3 +1,6 @@
+# The iPad Simulator does not open paths with "..": normalize.
+cmake_path(SET INK_DOCUMENTS_DIR NORMALIZE "${PROJECT_SOURCE_DIR}/../tests/documents")
+
 find_package(Catch2 3 CONFIG REQUIRED)
 include(Catch)
 
@@ -6,7 +9,7 @@ add_executable(ink_tests test_version.cpp test_pdf.cpp test_ink.cpp test_documen
 target_include_directories(ink_tests PRIVATE . ../src)
 target_compile_definitions(ink_tests PRIVATE
   INK_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures"
-  INK_DOCUMENTS_DIR="${PROJECT_SOURCE_DIR}/../tests/documents")
+  INK_DOCUMENTS_DIR="${INK_DOCUMENTS_DIR}")
 target_link_libraries(ink_tests PRIVATE ink Catch2::Catch2WithMain)
 target_compile_definitions(ink_tests PRIVATE INK_TEST_VERSION="${PROJECT_VERSION}")
 if(EMSCRIPTEN)
