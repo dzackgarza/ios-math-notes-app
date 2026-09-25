@@ -30,12 +30,32 @@ Write's stack is its own and about ten years old (`usvg`, `ulib`, `ugui`,
 mature libraries instead. Each one is confirmed by a build spike on all
 three targets before the engine depends on it.
 
+### Engine (C++20, one build for iOS, WASM, Linux)
+
 | Concern | Library | Notes |
 | --- | --- | --- |
-| Stroke modeling, brushes, stroke geometry, hit tests | [google/ink](https://github.com/google/ink) (C++, Apache-2.0) | Core of Android Jetpack Ink: smoothing, prediction, brush behaviors, mesh output, protobuf stroke storage. Android-first, Bazel build; iOS and WASM builds are unproven, and the API is not yet stable. |
-| 2D rendering, text layout, SVG and PDF output | [Skia](https://skia.org) | Builds for Linux, iOS (Metal), and WASM (CanvasKit). |
-| PDF page rendering | PDFium | Chromium's PDF renderer; draws through Skia. |
+| Input smoothing and prediction | [google/ink-stroke-modeler](https://github.com/google/ink-stroke-modeler) | Apache-2.0, CMake, made for handwriting. |
+| Brush outline, stroke mesh, hit tests | [google/ink](https://github.com/google/ink) | Uses ink-stroke-modeler itself. Android-first, Bazel, unstable API: adopted only if the spike builds it for iOS and WASM. |
+| 2D rendering | [Skia](https://skia.org) | Linked into the engine on every target: Metal on iOS, WebGL/WebGPU in the WASM build. The web host calls the engine, not CanvasKit, so one render path serves both hosts. |
+| Text layout and shaping | Skia `SkParagraph` (HarfBuzz, ICU) | Comes with Skia. Backs the text element. |
+| PDF render, text extraction, annotation, save | [MuPDF](https://mupdf.com) | One C engine on every target, so PDF import, search text, and export behave the same on iPad and web. PDF pages are background references; the overlay (ink, text, shapes) stays app objects. |
 | Polygon operations (lasso, erase regions) | [Clipper2](https://github.com/AngusJohnson/Clipper2) | Only where google/ink geometry does not cover it. |
+| Library index: tags, bookmarks, full-text search | SQLite with FTS5 | In the engine, one schema. Browser persistence through the SQLite WASM OPFS VFS. The note files are the source of truth; the index is rebuilt from them. |
+| Tests | Catch2 | Engine unit tests and trace tests, run on native and WASM builds. |
+
+### Hosts
+
+| Host | Stack |
+| --- | --- |
+| Web | TypeScript, SolidJS for chrome (toolbars, library, panels, search), Vite (run with bun). Pointer events go straight to the engine; no pen sample passes through Solid state. Playwright for Chrome, Firefox, WebKit tests. |
+| iPad | SwiftUI for chrome and library; UIKit view with a Metal layer for the canvas. Apple frameworks: Vision, VisionKit, AVFoundation, UniformTypeIdentifiers, `UIDocument`. Swift Observation for shell state. |
+
+### Added with the feature that needs it
+
+| Feature | Library |
+| --- | --- |
+| Handwriting and math recognition | ONNX Runtime (web: WASM/WebGPU; iOS: Core ML provider) behind a recognition service; a math model is still to be chosen. Apple Vision on iPad for text. |
+| Import of arbitrary SVG clippings | [resvg](https://github.com/linebender/resvg) `usvg`, through its C API, to normalize foreign SVG. |
 
 Reflow, insert space, and ruled select and erase have no library. They are
 new engine code, specified by fixtures recorded from Write.
@@ -45,7 +65,7 @@ new engine code, specified by fixtures recorded from Write.
 - `core/` calls no platform API: no UIKit, SDL, browser JS, X11.
 - Swift and JS see only the C ABI: opaque handles plus plain structs. No C++
   classes cross the boundary.
-- One renderer: Skia. The host supplies a drawable surface (WebGL canvas,
+- One renderer: Skia, inside the engine. The host supplies a drawable surface (WebGL canvas,
   Metal layer, SDL window).
 - One input record. Every host fills what its platform gives and sets a
   capability bit for it; missing values are absent, never invented.
@@ -75,7 +95,7 @@ new engine code, specified by fixtures recorded from Write.
 ## Steps
 
 1. Build Write on the Linux dev host and record the fixtures and traces.
-2. Build spikes: google/ink, Skia, PDFium, Clipper2 for `linux-x86_64`,
+2. Build spikes: ink-stroke-modeler, google/ink, Skia, MuPDF, Clipper2, SQLite for `linux-x86_64`,
    `wasm`, and `ios-arm64`, in CI (Linux runners for Linux and WASM, macOS
    runner for iOS).
 3. Engine: document model, strokes, selection, undo, rendering, then reflow
