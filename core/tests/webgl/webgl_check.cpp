@@ -81,3 +81,45 @@ EMSCRIPTEN_KEEPALIVE uint32_t webgl_pixel(int x, int y) {
 }
 
 }  // extern "C"
+
+// Mean milliseconds of EnqueueInputs plus UpdateShape for one 16-input frame,
+// over a 320-input spiral drawn with google/ink's PressurePen.
+#include <chrono>
+#include <cmath>
+
+#include "ink/brush/brush.h"
+#include "ink/brush/stock_brushes.h"
+#include "ink/color/color.h"
+#include "ink/strokes/in_progress_stroke.h"
+#include "ink/strokes/input/stroke_input_batch.h"
+#include "ink/types/duration.h"
+
+extern "C" EMSCRIPTEN_KEEPALIVE double stroke_frame_ms() {
+  auto brush = ink::Brush::Create(
+      ink::stock_brushes::PressurePen(ink::stock_brushes::PressurePenVersion::kV1),
+      ink::Color::Black(), 5, 0.1);
+  if (!brush.ok()) return -1;
+  ink::InProgressStroke stroke;
+  stroke.Start(*brush);
+  constexpr int kFrames = 20, kFrameInputs = 16;
+  double total_ms = 0;
+  for (int f = 0; f < kFrames; ++f) {
+    ink::StrokeInputBatch frame;
+    for (int j = 0; j < kFrameInputs; ++j) {
+      float t = float(f * kFrameInputs + j) / 240.0f;  // 240 Hz pencil
+      float r = 20 + 40 * t;
+      if (!frame.Append({.tool_type = ink::StrokeInput::ToolType::kStylus,
+                         .position = {250 + r * std::cos(8 * t), 250 + r * std::sin(8 * t)},
+                         .elapsed_time = ink::Duration32::Seconds(t),
+                         .pressure = 0.5f + 0.4f * std::sin(3 * t)})
+               .ok()) {
+        return -1;
+      }
+    }
+    auto start = std::chrono::steady_clock::now();
+    if (!stroke.EnqueueInputs(frame, {}).ok()) return -1;
+    if (!stroke.UpdateShape(frame.Get(kFrameInputs - 1).elapsed_time).ok()) return -1;
+    total_ms += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
+  }
+  return total_ms / kFrames;
+}

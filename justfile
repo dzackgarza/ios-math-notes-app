@@ -24,3 +24,10 @@ test-commit:
     uvx yamllint -s -d '{extends: relaxed, rules: {line-length: disable}}' project.yml .github/workflows/ios.yml .github/workflows/engine.yml
 
 test-push: test-commit
+
+# Rewrites core/tests/fixtures/ink (traces and host outline goldens) on the Linux host.
+ink-fixtures:
+    cmake -S core/tools/ink-host -B core/build/ink-host -G Ninja -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_TOOLCHAIN_FILE={{vcpkg}}/scripts/buildsystems/vcpkg.cmake
+    cmake --build core/build/ink-host
+    core/build/ink-host/ink_host_fixtures core/build/ink-host/_deps/google_ink-src core/tests/fixtures/ink

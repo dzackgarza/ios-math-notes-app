@@ -1,7 +1,9 @@
 find_package(Catch2 3 CONFIG REQUIRED)
 include(Catch)
 
-add_executable(ink_tests test_version.cpp test_pdf.cpp)
+add_executable(ink_tests test_version.cpp test_pdf.cpp test_ink.cpp support/trace.cpp)
+target_include_directories(ink_tests PRIVATE . ../src)
+target_compile_definitions(ink_tests PRIVATE INK_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures")
 target_link_libraries(ink_tests PRIVATE ink Catch2::Catch2WithMain)
 target_compile_definitions(ink_tests PRIVATE INK_TEST_VERSION="${PROJECT_VERSION}")
 if(EMSCRIPTEN)
