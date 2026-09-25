@@ -87,11 +87,3 @@ compat/    write/
 tests/     documents/ input-traces/
 .github/workflows/  linux.yml wasm.yml ios.yml
 ```
-
-## Licensing
-
-Copying Write's code makes this repository AGPL-3.0, and AGPL §13 applies to
-the web host when it is served over a network. This repository is public and
-the app is personal, so direct reuse is the plan. A non-AGPL product later
-would need a clean reimplementation that uses Write only as a behavioral
-reference.
