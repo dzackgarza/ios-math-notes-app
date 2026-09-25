@@ -6,8 +6,8 @@
     </inkml:traceFormat>
   </metadata>
   <g id="background" mn:ruling="dotted" mn:y-ruling="16.8" mn:y-offset="16.8" mn:x-ruling="16.8" mn:margin-left="0">
-    <image href="../assets/p0017.png" x="0" y="0" width="612" height="792"/>
     <rect width="612" height="792" fill="#FFFFFF"/>
+    <image href="../assets/p0017.png" x="0" y="0" width="612" height="792"/>
   </g>
   <g id="l-inkaaa">
     <path id="s-mouseonly001" fill="#1A1A1A" mn:brush="marker" mn:brush-version="1" mn:size="2" mn:time="2026-09-25T19:00:00.000Z" d="M10 10l100 100 -2 2 -100 -100Z">
