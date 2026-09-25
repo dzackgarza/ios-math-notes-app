@@ -21,7 +21,7 @@ engine-test: engine-wasm
     cd core/tests/webgl && bun install --frozen-lockfile && WEBGL_CHECK_DIR=$PWD/../../build/wasm/tests/webgl bunx playwright test -c playwright.config.mjs --project chromium --project firefox
 
 test-commit:
-    uvx yamllint -s -d '{extends: relaxed, rules: {line-length: disable}}' project.yml .github/workflows/ios.yml .github/workflows/engine.yml
+    uvx yamllint -s -d '{extends: relaxed, rules: {line-length: disable}}' project.yml .github/workflows/ios.yml .github/workflows/engine.yml .github/workflows/web.yml
 
 test-push: test-commit
 
@@ -54,4 +54,19 @@ engine-module: engine-wasm
 web-engine-test: engine-module
     mkdir -p hosts/web/src/engine/wasm
     cp {{build}}/web/engine.* {{build}}/web/engine_test.* hosts/web/src/engine/wasm/
-    cd hosts/web && bunx tsc --noEmit && node --test src/engine/engine.test.ts
+    cd hosts/web && bunx tsc -b && node --test src/engine/engine.test.ts
+
+# The web app in hosts/web/dist, with the engine module.
+web-build: engine-module
+    mkdir -p hosts/web/src/engine/wasm
+    cp {{build}}/web/engine.* {{build}}/web/engine_test.* hosts/web/src/engine/wasm/
+    cd hosts/web && bunx tsc -b && bunx --bun vite build
+
+# Builds the web app and copies it to /var/www/math-notes (served at http://localhost/math-notes/, README).
+web-deploy: web-build
+    rsync -a --delete hosts/web/dist/ /var/www/math-notes/
+
+# Vitest Browser Mode (Chromium and Firefox here; CI adds WebKit), then Playwright against the deployment.
+web-test: web-deploy
+    cd hosts/web && bunx vitest run --project chromium --project firefox
+    cd hosts/web && bunx playwright test

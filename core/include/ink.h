@@ -58,6 +58,9 @@ InkStatus ink_document_load_asset(InkDocument *document, const char *path, const
 InkStatus ink_document_dirty_files(InkDocument *document, const InkFile **files, size_t *count);
 /* The host wrote the dirty files. */
 InkStatus ink_document_mark_saved(InkDocument *document);
+/* The laid-out pages' extent in content coordinates (pt): the widest page
+   and the stack's height (ink_canvas_set_view). */
+InkStatus ink_document_content_size(InkDocument *document, double *width, double *height);
 /* Frees the document. Free its canvases first. */
 InkStatus ink_document_free(InkDocument *document);
 

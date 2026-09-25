@@ -7,12 +7,16 @@ on:
     paths:
       - core/**
       - tests/documents/**
+      - hosts/web/**
       - .github/workflows/engine.yml
+      - .github/workflows/web.yml
   pull_request:
     paths:
       - core/**
       - tests/documents/**
+      - hosts/web/**
       - .github/workflows/engine.yml
+      - .github/workflows/web.yml
 
 env:
   EMSDK_VERSION: 4.0.7
@@ -126,5 +130,15 @@ jobs:
           mkdir -p hosts/web/src/engine/wasm
           cp "$BUILD_DIR"/web/engine.* "$BUILD_DIR"/web/engine_test.* hosts/web/src/engine/wasm/
           cd hosts/web
-          bunx tsc --noEmit
+          bunx tsc -b
           node --test src/engine/engine.test.ts
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: engine-module
+          path: ${{ env.BUILD_DIR }}/web/
+          if-no-files-found: error
+
+  web:
+    needs: wasm
+    uses: ./.github/workflows/web.yml

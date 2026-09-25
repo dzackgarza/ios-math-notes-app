@@ -62,7 +62,7 @@ if(EMSCRIPTEN)
     _ink_version _ink_last_error
     _ink_document_create _ink_document_load_notebook _ink_document_load_page
     _ink_document_load_asset _ink_document_dirty_files _ink_document_mark_saved
-    _ink_document_free
+    _ink_document_free _ink_document_content_size
     _ink_canvas_create_webgl _ink_canvas_set_view _ink_canvas_set_surface_size
     _ink_canvas_set_tool _ink_canvas_set_utc_offset _ink_canvas_free
     _ink_input _ink_input_update _ink_render _ink_undo _ink_redo _ink_struct_layout
