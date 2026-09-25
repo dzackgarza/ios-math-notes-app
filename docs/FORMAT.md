@@ -96,8 +96,8 @@ conflict. Assets are separate files, not base64 inside SVG.
   </metadata>
   <g id="background" mn:ruling="lined" mn:y-ruling="19.2"
      mn:y-offset="57.6" mn:x-ruling="0" mn:margin-left="48">
-    <rect width="595.28" height="841.89" fill="#FFFFFF"/>
-    <path d="…" fill="none" stroke="#9F9FFF" stroke-width="0.5"/>
+    <rect width="595.28" height="841.89" fill="#FCFAF5"/>
+    <path d="…" fill="none" stroke="#C9D3E0" stroke-width="0.6"/>
   </g>
   <g id="l-8f3kq0">
     <path id="s-3kd92lq0mzpa" transform="translate(12.5,-4)"
@@ -200,8 +200,10 @@ a notebook directory (send, archive, download).
   the template. The app creates `blank`, `lined-wide`, `lined-medium`,
   `lined-narrow` (y-ruling 21.6, 19.2, 16.8 pt; margin 48 pt),
   `grid-coarse`, `grid-medium`, `grid-fine` (16.8, 14.4, 9.6 pt) and
-  `dotted` (16.8 pt) on first use, from Write's ruling presets. Rules are
-  0.48 pt wide; dots are zero-length subpaths with `stroke-linecap="round"`.
+  `dotted` (16.8 pt) on first use, with Write's ruling spacings. Paper is
+  `#FCFAF5`; rules and dots are `#C9D3E0`, the margin `#E8A0A0`. Rules are
+  0.6 pt wide; dots are 1.5 pt zero-length subpaths with
+  `stroke-linecap="round"`.
 - `Notes/.clippings/`: a notebook directory; each page is one clipping,
   sized to its content.
 
