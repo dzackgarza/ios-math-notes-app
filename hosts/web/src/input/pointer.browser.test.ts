@@ -3,7 +3,7 @@
 import { describe, expect, test } from "vitest";
 
 import { Has, Phase, Tool } from "../engine/engine.ts";
-import { browserEngine, capabilities, penSamples } from "./pointer.ts";
+import { browserEngine, capabilities, penSamples, tiltToSpherical } from "./pointer.ts";
 
 const origin = { x: 10, y: 20 };
 const pen = capabilities(browserEngine(), "pen");
@@ -19,14 +19,16 @@ describe("penSamples", () => {
       clientY: 70,
       buttons: 1,
       pressure: 0.625,
-      altitudeAngle: 1.0,
-      azimuthAngle: 2.5,
+      tiltX: 30,
+      tiltY: 20,
       twist: 90,
     });
     const [s] = penSamples(e, origin, pen, { next: 7 });
     expect(s).toMatchObject({ x: 100, y: 50, pressure: 0.625, buttons: 1, id: 7 });
-    expect(s.altitude).toBeCloseTo(1.0, 6);
-    expect(s.azimuth).toBeCloseTo(2.5, 6);
+    // Browsers with altitudeAngle compute it from the tilts, as the adapter does without it.
+    const angles = tiltToSpherical(30, 20);
+    expect(s.altitude).toBeCloseTo(angles.altitude, 6);
+    expect(s.azimuth).toBeCloseTo(angles.azimuth, 6);
     expect(s.roll).toBeCloseTo(Math.PI / 2, 6);
     expect(s).toMatchObject({ tool: Tool.pen, phase: Phase.move, predicted: false, has: pen });
   });
