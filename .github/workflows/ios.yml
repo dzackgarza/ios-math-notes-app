@@ -43,7 +43,7 @@ jobs:
 
       - name: Restore iOS Skia build
         id: skia-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ${{ env.SKIA_DIR }}/include
@@ -60,7 +60,7 @@ jobs:
           core/scripts/build-skia-ios.sh "$SKIA_DIR" simulator
 
       - name: Restore vcpkg binary cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ${{ github.workspace }}/../vcpkg-bin
           key: vcpkg-ios-${{ hashFiles('core/vcpkg.json', 'core/triplets/**') }}

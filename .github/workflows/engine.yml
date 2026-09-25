@@ -35,7 +35,7 @@ jobs:
 
       - name: Restore vcpkg binary cache
         id: vcpkg-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ${{ github.workspace }}/../vcpkg-bin
           key: vcpkg-wasm-${{ env.EMSDK_VERSION }}-${{ hashFiles('core/vcpkg.json', 'core/triplets/**') }}
@@ -77,7 +77,11 @@ jobs:
       - name: Check the wasm uses no threads
         run: |
           for f in "$BUILD_DIR"/tests/ink_tests.wasm "$BUILD_DIR"/tests/webgl/webgl_check.wasm; do
-            wasm-objdump -x "$f" > sections.txt
+            # Only the Memory and target_features sections; data segments hold
+            # unrelated strings such as "shared_ptr".
+            wasm-objdump -x -j Memory "$f" > sections.txt
+            wasm-objdump -x -j target_features "$f" >> sections.txt || true
+            cat sections.txt
             if grep -Ei 'shared|atomics' sections.txt; then exit 1; fi
           done
 
