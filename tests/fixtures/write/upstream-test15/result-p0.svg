@@ -1,0 +1,67 @@
+<svg class="write-page" color-interpolation="linearRGB" width="768px" height="1024px" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+  <g class="write-content write-v3" xruling="0" yruling="40" marginLeft="100" papercolor="#FFFFFF" rulecolor="#FF0000FF">
+    <g class="ruleline write-std-ruling write-scale-down" fill="none" stroke="#0000FF" stroke-width="1" shape-rendering="crispEdges" vector-effect="non-scaling-stroke">
+      <rect class="pagerect" fill="#FFFFFF" stroke="none" x="0" y="0" width="768" height="1024" />
+      <path class="yrule_1" d="M0 40 l768 0" />
+      <path d="M0 80 l768 0" />
+      <path d="M0 120 l768 0" />
+      <path d="M0 160 l768 0" />
+      <path d="M0 200 l768 0" />
+      <path d="M0 240 l768 0" />
+      <path d="M0 280 l768 0" />
+      <path d="M0 320 l768 0" />
+      <path d="M0 360 l768 0" />
+      <path d="M0 400 l768 0" />
+      <path d="M0 440 l768 0" />
+      <path d="M0 480 l768 0" />
+      <path d="M0 520 l768 0" />
+      <path d="M0 560 l768 0" />
+      <path d="M0 600 l768 0" />
+      <path d="M0 640 l768 0" />
+      <path d="M0 680 l768 0" />
+      <path d="M0 720 l768 0" />
+      <path d="M0 760 l768 0" />
+      <path d="M0 800 l768 0" />
+      <path d="M0 840 l768 0" />
+      <path d="M0 880 l768 0" />
+      <path d="M0 920 l768 0" />
+      <path d="M0 960 l768 0" />
+      <path d="M0 1000 l768 0" />
+      <path class="leftmargin" stroke="#FF0000" d="M100 0 l0 1024" />
+    </g>
+    <path class="write-chisel-pen" fill="#FFFF00" stroke-width="20" __comx="310.05" __comy="169.819" d="M322.5 175.2 l0 -20 -5 0 -19.9 14.9 0 20 5 0 19.9 -14.9 m-19.9 -5.1 l-5 0 0 20 19.7 15 5 0 0 -20 -19.7 -15" />
+    <path class="write-chisel-pen" fill="#FFFF00" stroke-width="20" __comx="250.05" __comy="179.819" d="M262.5 185.2 l0 -20 -5 0 -19.9 14.9 0 20 5 0 19.9 -14.9 m-19.9 -5.1 l-5 0 0 20 19.7 15 5 0 0 -20 -19.7 -15" />
+    <path class="write-stroke-pen" fill="none" stroke="#000000" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" __comx="200.05" __comy="180.713" d="M210 164.2 l-19.9 14.9 19.7 15" />
+    <path class="write-flat-pen" fill="#000000" stroke-width="1.2" __comx="250.1" __comy="180.713" d="M260.062 166.772 l-20.289 14.891 -0.004 0.871 20.116 15.196 0.545 -0.716 -20 -15.349 -0.004 0.871 20.001 -15.276" />
+    <g class="hyperref">
+      <path class="write-stroke-pen" fill="none" stroke="#000000" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" __comx="299.85" __comy="180.713" d="M289.9 166.2 l19.9 14.9 -19.5 15" />
+      <path class="write-stroke-pen" fill="none" stroke="#000000" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" __comx="309.95" __comy="180.713" d="M300 167.2 l19.9 13.9 -19.7 12.3" />
+      <a xlink:href="http://www.styluslabs.com" target="_top">
+        <rect fill-opacity="0" stroke-opacity="0" x="289.4" y="165.7" width="31" height="30.9" />
+      </a>
+    </g>
+    <path class="write-stroke-pen" fill="none" stroke="#000000" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" __comx="410" __comy="179.833" d="M400 180 l10 0 10 0" />
+    <path class="write-stroke-pen" transform="translate(208,0)" fill="none" stroke="#000000" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" __comx="401.1" __comy="292.467" d="M179.4 304.4 l20.1 -22.2 7.3 5.1" />
+    <path class="write-stroke-pen" transform="translate(208,0)" fill="none" stroke="#000000" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" __comx="431.1" __comy="292.467" d="M209.4 304.4 l20.1 -22.2 7.3 5.1" />
+    <path class="write-stroke-pen" transform="translate(208,0)" fill="none" stroke="#000000" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" __comx="341.1" __comy="292.467" d="M119.4 304.4 l20.1 -22.2 7.3 5.1" />
+    <path class="write-stroke-pen" transform="translate(208,0)" fill="none" stroke="#000000" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" __comx="371.1" __comy="292.467" d="M149.4 304.4 l20.1 -22.2 7.3 5.1" />
+    <path class="write-stroke-pen" transform="translate(208,0)" fill="none" stroke="#000000" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" __comx="540.1" __comy="292.467" d="M318.4 304.4 l20.1 -22.2 7.3 5.1" />
+    <path class="write-stroke-pen" transform="translate(208,0)" fill="none" stroke="#000000" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" __comx="570.1" __comy="292.467" d="M348.4 304.4 l20.1 -22.2 7.3 5.1" />
+    <path class="write-stroke-pen" transform="translate(208,0)" fill="none" stroke="#000000" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" __comx="480.1" __comy="292.467" d="M258.4 304.4 l20.1 -22.2 7.3 5.1" />
+    <path class="write-stroke-pen" transform="translate(208,0)" fill="none" stroke="#000000" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" __comx="510.1" __comy="292.467" d="M288.4 304.4 l20.1 -22.2 7.3 5.1" />
+    <path class="write-stroke-pen" transform="translate(208,0)" fill="none" stroke="#000000" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" __comx="679.1" __comy="292.467" d="M457.4 304.4 l20.1 -22.2 7.3 5.1" />
+    <path class="write-stroke-pen" transform="translate(208,0)" fill="none" stroke="#000000" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" __comx="709.1" __comy="292.467" d="M487.4 304.4 l20.1 -22.2 7.3 5.1" />
+    <path class="write-stroke-pen" transform="translate(208,0)" fill="none" stroke="#000000" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" __comx="619.1" __comy="292.467" d="M397.4 304.4 l20.1 -22.2 7.3 5.1" />
+    <path class="write-stroke-pen" transform="translate(208,0)" fill="none" stroke="#000000" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" __comx="649.1" __comy="292.467" d="M427.4 304.4 l20.1 -22.2 7.3 5.1" />
+    <path class="write-stroke-pen" transform="translate(-423.9,40)" fill="none" stroke="#000000" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" __comx="186.2" __comy="332.467" d="M596.4 304.4 l20.1 -22.2 7.3 5.1" />
+    <path class="write-stroke-pen" transform="translate(-423.9,40)" fill="none" stroke="#000000" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" __comx="216.2" __comy="332.467" d="M626.4 304.4 l20.1 -22.2 7.3 5.1" />
+    <path class="write-stroke-pen" transform="translate(-423.9,40)" fill="none" stroke="#000000" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" __comx="126.2" __comy="332.467" d="M536.4 304.4 l20.1 -22.2 7.3 5.1" />
+    <path class="write-stroke-pen" transform="translate(-423.9,40)" fill="none" stroke="#000000" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" __comx="156.2" __comy="332.467" d="M566.4 304.4 l20.1 -22.2 7.3 5.1" />
+    <path class="write-stroke-pen" transform="translate(-85,0)" fill="none" stroke="#000000" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" __comx="155.05" __comy="410.011" d="M250 405.2 l-19.9 14.9 19.7 15" />
+    <path class="write-stroke-pen" transform="translate(-85,0)" fill="none" stroke="#000000" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" __comx="185.05" __comy="410.011" d="M280 405.2 l-19.9 14.9 19.7 15" />
+    <g transform="translate(50,50)" stroke="#008000">
+      <rect fill="rgba(0,0,255,0.8)" stroke="none" x="0" y="0" width="20" height="20" />
+      <path fill="#FF0000" d="M10 10 l2 4 1 2 0 3 -1 1 -1 0 -1 -10" />
+    </g>
+  </g>
+</svg>
