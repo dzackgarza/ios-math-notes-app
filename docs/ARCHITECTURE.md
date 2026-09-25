@@ -1,79 +1,106 @@
 # Architecture plan
 
-One portable document and ink engine, with thin platform hosts. Write
-([styluslabs/Write](https://github.com/styluslabs/Write), C++, AGPL-3.0) is the
-reference implementation and the first engine. Its current UI and platform
-structure is not the target architecture.
+One portable document and ink engine (C++), with thin platform hosts.
+[Stylus Labs Write](https://github.com/styluslabs/Write) is the reference
+implementation and the behavioral oracle. Its app layer and UI are not reused.
 
 ```text
-                  write-core (C++)
+                   ink engine (C++, also built to WASM)
    document/page model, SVG ink geometry, stroke building,
    selection, reflow, undo/redo, rendering, import/export
                          │  stable C ABI
-        ┌────────────────┼────────────────┐
-   iPadOS host       Linux host         Web host
-   Swift/UIKit       SDL/OpenGL         JS + WASM
+          ┌──────────────┼──────────────────┐
+     Web host        iPadOS host         Linux dev host
+     JS + WASM       Swift/UIKit         SDL, libinput
+   primary on        full Apple Pencil   reference build,
+   Linux/Win/macOS   and lowest latency  tests, raw tablet axes
 ```
 
 | Host | Role |
 | --- | --- |
-| Linux (SDL) | Development and reference host. Write's existing frontend; keep it working through every step. |
-| Web (WASM) | Linux and browser host with no install. Modernize Write's Emscripten target (`Makefile.wasm`, `wasm/wasmhelper.c`). |
-| iPadOS (UIKit) | Native host, not a WKWebView. Replaces and extends Write's `ios/ioshelper`. |
+| Web (WASM, PWA) | Primary product on desktop. Pointer Events give pen type, pressure, tilt, altitude/azimuth, buttons, hover, coalesced and predicted samples; Safari 18.2+ gives coalesced/predicted and altitude/azimuth, Safari 26.2 gives subpixel coordinates. |
+| iPadOS (UIKit) | Native host, not a WKWebView. Needed for Pencil double-tap, Pencil Pro squeeze, barrel roll, hover pose and distance, haptics, and the shortest input-to-display path. WebKit still reports `twist` as 0 for Pencil Pro. |
+| Linux native | Development and reference executable: runs the oracle tests, and reads libinput/Wayland tablet axes (distance, rotation) that the web does not expose. Not a user-facing UI. |
+
+## Reuse or rewrite
+
+Measured on Write `master` (2026-06-23). The decision is per layer.
+
+| Layer | Write source | Coupling | Decision |
+| --- | --- | --- | --- |
+| Document model | `document`, `page`, `element`, `selection`, `strokebuilder`, `syncundo` (~5.4k lines) | Includes only pugixml, `ulib`, `usvg`. No ugui, no SDL, no `ScribbleApp`. | Take as the engine core. Already portable. |
+| SVG and rendering | `usvg` (~6.9k), `ulib` (~5.8k), `nanovgXC` (~14.9k) | Standalone libraries. | Use as dependencies from their upstream repos. |
+| Editing operations | `scribblearea` (~3k: reflow, insert space, ruled select/erase), `scribbledoc` (~1k), `scribbleview`, `scribblemode` | Include `scribbleapp.h` or `scribblewidget.h`; `scribbledoc` calls `ScribbleApp::openURL`. | Move into the engine and cut the app calls behind the C ABI. Reflow is the hardest behavior to reproduce; do not rewrite it. |
+| Input | `scribbleinput` | Depends on `ugui`. | Rewrite against the `PenSample` record below. |
+| App and UI | `scribbleapp` (~3k), `mainwindow`, `documentlist`, dialogs, toolbars, `ugui` | UI toolkit and platform. | Do not reuse. Each host builds its own UI. |
+
+Result: neither "fork and gut" nor "rewrite". Start a new repository
+structure, copy the engine-layer files from Write into `core/` with their
+history reference, and write the hosts new. Copied files are owned code, not
+a vendored library, so they are edited freely.
 
 ## Rules
 
-- `core/` calls no platform API: no UIKit, SDL file dialogs, browser JS, X11.
+- `core/` calls no platform API: no UIKit, SDL, browser JS, X11.
 - Swift and JS see only the C ABI: opaque handles plus plain structs. No C++
   classes cross the boundary.
-- One renderer: Write's SVG/painter/NanoVG stack. The host supplies a drawable
-  surface. A Metal renderer comes only if iPad latency measurements require it.
-- One pointer record. UIKit Pencil events, browser Pointer Events, and Linux
-  tablet events all normalize to it:
-  `x, y, time, pressure, altitude, azimuth, roll, pointer kind, phase, predicted`.
-  It extends Write's `InputPoint`. iOS feeds coalesced and predicted touches.
-- Document format stays Write's SVG, round-trip compatible with Write, until
+- One renderer: `usvg` + nanovgXC. The host supplies a drawable surface
+  (WebGL canvas, `MTKView`/GL layer, SDL window). A Metal renderer comes only
+  if iPad latency measurements require it.
+- One input record. Every host fills what its platform gives and sets a
+  capability bit for it; missing values are absent, never invented.
+  ```c
+  typedef struct {
+    double x, y, time;
+    float pressure, altitude, azimuth, rotation, distance;
+    uint32_t buttons;
+    uint32_t has;        /* capability bits: which fields are real */
+    InkTool tool;        /* pen, eraser, touch, mouse */
+    InkPhase phase;      /* hover, begin, move, end, cancel */
+    bool predicted;
+  } InkPenSample;
+  ```
+  Sources: web `PointerEvent` + `getCoalescedEvents()`/`getPredictedEvents()`;
+  UIKit `UITouch` coalesced/predicted touches, `UIPencilInteraction`,
+  `UIPencilHoverPose`; Linux libinput / Wayland `tablet-v2`.
+- Document format is Write's SVG, round-trip compatible with Write, until
   the engine boundary is stable. A later container wraps the same pages:
   `Note.note/{manifest.json, pages/*.svg, assets/, index/}`.
 - New features go in the engine or in a service, never in one host only.
   PDF and layers belong to the document model. OCR belongs to an indexing
   service. Scanner and microphone are host services.
-- Write is the behavioral oracle. Before a change to reflow, ruled selection,
-  free erase, line insertion, clipping, undo, or stroke serialization, record
-  fixture documents and input-event traces with their resulting SVG. The new
-  core must reproduce them.
+- Write is the behavioral oracle. Record fixture documents and input-event
+  traces with their resulting SVG from Write for reflow, ruled selection,
+  free erase, line insertion, clipping, undo, and stroke serialization. The
+  engine must reproduce them.
 
 ## Steps
 
-1. Fork Write. Build the current engine unchanged as `linux-x86_64`, `wasm`,
-   and `ios-arm64`, all three in CI (Linux runners for Linux and WASM,
-   macOS runner for iOS). Build modernization only; no redesign.
-2. Extract the engine boundary: `Document`, `Page`, `Element`,
-   `StrokeBuilder`, `Selection`, `SyncUndo`, SVG parse/write/render, and the
-   geometric parts of `ScribbleView` and `ScribbleInput`.
-3. Define the C ABI, for example:
+1. Build Write unchanged on the Linux dev host and record the oracle
+   fixtures and traces.
+2. Create `core/` from the engine-layer files and the `usvg`, `ulib`,
+   `nanovgXC` dependencies. Build it for `linux-x86_64`, `wasm`, and
+   `ios-arm64` in CI (Linux runners for Linux and WASM, macOS runner for iOS).
+3. Move the editing operations out of `scribblearea`/`scribbledoc` into the
+   engine, and pass the oracle tests.
+4. Define the C ABI:
    ```c
    InkDocument *ink_document_open(...);
    void ink_document_save(...);
-   void ink_pointer_begin(InkCanvas *, const InkPointerEvent *);
-   void ink_pointer_update(InkCanvas *, const InkPointerEvent *);
-   void ink_pointer_end(InkCanvas *, const InkPointerEvent *);
+   void ink_input(InkCanvas *, const InkPenSample *, size_t count);
    void ink_undo(InkDocument *);
    void ink_redo(InkDocument *);
    void ink_render(InkCanvas *, InkRenderTarget *);
    ```
-4. Split `ScribbleApp` (document management, clipboard, preferences, UI, file
-   operations, sync, export, lifecycle in one class) into core commands and
-   host-supplied service interfaces:
-   - Core: Document, Canvas, Commands, History, Renderer.
-   - Services: Storage, Clipboard, PDF, Images, Search, Sync, Audio.
-   - Host UI: iPadOS, SDL/Linux, Browser.
-5. Web host storage: Emscripten IDBFS first, OPFS for the library later.
-   Upload/download import and export always work; `showOpenFilePicker()` is
-   an extra where available.
-6. iPad host owns Files/`UIDocument`, share sheet, camera and scanner,
-   keyboard text input, audio session, lifecycle, and Pencil interactions.
-7. After Write parity, add the features in [FEATURES.md](FEATURES.md) in
+5. Web host: canvas, Pointer Events adapter, storage on Emscripten IDBFS
+   first and OPFS for the library later. Upload/download import and export
+   always work; `showOpenFilePicker()` is an extra where available.
+6. iPad host: Files/`UIDocument`, share sheet, camera and scanner, keyboard
+   text input, audio session, lifecycle, and Pencil interactions. Replaces
+   the current SwiftUI placeholder; the SideStore release pipeline stays.
+7. Services the hosts supply: Storage, Clipboard, PDF, Images, Search, Sync,
+   Audio.
+8. After Write parity, add the features in [FEATURES.md](FEATURES.md) in
    this order: PDF import and backgrounds, text elements, layers, metadata and
    tags, indexing and search, scanner, handwriting OCR, synchronized audio.
 
@@ -82,8 +109,7 @@ structure is not the target architecture.
 ```text
 core/      document/ ink/ reflow/ selection/ undo/ svg/ render/
 services/  pdf/ search/ sync/
-hosts/     ios/{Swift,CoreBridge}/  linux/SDL/  web/{wasm,shell}/
-compat/    write/
+hosts/     web/{wasm,shell}/  ios/{Swift,CoreBridge}/  linux/
 tests/     documents/ input-traces/
 .github/workflows/  linux.yml wasm.yml ios.yml
 ```
