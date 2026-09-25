@@ -41,16 +41,17 @@ jobs:
       - name: Install tools
         run: brew install xcodegen ninja
 
+      # Restore and save are separate so a later failing step keeps the build.
       - name: Restore iOS Skia build
         id: skia-cache
-        uses: actions/cache@v6
+        uses: actions/cache/restore@v6
         with:
-          path: |
+          path: &skia-paths |
             ${{ env.SKIA_DIR }}/include
             ${{ env.SKIA_DIR }}/modules
             ${{ env.SKIA_DIR }}/src
-            ${{ env.SKIA_DIR }}/out/device/*.a
-            ${{ env.SKIA_DIR }}/out/simulator/*.a
+            ${{ env.SKIA_DIR }}/out/device/libskia.a
+            ${{ env.SKIA_DIR }}/out/simulator/libskia.a
           key: skia-ios-${{ hashFiles('core/scripts/build-skia-ios.sh') }}
 
       - name: Build Skia for iOS
@@ -58,6 +59,13 @@ jobs:
         run: |
           core/scripts/build-skia-ios.sh "$SKIA_DIR" device
           core/scripts/build-skia-ios.sh "$SKIA_DIR" simulator
+
+      - name: Save iOS Skia build
+        if: steps.skia-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: *skia-paths
+          key: ${{ steps.skia-cache.outputs.cache-primary-key }}
 
       - name: Restore vcpkg binary cache
         uses: actions/cache@v6

@@ -29,10 +29,12 @@ for target in device simulator; do
     -DSKIA_SOURCE_DIR="$skia_dir"
   cmake --build "$dir" --target ink
 
-  archives=("$dir/libink.a" "$dir/vcpkg_installed/$triplet/lib/libpugixml.a" "$skia_dir/out/$target"/*.a)
+  archives=("$dir/libink.a" "$dir/vcpkg_installed/$triplet/lib/libpugixml.a" "$skia_dir/out/$target/libskia.a")
   libtool -static -o "$dir/libInkEngine.a" "${archives[@]}"
 
-  lipo -info "$dir/libInkEngine.a" | grep -q 'architecture: arm64$'
+  arch=$(lipo -info "$dir/libInkEngine.a")
+  echo "$arch"
+  [[ $arch == *"architecture: arm64" ]]
   # Every object must target iOS 18.0.
   minos=$(otool -l "$dir/libInkEngine.a" | awk '$1 == "minos" { print $2 }' | sort -u)
   echo "$target minos: $minos"

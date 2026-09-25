@@ -3,9 +3,13 @@
 import { test, expect } from "@playwright/test";
 
 test("Skia draws an SVG path on a WebGL2 surface", async ({ page }) => {
+  page.on("console", (message) => console.log(`[${message.type()}] ${message.text()}`));
   await page.goto("/index.html");
   await page.waitForFunction(() => window.inkReady === true);
   const result = await page.evaluate(() => {
+    const probe = document.createElement("canvas");
+    probe.addEventListener("webglcontextcreationerror", (e) => console.error(`webgl2: ${e.statusMessage}`));
+    if (!probe.getContext("webgl2")) console.error("webgl2: getContext returned null");
     const status = Module.ccall("webgl_draw", "number", ["number", "number"], [100, 100]);
     const px = (x, y) => (Module.ccall("webgl_pixel", "number", ["number", "number"], [x, y]) >>> 0)
       .toString(16).padStart(8, "0");
