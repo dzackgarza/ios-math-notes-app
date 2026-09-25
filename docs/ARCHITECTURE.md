@@ -48,7 +48,7 @@ three targets before the engine depends on it.
 | Host | Stack |
 | --- | --- |
 | Web | TypeScript, SolidJS for chrome (toolbars, library, panels, search), Vite (run with bun). Pointer events go straight to the engine; no pen sample passes through Solid state. Playwright for Chrome, Firefox, WebKit tests. |
-| iPad | SwiftUI for chrome and library; UIKit view with a Metal layer for the canvas. Apple frameworks: Vision, VisionKit, AVFoundation, UniformTypeIdentifiers, `UIDocument`. Swift Observation for shell state. |
+| iPad | SwiftUI for chrome and library; UIKit view with a Metal layer for the canvas. Apple frameworks: Vision, VisionKit, UniformTypeIdentifiers, `UIDocument`. Swift Observation for shell state. |
 
 ### Added with the feature that needs it
 
@@ -87,7 +87,7 @@ new engine code, specified by fixtures recorded from Write.
   A note is a directory: `Note.note/{manifest.json, pages/*.svg, assets/, index/}`.
 - New features go in the engine or in a service, never in one host only.
   PDF and layers belong to the document model. OCR belongs to an indexing
-  service. Scanner and microphone are host services.
+  service. The scanner is a host service.
 - Write fixtures: documents and input-event traces with their resulting SVG,
   for reflow, ruled selection, free erase, line insertion, clipping, undo,
   and stroke serialization. The engine must reproduce the behavior.
@@ -113,13 +113,12 @@ new engine code, specified by fixtures recorded from Write.
    first and OPFS for the library later. Upload/download import and export
    always work; `showOpenFilePicker()` is an extra where available.
 6. iPad host: Files/`UIDocument`, share sheet, camera and scanner, keyboard
-   text input, audio session, lifecycle, and Pencil interactions. Replaces
+   text input, lifecycle, and Pencil interactions. Replaces
    the current SwiftUI placeholder; the SideStore release pipeline stays.
-7. Services the hosts supply: Storage, Clipboard, PDF, Images, Search, Sync,
-   Audio.
+7. Services the hosts supply: Storage, Clipboard, PDF, Images, Search, Sync.
 8. After Write parity, add the features in [FEATURES.md](FEATURES.md) in
    this order: PDF import and backgrounds, text elements, layers, metadata and
-   tags, indexing and search, scanner, handwriting OCR, synchronized audio.
+   tags, indexing and search, scanner, handwriting OCR.
 
 ## Target layout
 
