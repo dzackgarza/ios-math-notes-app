@@ -4,6 +4,7 @@
 
 #include <map>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "document/document.h"
@@ -17,6 +18,14 @@ using NotebookFiles = std::map<std::string, std::string>;
 // notebook.json order; files in pages/ that it does not list follow, marked
 // unlisted. A page that does not parse becomes an error page.
 Document LoadNotebook(const NotebookFiles &files);
+
+// The notebook of notebook.json, each listed page a "missing file" error page
+// until AddPage loads it. Throws nlohmann::json::parse_error on bad JSON.
+Document ReadNotebookJson(std::string_view bytes);
+
+// Loads one page file: into its listed place, or else after the listed
+// pages, in file name order, marked unlisted.
+const Page &AddPage(Document &document, const std::string &file, std::string_view bytes);
 
 // The files that differ from `saved`: every page whose box is not the object
 // in `saved`, and notebook.json when its bytes differ. Error pages are never

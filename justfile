@@ -44,6 +44,18 @@ render-goldens:
 frame-times: engine-wasm
     cd core/tests/webgl && bun install --frozen-lockfile && WEBGL_CHECK_DIR=$PWD/../../build/wasm/tests/webgl bunx playwright test frame.spec.mjs -c playwright.config.mjs --project chromium-gpu --reporter list
 
+# The web engine module (core/build/wasm/web/engine.mjs, .wasm, .d.mts) and its Node test build.
+# --emit-tsd runs the tsc that hosts/web installs.
+engine-module: engine-wasm
+    cd hosts/web && bun install --frozen-lockfile
+    PATH="$PWD/hosts/web/node_modules/.bin:$PATH" cmake --build {{build}} --target engine engine_test
+
+# The TypeScript wrapper: type check against the module's --emit-tsd types, then the Node tests.
+web-engine-test: engine-module
+    mkdir -p hosts/web/src/engine/wasm
+    cp {{build}}/web/engine.* {{build}}/web/engine_test.* hosts/web/src/engine/wasm/
+    cd hosts/web && bunx tsc --noEmit && node --test src/engine/engine.test.ts
+
 # Stylus Labs Write fork with the replay harness (dzackgarza/Write, branch replay-harness).
 write_dir := env_var_or_default("WRITE_DIR", env_var("HOME") / ".cache/math-notes/Write")
 write_rev := "876de97"

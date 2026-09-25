@@ -48,6 +48,10 @@ struct LiveInk {
   Rgb color;
 };
 
+// A notebook's image files by path relative to the notebook, e.g.
+// "assets/p0017.png".
+using Assets = std::map<std::string, sk_sp<SkData>>;
+
 // What one frame shows.
 struct View {
   Transform content_to_view;  // SVG matrix order; content = layout coordinates
@@ -59,11 +63,9 @@ struct View {
 class Renderer {
  public:
   // `context` is the GPU context of the screen surfaces; null for raster.
-  explicit Renderer(GrDirectContext *context) : context_(context) {}
-
-  // An image file of the notebook, by its path relative to the notebook
-  // directory, e.g. "assets/p0017.png". Decoded once, when first drawn.
-  void SetAsset(const std::string &path, sk_sp<SkData> bytes);
+  // Images come from `assets`, each decoded once, when first drawn.
+  Renderer(GrDirectContext *context, const Assets &assets)
+      : context_(context), assets_(&assets) {}
 
   // Brings the content surface up to date with `document` in `view`.
   // `live_changed` says the live stroke's geometry changed. Returns whether
@@ -72,6 +74,9 @@ class Renderer {
 
   // Draws the content surface and then the live stroke onto `screen`.
   void Draw(SkCanvas *screen, const LiveInk *live);
+
+  // Redraws everything on the next Update: the assets changed.
+  void Invalidate() { invalidated_ = true; }
 
   const RenderStats &stats() const { return stats_; }
 
@@ -93,15 +98,21 @@ class Renderer {
   void ElementBounds(const Page &page, const Elements &elements, SkRect *bounds);
   SkRegion DirtyRegion(const Document &next);
 
+  struct DecodedAsset {
+    sk_sp<SkData> bytes;  // the asset it was decoded from
+    sk_sp<SkImage> image;  // null when undecodable
+  };
+
   GrDirectContext *context_;
-  std::map<std::string, sk_sp<SkData>> asset_bytes_;
-  std::map<std::string, sk_sp<SkImage>> images_;  // decoded assets, null when undecodable
+  const Assets *assets_;
+  std::map<std::string, DecodedAsset> images_;
   std::map<const Element *, CachedElement> elements_;
   sk_sp<SkSurface> content_;
   std::optional<Document> document_;
   std::vector<PagePlacement> layout_;
   View view_;
   bool screen_stale_ = true;
+  bool invalidated_ = false;
   RenderStats stats_;
 };
 

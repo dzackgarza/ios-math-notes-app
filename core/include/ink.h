@@ -1,5 +1,8 @@
-/* Ink engine C ABI. Swift and TypeScript see only this header: opaque
-   handles and plain structs with fixed layouts (docs/ARCHITECTURE.md). */
+/* Ink engine C ABI v1. Swift and TypeScript see only this header: opaque
+   handles and plain structs with fixed layouts (docs/ARCHITECTURE.md).
+
+   Every call returns an InkStatus. On an error, ink_last_error() gives the
+   message. No C++ exception crosses the ABI. */
 #ifndef INK_H
 #define INK_H
 
@@ -10,8 +13,53 @@
 extern "C" {
 #endif
 
+typedef enum InkStatus {
+  INK_OK = 0,
+  INK_ERROR_ARGUMENT = 1, /* a null handle or pointer, or a bad value */
+  INK_ERROR_PARSE = 2,    /* a notebook or page file that does not parse */
+  INK_ERROR_GPU = 3,      /* no GPU context or surface */
+  INK_ERROR_INTERNAL = 4  /* an engine failure */
+} InkStatus;
+
 /* Engine version string, "MAJOR.MINOR.PATCH". Static storage. */
 const char *ink_version(void);
+
+/* The message of the last call that did not return INK_OK. Valid until the
+   next failing call. */
+const char *ink_last_error(void);
+
+/* ---- Documents -------------------------------------------------------- */
+
+typedef struct InkDocument InkDocument;
+
+/* One file of a notebook directory. `path` is relative to the notebook,
+   e.g. "pages/0001.svg". */
+typedef struct InkFile {
+  const char *path;
+  const uint8_t *bytes;
+  size_t size;
+} InkFile;
+
+/* A new notebook with one blank A4 page and one layer. `seed` seeds the id
+   generator. */
+InkStatus ink_document_create(uint64_t seed, InkDocument **out);
+/* Replaces the document with the notebook of notebook.json. Its listed pages
+   are error pages ("missing file") until ink_document_load_page loads them. */
+InkStatus ink_document_load_notebook(InkDocument *document, const uint8_t *json, size_t size);
+/* Loads one page file. A file that does not parse returns INK_ERROR_PARSE and
+   stays in the document as an error page, which is shown and never written. */
+InkStatus ink_document_load_page(InkDocument *document, const char *file, const uint8_t *svg,
+                                 size_t size);
+/* An image file the pages reference, e.g. "assets/p0017.png". */
+InkStatus ink_document_load_asset(InkDocument *document, const char *path, const uint8_t *bytes,
+                                  size_t size);
+/* The files that changed since the last save. `*files` stays valid until the
+   next call on the document. */
+InkStatus ink_document_dirty_files(InkDocument *document, const InkFile **files, size_t *count);
+/* The host wrote the dirty files. */
+InkStatus ink_document_mark_saved(InkDocument *document);
+/* Frees the document. Free its canvases first. */
+InkStatus ink_document_free(InkDocument *document);
 
 /* ---- Input ------------------------------------------------------------ */
 
@@ -51,7 +99,7 @@ typedef struct InkPenSample {
   uint8_t reserved;
 } InkPenSample;
 
-/* ---- Canvas ----------------------------------------------------------- */
+/* ---- Canvases --------------------------------------------------------- */
 
 typedef struct InkCanvas InkCanvas;
 
@@ -61,45 +109,67 @@ typedef enum InkBrush {
   INK_BRUSH_HIGHLIGHTER = 2
 } InkBrush;
 
-/* A canvas on a new notebook with one A4 page and one layer. `seed` seeds
-   the id generator. */
-InkCanvas *ink_canvas_create(uint64_t seed);
-void ink_canvas_destroy(InkCanvas *canvas);
+/* The tool that new pen input uses. */
+typedef struct InkToolSettings {
+  uint32_t brush; /* InkBrush */
+  uint32_t rgb;   /* 0xRRGGBB */
+  float size;     /* pt */
+} InkToolSettings;
 
+#ifdef __EMSCRIPTEN__
+/* A canvas on `document` that draws into the WebGL2 canvas element matched
+   by the CSS `selector`. */
+InkStatus ink_canvas_create_webgl(InkDocument *document, const char *selector, InkCanvas **out);
+#endif
+#ifdef __APPLE__
+/* A canvas on `document` that draws into `layer`, a CAMetalLayer, with the
+   host's MTLDevice and MTLCommandQueue. All three are passed unretained and
+   must outlive the canvas. */
+InkStatus ink_canvas_create_metal(InkDocument *document, void *device, void *queue, void *layer,
+                                  InkCanvas **out);
+#endif
 /* The content -> view transform, as SVG matrix(a, b, c, d, e, f). Content
    coordinates are pt: the listed pages stacked top to bottom with a 9.6 pt
    gap, each centered on the widest. */
-void ink_canvas_set_view(InkCanvas *canvas, double a, double b, double c, double d, double e,
-                         double f);
-/* Pen for new strokes. `rgb` is 0xRRGGBB, `size` in pt. */
-void ink_canvas_set_pen(InkCanvas *canvas, InkBrush brush, uint32_t rgb, float size);
-/* UTC ms since the Unix epoch minus the host's sample clock, for mn:time. */
-void ink_canvas_set_utc_offset(InkCanvas *canvas, double utc_minus_host_ms);
-
-/* One batch of samples per platform event. */
-void ink_input(InkCanvas *canvas, const InkPenSample *samples, size_t count);
-/* Replaces the values of earlier samples with the same `id` (UIKit estimated
-   properties arrive late, sometimes after the touch ends). */
-void ink_input_update(InkCanvas *canvas, const InkPenSample *samples, size_t count);
-
-/* ---- Rendering -------------------------------------------------------- */
-
-#ifdef __EMSCRIPTEN__
-/* Draws into the WebGL2 canvas matched by the CSS `selector`. Returns 0 on
-   success. */
-int ink_canvas_attach_webgl(InkCanvas *canvas, const char *selector);
-#endif
-#ifdef __APPLE__
-/* Draws into `ca_metal_layer`, a CAMetalLayer passed unretained, which must
-   outlive the canvas. Returns 0 on success. */
-int ink_canvas_attach_metal(InkCanvas *canvas, void *ca_metal_layer);
-#endif
+InkStatus ink_canvas_set_view(InkCanvas *canvas, double a, double b, double c, double d, double e,
+                              double f);
 /* The surface size in device pixels, and device pixels per view unit (CSS
    devicePixelRatio, UIKit contentScaleFactor). */
-void ink_canvas_set_surface_size(InkCanvas *canvas, int width, int height, float pixel_ratio);
+InkStatus ink_canvas_set_surface_size(InkCanvas *canvas, int32_t width, int32_t height,
+                                      float pixel_ratio);
+InkStatus ink_canvas_set_tool(InkCanvas *canvas, const InkToolSettings *tool);
+/* UTC ms since the Unix epoch minus the host's sample clock, for mn:time. */
+InkStatus ink_canvas_set_utc_offset(InkCanvas *canvas, double utc_minus_host_ms);
+InkStatus ink_canvas_free(InkCanvas *canvas);
+
+/* One batch of samples per platform event. */
+InkStatus ink_input(InkCanvas *canvas, const InkPenSample *samples, size_t count);
+/* Replaces the values of earlier samples with the same `id` (UIKit estimated
+   properties arrive late, sometimes after the touch ends). */
+InkStatus ink_input_update(InkCanvas *canvas, const InkPenSample *samples, size_t count);
+
+/* ---- Frame and history ------------------------------------------------ */
+
 /* Draws a frame when the document, the view, or the live stroke changed
-   since the last one. Returns 1 when it drew. */
-int ink_render(InkCanvas *canvas);
+   since the last one. `*drew` is 1 when it drew. */
+InkStatus ink_render(InkCanvas *canvas, int32_t *drew);
+/* Moves the document one step back or forward in its history. `*moved` is 0
+   at either end. */
+InkStatus ink_undo(InkDocument *document, int32_t *moved);
+InkStatus ink_redo(InkDocument *document, int32_t *moved);
+
+/* ---- Layout check ----------------------------------------------------- */
+
+typedef enum InkStruct {
+  INK_STRUCT_PEN_SAMPLE = 0,
+  INK_STRUCT_TOOL_SETTINGS = 1,
+  INK_STRUCT_FILE = 2
+} InkStruct;
+
+/* The struct's size, then the offset of each field in declaration order,
+   into `out`. `*count` is the number of values. Wrappers in other languages
+   compare their layouts with these. */
+InkStatus ink_struct_layout(InkStruct which, uint32_t *out, size_t capacity, size_t *count);
 
 #ifdef __cplusplus
 }
@@ -120,6 +190,17 @@ static_assert(offsetof(InkPenSample, phase) == 57);
 static_assert(offsetof(InkPenSample, predicted) == 58);
 static_assert(offsetof(InkPenSample, reserved) == 59);
 static_assert(sizeof(InkPenSample) == 64);
+
+static_assert(offsetof(InkToolSettings, brush) == 0);
+static_assert(offsetof(InkToolSettings, rgb) == 4);
+static_assert(offsetof(InkToolSettings, size) == 8);
+static_assert(sizeof(InkToolSettings) == 12);
+
+/* Pointer-sized fields: 4 bytes on wasm32, 8 on arm64. */
+static_assert(offsetof(InkFile, path) == 0);
+static_assert(offsetof(InkFile, bytes) == sizeof(void *));
+static_assert(offsetof(InkFile, size) == 2 * sizeof(void *));
+static_assert(sizeof(InkFile) == 3 * sizeof(void *));
 #endif
 
 #endif

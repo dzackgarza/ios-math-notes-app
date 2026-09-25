@@ -10,7 +10,7 @@
 #include <vector>
 
 #include "document/document.h"
-#include "document/ids.h"
+#include "editor/history.h"
 #include "ink.h"
 #include "ink/brush/brush.h"
 #include "ink/geometry/envelope.h"
@@ -33,7 +33,7 @@ ink::Brush MakeBrush(const Pen &pen);
 
 class Editor {
  public:
-  Editor(Document document, uint64_t id_seed);
+  explicit Editor(DocumentHistory &history) : history_(&history) {}
 
   // content -> view affine transform, SVG matrix order. Content coordinates
   // are those of the page layout (layout/layout.h).
@@ -45,9 +45,8 @@ class Editor {
   void Input(const InkPenSample *samples, size_t count);
   void InputUpdate(const InkPenSample *samples, size_t count);
 
-  const Document &document() const { return history_[index_]; }
+  const Document &document() const { return history_->current(); }
   const Transform &view() const { return view_; }
-  size_t HistorySize() const { return history_.size(); }
 
   // The stroke being drawn, if any: its page and pen, its outline in page
   // coordinates, and the page-space area its geometry changed in since the
@@ -83,11 +82,8 @@ class Editor {
   void Commit();
   Stroke MakeElement(const std::string &id, const ink::Stroke &ink_stroke, const Pen &pen,
                      double t0, const std::vector<InkPenSample> &real) const;
-  void Push(Document next);
 
-  std::vector<Document> history_;
-  size_t index_ = 0;
-  IdGenerator ids_;
+  DocumentHistory *history_;
   Transform view_;
   Pen pen_;
   double utc_offset_ms_ = 0;

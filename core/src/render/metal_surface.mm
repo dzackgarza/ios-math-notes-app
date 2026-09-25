@@ -54,11 +54,11 @@ class MetalSurface : public HostSurface {
 
 }  // namespace
 
-std::unique_ptr<HostSurface> MakeMetalSurface(void *ca_metal_layer) {
+std::unique_ptr<HostSurface> MakeMetalSurface(void *mtl_device, void *mtl_queue,
+                                              void *ca_metal_layer) {
+  id<MTLDevice> device = (__bridge id<MTLDevice>)mtl_device;
+  id<MTLCommandQueue> queue = (__bridge id<MTLCommandQueue>)mtl_queue;
   CAMetalLayer *layer = (__bridge CAMetalLayer *)ca_metal_layer;
-  id<MTLDevice> device = MTLCreateSystemDefaultDevice();
-  if (!device) return nullptr;
-  id<MTLCommandQueue> queue = [device newCommandQueue];
   layer.device = device;
   layer.pixelFormat = MTLPixelFormatBGRA8Unorm;
 

@@ -31,6 +31,7 @@ add_library(ink STATIC
   src/format/notebook.cpp
   src/strokes/outline.cpp
   src/editor/editor.cpp
+  src/editor/history.cpp
   src/layout/layout.cpp
   src/render/renderer.cpp)
 target_include_directories(ink PUBLIC include src)
@@ -49,4 +50,41 @@ endif()
 if(INK_BUILD_TESTS)
   enable_testing()
   add_subdirectory(tests)
+endif()
+
+if(EMSCRIPTEN)
+  # The web engine module (issue #4). Link flags follow the emcc step of
+  # MuPDF platform/wasm/tools/build.sh (ArtifexSoftware/mupdf d587982): no
+  # main, no file system, an ES6 module factory. --emit-tsd runs tsc, which
+  # hosts/web installs: build with hosts/web/node_modules/.bin on PATH
+  # (just engine-module).
+  set(INK_EXPORTS
+    _ink_version _ink_last_error
+    _ink_document_create _ink_document_load_notebook _ink_document_load_page
+    _ink_document_load_asset _ink_document_dirty_files _ink_document_mark_saved
+    _ink_document_free
+    _ink_canvas_create_webgl _ink_canvas_set_view _ink_canvas_set_surface_size
+    _ink_canvas_set_tool _ink_canvas_set_utc_offset _ink_canvas_free
+    _ink_input _ink_input_update _ink_render _ink_undo _ink_redo _ink_struct_layout
+    _malloc _free)
+  list(JOIN INK_EXPORTS "," INK_EXPORTS_FLAG)
+  set(INK_MODULE_FLAGS
+    -sEXPORTED_FUNCTIONS=${INK_EXPORTS_FLAG}
+    -sEXPORTED_RUNTIME_METHODS=HEAPU8,HEAPU32,HEAPF32,HEAPF64
+    --no-entry -sFILESYSTEM=0 -sMODULARIZE=1 -sEXPORT_ES6=1 -sALLOW_MEMORY_GROWTH=1
+    -sMIN_WEBGL_VERSION=2 -sMAX_WEBGL_VERSION=2)
+
+  add_executable(engine EXCLUDE_FROM_ALL src/wasm/module.cpp)
+  target_link_libraries(engine PRIVATE ink)
+  set_target_properties(engine PROPERTIES SUFFIX .mjs RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/web)
+  target_link_options(engine PRIVATE ${INK_MODULE_FLAGS} -sENVIRONMENT=web,worker
+    --emit-tsd engine.d.mts)
+
+  # The same module for Node, with the sample round-trip exports of
+  # tests/wasm_abi, for the wrapper's tests.
+  add_executable(engine_test EXCLUDE_FROM_ALL src/wasm/module.cpp tests/wasm_abi/samples.cpp)
+  target_link_libraries(engine_test PRIVATE ink)
+  set_target_properties(engine_test PROPERTIES SUFFIX .mjs RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/web)
+  target_link_options(engine_test PRIVATE ${INK_MODULE_FLAGS} -sENVIRONMENT=node
+    --emit-tsd engine_test.d.mts)
 endif()

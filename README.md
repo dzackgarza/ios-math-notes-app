@@ -20,6 +20,8 @@ iPad: SideStore source ◄── releases/latest/download/source.json
 | `docs/FEATURES.md` | Feature spec. |
 | `docs/ARCHITECTURE.md` | Engine and host architecture, dependencies, reference implementations. |
 | `docs/FORMAT.md` | Notebook storage and file format. |
+| `core/` | The C++ engine; `core/include/ink.h` is its C ABI. |
+| `hosts/web/` | The web host; `src/engine/` wraps the engine module (`just web-engine-test`). |
 | `tests/fixtures/write/` | Traces and results recorded from Stylus Labs Write; see its README.md. |
 | `justfile` | `test-commit` / `test-push`: YAML lint. Swift compiles only in CI. `write-fixtures`: regenerates `tests/fixtures/write/`. |
 
