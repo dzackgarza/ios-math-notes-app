@@ -47,7 +47,40 @@ for (let line = 0; line < 4; line++) {
   await drawWithPen(page, Array.from({ length: 40 }, (_, i) => ({ x: box.x + 80 + i * 10, y: y + 6 * Math.sin(i / 2) })));
 }
 await page.screenshot({ path: `${out}/editor.png` });
+// Mid-pull past the last page, past the threshold: the wheel releases 250 ms
+// after the last wheel event.
+await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+await page.mouse.wheel(0, 5000);
+await page.screenshot({ path: `${out}/editor-pull.png` });
+await page.waitForTimeout(500);
 await page.getByRole("button", { name: "Library" }).click();
 await page.getByRole("button", { name: "Algebraic Geometry", exact: true }).click();
+
+// Kobalte un-hides the app a frame after a dialog or menu closes (TRAPS.md).
+const appShown = () => page.locator("#root:not([aria-hidden])").waitFor();
+for (const tag of ["Research", "AG"]) {
+  await page.getByRole("button", { name: "Add tag", exact: true }).click();
+  await page.getByRole("textbox", { name: "Name" }).fill(tag);
+  await page.getByRole("button", { name: "Add Tag", exact: true }).click();
+  await appShown();
+}
+const actions = page.getByRole("button", { name: "Minimal Models in Dimension Three actions" });
+// Checkbox items leave the menu open: Escape closes it.
+const closeMenu = async () => {
+  await page.keyboard.press("Escape");
+  await appShown();
+};
+await actions.click();
+await page.getByRole("menuitemcheckbox", { name: "Favorite" }).click();
+await closeMenu();
+// The Tags submenu by keyboard: Playwright's click on it lands on the page behind it.
+for (const [i, tag] of ["Research", "AG"].entries()) {
+  await actions.click();
+  await page.getByRole("menuitem", { name: "Tags" }).focus();
+  await page.keyboard.press("ArrowRight");
+  for (let k = 0; k < i; k++) await page.keyboard.press("ArrowDown");
+  await page.getByRole("menuitemcheckbox", { name: tag }).press("Enter");
+  await closeMenu();
+}
 await page.screenshot({ path: `${out}/library.png` });
 await browser.close();

@@ -1,7 +1,7 @@
 import { Button } from "@kobalte/core/button";
 import { DropdownMenu } from "@kobalte/core/dropdown-menu";
 import { ToggleGroup } from "@kobalte/core/toggle-group";
-import { ChevronDown, ChevronLeft, ChevronRight, Ellipsis, Grip, Highlighter, PenLine, Redo2, Undo2, X } from "lucide-solid";
+import { ChevronDown, ChevronLeft, ChevronRight, Ellipsis, Grip, Highlighter, PenLine, Plus, Redo2, Undo2, X } from "lucide-solid";
 import { For, createEffect, createResource, createSignal, onCleanup, onMount } from "solid-js";
 
 import { Brush, PageSize, type Canvas } from "../engine/engine.ts";
@@ -12,7 +12,9 @@ import { AppMark } from "../ui/Library.tsx";
 import { paperLabel } from "../ui/paper.tsx";
 import { applyTemplate, type OpenNotebook } from "./notebook.ts";
 
-const MARGIN = 16; // CSS px around the pages
+// How far past the last page, in CSS px, a pull must go to add a page.
+const PULL_THRESHOLD = 96;
+const WHEEL_RELEASE_MS = 250;
 
 // The tool rail's pens (docs/specs/tablet-ui.md, Editor): brush and size in pt.
 const PENS = {
@@ -56,38 +58,61 @@ export function Editor(props: {
   const [template, setTemplate] = createSignal(props.notebook.template);
   const [pen, setPen] = createSignal<PenId>("pen");
   const [colors, setColors] = createSignal<Record<PenId, number>>({ pen: PENS.pen.rgb, highlighter: PENS.highlighter.rgb });
-  const [view, setView] = createSignal<View>({ scale: 1, x: MARGIN, y: MARGIN });
+  const [view, setView] = createSignal<View>({ scale: 1, x: 0, y: 0 });
   const [pages, setPages] = createSignal(doc.pageCount());
+  // How far, in CSS px, the view is pulled past the end of the last page.
+  const [pull, setPull] = createSignal(0);
 
-  // Keeps some page in view: the content may not scroll past the margins.
+  // The view stops at the ends of the pages (docs/specs/tablet-ui.md, "Pages
+  // in the editor"); content narrower or shorter than the canvas is centered.
   const clampView = (view: View): View => {
     const content = doc.contentSize();
     const width = content.width * view.scale, height = content.height * view.scale;
     const clampAxis = (at: number, size: number, viewport: number) =>
-      size + 2 * MARGIN <= viewport ? (viewport - size) / 2 : Math.min(MARGIN, Math.max(viewport - MARGIN - size, at));
+      size <= viewport ? (viewport - size) / 2 : Math.min(0, Math.max(viewport - size, at));
     return {
       scale: view.scale,
       x: clampAxis(view.x, width, element.clientWidth),
       y: clampAxis(view.y, height, element.clientHeight),
     };
   };
-  const controller = new ViewController({ scale: 1, x: MARGIN, y: MARGIN }, (view) => {
-    const clamped = clampView(view);
-    controller.view = clamped;
-    canvas?.setView(clamped.scale, 0, 0, clamped.scale, clamped.x, clamped.y);
-    setView(clamped);
-    setPages(doc.pageCount());
-  });
+  const controller = new ViewController(
+    { scale: 1, x: 0, y: 0 },
+    (view) => {
+      const clamped = clampView(view);
+      // Movement past the end of the last page goes into the pull; moving
+      // back takes it out before the view scrolls.
+      const end = clampView({ ...view, y: -Infinity }).y;
+      if (pull() > 0 || view.y < end) {
+        const next = Math.max(0, pull() + end - view.y);
+        setPull(next);
+        if (next > 0) clamped.y = end;
+      }
+      controller.view = clamped;
+      canvas?.setView(clamped.scale, 0, 0, clamped.scale, clamped.x, clamped.y);
+      setView(clamped);
+      setPages(doc.pageCount());
+    },
+    () => releasePull(),
+  );
 
-  const fitScale = () => (element.clientWidth - 2 * MARGIN) / doc.contentSize().width;
+  // Releasing past the threshold adds a page after the last one; the pull
+  // springs back either way.
+  const releasePull = () => {
+    const add = pull() >= PULL_THRESHOLD;
+    setPull(0);
+    if (add) edit(() => doc.insertPage(doc.pageCount()));
+  };
 
-  const fitWidth = () => controller.set({ scale: fitScale(), x: MARGIN, y: MARGIN });
+  const fitScale = () => element.clientWidth / doc.contentSize().width;
+
+  const fitWidth = () => controller.set({ scale: fitScale(), x: 0, y: 0 });
 
   // Zooms about the top left of the view, keeping the page at the top in place.
   const zoom = (factor: number) => {
     const { scale, y } = controller.view;
     const next = fitScale() * factor;
-    controller.set({ scale: next, x: MARGIN, y: MARGIN + ((y - MARGIN) * next) / scale });
+    controller.set({ scale: next, x: 0, y: (y * next) / scale });
   };
 
   const resize = () => {
@@ -121,9 +146,14 @@ export function Editor(props: {
     if (e.type === "pointerup" || e.type === "pointercancel") saver.schedule();
   };
 
+  // A wheel or trackpad scroll has no release event: the pull is released
+  // when no wheel event has come for WHEEL_RELEASE_MS.
+  let wheelRelease = 0;
   const onWheel = (e: WheelEvent) => {
     e.preventDefault();
     controller.wheel(e, origin());
+    clearTimeout(wheelRelease);
+    wheelRelease = window.setTimeout(releasePull, WHEEL_RELEASE_MS);
   };
 
   // The page at the middle of the view; the last page below the pages.
@@ -149,14 +179,14 @@ export function Editor(props: {
     const { scale, x, y } = controller.view;
     const top = y + rect.y * scale, bottom = top + rect.height * scale;
     if (bottom > 0 && top < element.clientHeight) return;
-    controller.set({ scale, x, y: MARGIN - rect.y * scale });
+    controller.set({ scale, x, y: -rect.y * scale });
   };
 
   // Puts the top of page `index` at the top of the view.
   const goToPage = (index: number) => {
     if (index < 0 || index >= doc.pageCount()) return;
     const { scale, x } = controller.view;
-    controller.set({ scale, x, y: MARGIN - doc.pageRect(index).y * scale });
+    controller.set({ scale, x, y: -doc.pageRect(index).y * scale });
   };
 
   const history = (step: "undo" | "redo") => {
@@ -325,6 +355,15 @@ export function Editor(props: {
             onWheel={onWheel}
             onContextMenu={(e) => e.preventDefault()}
           />
+          <div
+            class="pull-indicator"
+            data-active={pull() > 0 ? "" : undefined}
+            data-ready={pull() >= PULL_THRESHOLD ? "" : undefined}
+            style={{ height: `${Math.min(pull(), 1.5 * PULL_THRESHOLD)}px` }}
+          >
+            <Plus size={16} />
+            {pull() >= PULL_THRESHOLD ? "Release to add a page" : "Pull to add a page"}
+          </div>
           <div class="bottom-bar">
             <div class="bar-group">
               <Button class="icon-button" aria-label="Undo" title="Undo (Ctrl+Z)" onClick={() => history("undo")}>

@@ -78,12 +78,12 @@ export type SidebarProps = Pick<LibraryProps, "folders" | "metadata" | "section"
 export function Sidebar(props: SidebarProps) {
   const notes = () => props.folders.flatMap((f) => f.notes);
   const tagCount = (tag: string) => notes().filter((n) => props.metadata.notes[pathKey(n.path)]?.tags.includes(tag)).length;
-  const item = (section: Section, icon: JSX.Element, label: string, count?: number) => (
+  const item = (section: Section, icon: JSX.Element, label: string, count?: () => number) => (
     <Button class="nav-item" aria-current={props.section === section ? "page" : undefined} onClick={() => props.onSection(section)}>
       {icon}
       <span>{label}</span>
       <Show when={count !== undefined}>
-        <span class="nav-count">{count}</span>
+        <span class="nav-count">{count!()}</span>
       </Show>
     </Button>
   );
@@ -119,7 +119,7 @@ export function Sidebar(props: SidebarProps) {
             `tag:${tag.name}`,
             <span class="tag-dot" style={{ background: tag.color }} />,
             tag.name,
-            tagCount(tag.name),
+            () => tagCount(tag.name),
           )
         }
       </For>

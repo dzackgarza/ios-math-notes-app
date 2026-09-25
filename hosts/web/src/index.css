@@ -13,7 +13,7 @@
   --panel: #ffffff;
   --panel-soft: #f6f7f9;
   --desk: #e9ebef;
-  --paper: #fcfbf7;
+  --paper: #fcfaf5;
   --danger: #d6455d;
   --radius: 12px;
   --radius-small: 8px;
@@ -719,6 +719,8 @@ button {
   font-size: 1rem;
 }
 
+/* A cover is a preview of the first page (docs/specs/tablet-ui.md): a new
+   notebook has none yet, so its preview is blank paper with the title. */
 .cover {
   display: flex;
   align-items: flex-start;
@@ -726,9 +728,10 @@ button {
   aspect-ratio: 3 / 4;
   padding-top: 20%;
   box-sizing: border-box;
-  border-radius: 6px 12px 12px 6px;
-  background: linear-gradient(90deg, #9fb7e8 0 6%, #b9cdf3 6%);
-  box-shadow: 0 8px 20px rgb(16 24 40 / 15%);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--paper);
+  box-shadow: 0 2px 8px rgb(16 24 40 / 8%);
 }
 
 .cover-title {
@@ -1045,4 +1048,31 @@ button {
   min-width: 3.5rem;
   font-size: 0.85rem;
   text-align: center;
+}
+
+/* The space pulled past the last page (docs/specs/tablet-ui.md, "Pages in
+   the editor"). It springs back when released. */
+.pull-indicator {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  overflow: hidden;
+  background: var(--desk);
+  color: var(--muted);
+  pointer-events: none;
+  transition: height 0.2s ease-out;
+}
+
+.pull-indicator[data-active] {
+  transition: none;
+}
+
+.pull-indicator[data-ready] {
+  color: var(--accent);
+  font-weight: 600;
 }

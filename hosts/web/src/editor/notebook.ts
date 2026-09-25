@@ -78,8 +78,9 @@ export async function createNotebook(
 ): Promise<OpenNotebook> {
   await ensureTemplates(root, engine);
   const dir = await (await directoryAt(root, parent)).getDirectoryHandle(name, { create: true });
-  const document = engine.createDocument(randomSeed());
-  await applyTemplate(root, document, template);
+  const page1 = await readTemplatePage(root, template);
+  if (!page1) throw new Error(`template ${template} has no pages/0001.svg`);
+  const document = engine.createDocumentFromTemplate(randomSeed(), template, page1);
   const saver = new Saver(document, dir);
   await saver.save();
   return { engine, document, root, dir, template, path: [...parent, name], name, saver };

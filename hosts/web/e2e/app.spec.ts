@@ -124,7 +124,7 @@ test("after one visit the app starts offline", async ({ page, context }) => {
   await context.setOffline(true);
   await page.reload();
   await expect(page.getByRole("heading", { name: "Library" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "New Note" })).toBeEnabled(); // the library shows once the engine loaded from the cache
+  await expect(page.getByRole("button", { name: "New Note", exact: true })).toBeEnabled(); // the library shows once the engine loaded from the cache
 });
 
 test("Ctrl+Z undoes a stroke and the save removes it from the page file", async ({ page }) => {
@@ -196,4 +196,31 @@ test("the tool rail's pen, highlighter and color reach the saved strokes", async
       ["highlighter", "#2BB3C0"],
       ["pressure-pen", "#D6455D"],
     ]);
+});
+
+test("pulling past the last page adds a page only past the threshold, and the view stops at the pages", async ({ page }) => {
+  await startEmpty(page);
+  await newNote(page, "Pull");
+  const box = (await page.locator("#ink-canvas").boundingBox())!;
+  const indicator = page.getByLabel("Page", { exact: true });
+  const pull = page.locator(".pull-indicator");
+  // Paper, not desk, at the canvas's top and bottom edges.
+  const paperAt = async (y: number) => Math.min(...(await pixel(page, box.x + 5, y)).slice(0, 3)) > 240;
+  // The A4 page fills the canvas width: this far down its end meets the canvas's.
+  const toEnd = (box.width * 841.89) / 595.28 - box.height;
+
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.wheel(0, -500);
+  expect(await paperAt(box.y + 1)).toBe(true);
+
+  await page.mouse.wheel(0, toEnd + 40); // 40 px of pull, under the threshold
+  await expect(pull).toHaveText("Pull to add a page");
+  await expect(pull).toHaveCSS("height", "0px"); // released: springs back
+  await expect(indicator).toHaveText(/\/ 1$/);
+  expect(await paperAt(box.y + box.height - 2)).toBe(true);
+
+  await page.mouse.wheel(0, 150);
+  await expect(pull).toHaveText("Release to add a page");
+  await expect(indicator).toHaveText(/\/ 2$/);
+  await expect(pull).toHaveCSS("height", "0px");
 });
