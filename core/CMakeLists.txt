@@ -28,7 +28,9 @@ add_library(ink STATIC
   src/geometry/hit_shapes.cpp
   src/format/numbers.cpp
   src/format/page_svg.cpp
-  src/format/notebook.cpp)
+  src/format/notebook.cpp
+  src/strokes/outline.cpp
+  src/editor/editor.cpp)
 target_include_directories(ink PUBLIC include src)
 target_compile_definitions(ink PRIVATE INK_VERSION="${PROJECT_VERSION}")
 target_link_libraries(ink PUBLIC Skia::skia inkcore pugixml::pugixml FastFloat::fast_float immer

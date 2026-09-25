@@ -82,44 +82,33 @@ EMSCRIPTEN_KEEPALIVE uint32_t webgl_pixel(int x, int y) {
 
 }  // extern "C"
 
-// Mean milliseconds of EnqueueInputs plus UpdateShape for one 16-input frame,
-// over a 320-input spiral drawn with google/ink's PressurePen.
+// Mean milliseconds of one 16-sample ink_input event, over a 320-sample
+// spiral drawn with the pressure pen.
 #include <chrono>
 #include <cmath>
+#include <vector>
 
-#include "ink/brush/brush.h"
-#include "ink/brush/stock_brushes.h"
-#include "ink/color/color.h"
-#include "ink/strokes/in_progress_stroke.h"
-#include "ink/strokes/input/stroke_input_batch.h"
-#include "ink/types/duration.h"
+#include "ink.h"
 
 extern "C" EMSCRIPTEN_KEEPALIVE double stroke_frame_ms() {
-  auto brush = ink::Brush::Create(
-      ink::stock_brushes::PressurePen(ink::stock_brushes::PressurePenVersion::kV1),
-      ink::Color::Black(), 5, 0.1);
-  if (!brush.ok()) return -1;
-  ink::InProgressStroke stroke;
-  stroke.Start(*brush);
-  constexpr int kFrames = 20, kFrameInputs = 16;
+  InkCanvas *canvas = ink_canvas_create(1);
+  ink_canvas_set_pen(canvas, INK_BRUSH_PRESSURE_PEN, 0x1A1A1A, 5);
+  constexpr int kEvents = 20, kSamples = 16;
   double total_ms = 0;
-  for (int f = 0; f < kFrames; ++f) {
-    ink::StrokeInputBatch frame;
-    for (int j = 0; j < kFrameInputs; ++j) {
-      float t = float(f * kFrameInputs + j) / 240.0f;  // 240 Hz pencil
-      float r = 20 + 40 * t;
-      if (!frame.Append({.tool_type = ink::StrokeInput::ToolType::kStylus,
-                         .position = {250 + r * std::cos(8 * t), 250 + r * std::sin(8 * t)},
-                         .elapsed_time = ink::Duration32::Seconds(t),
-                         .pressure = 0.5f + 0.4f * std::sin(3 * t)})
-               .ok()) {
-        return -1;
-      }
+  for (int e = 0; e < kEvents; ++e) {
+    std::vector<InkPenSample> event;
+    for (int j = 0; j < kSamples; ++j) {
+      int n = e * kSamples + j;
+      double t = n / 240.0, r = 20 + 40 * t;  // 240 Hz pencil
+      event.push_back({.x = 250 + r * std::cos(8 * t), .y = 250 + r * std::sin(8 * t),
+                       .time = t * 1000, .pressure = float(0.5 + 0.4 * std::sin(3 * t)),
+                       .has = INK_HAS_PRESSURE, .id = uint32_t(n), .tool = INK_TOOL_PEN,
+                       .phase = uint8_t(n == 0 ? INK_PHASE_BEGIN : INK_PHASE_MOVE)});
     }
     auto start = std::chrono::steady_clock::now();
-    if (!stroke.EnqueueInputs(frame, {}).ok()) return -1;
-    if (!stroke.UpdateShape(frame.Get(kFrameInputs - 1).elapsed_time).ok()) return -1;
+    ink_input(canvas, event.data(), event.size());
     total_ms += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
   }
-  return total_ms / kFrames;
+  ink_canvas_destroy(canvas);
+  return total_ms / kEvents;
 }
