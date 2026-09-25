@@ -1,13 +1,42 @@
 # ios-math-notes-app
 
-Personal iPad app, developed on Linux.
+Personal iPad app (SwiftUI), developed on Linux, built by GitHub Actions, installed with SideStore. No Mac, no App Store, free Apple Account.
 
-- `project.yml` defines the Xcode project ([XcodeGen](https://github.com/yonaskolb/XcodeGen)). The `.xcodeproj` is generated in CI and not tracked.
-- GitHub Actions (`macos-26` runner) builds an **unsigned** IPA on each push to `main`, versioned `0.1.<run number>`, and publishes it with a SideStore source (`sidestore-source.jq` → `source.json`) as release `v<run number>`.
-- [SideStore](https://docs.sidestore.io/) on the iPad signs and installs the IPA with a free Apple Account and refreshes the 7-day signature on-device.
+```
+push to main ──► GitHub Actions (macos-26) ──► release vN: MathNotes.ipa + source.json
+                                                          │
+iPad: SideStore source ◄── releases/latest/download/source.json
+      signs with your Apple Account, installs, refreshes every 7 days
+```
 
-## Install on the iPad
+## Layout
 
-1. One-time: install SideStore from Linux with `iloader` (see SideStore docs); enable Developer Mode on the iPad.
-2. In SideStore, Sources → + → `https://github.com/dzackgarza/ios-math-notes-app/releases/latest/download/source.json`.
-3. Install Math Notes from that source. New pushes to `main` appear as updates in SideStore.
+| Path | Role |
+| --- | --- |
+| `project.yml` | [XcodeGen](https://github.com/yonaskolb/XcodeGen) spec. The `.xcodeproj` and `Sources/Info.plist` are generated in CI and not tracked. |
+| `Sources/` | Swift sources. |
+| `.github/workflows/ios.yml` | Builds an unsigned IPA, checks it, publishes release `v<run number>`. |
+| `sidestore-source.jq` | Template for `source.json` ([AltStore source format](https://faq.altstore.io/developers/make-a-source)). |
+| `justfile` | `test-commit` / `test-push`: YAML lint. Swift compiles only in CI. |
+
+## Releasing
+
+Push to `main` with a change under `Sources/`, `project.yml`, `sidestore-source.jq`, or the workflow. The run sets version `0.1.<run number>`, build `<run number>`. Other pushes do not build. Run manually with `gh workflow run ios.yml`.
+
+On the iPad, open SideStore; the update shows in My Apps. Tap Update (SideStore does not auto-install source updates).
+
+## One-time iPad setup (from Linux)
+
+1. `sudo pacman -S usbmuxd && sudo systemctl start usbmuxd`. Re-plug the iPad and tap Trust. `idevicepair validate` must succeed.
+2. Install SideStore with [iloader](https://github.com/nab138/iloader). Use the binary from the `.deb` release asset (`usr/bin/iloader`, installed at `~/.local/bin/iloader`); see TRAPS.md for why not the AppImage.
+3. iPad: Settings → General → VPN & Device Management → trust your Apple Account's developer certificate.
+4. Open SideStore once; then Settings → Privacy & Security → Developer Mode → on, restart, Turn On.
+5. Install **LocalDevVPN** from the App Store and connect it. SideStore needs it for every install and refresh.
+6. SideStore → Settings → sign in with the same Apple Account.
+7. SideStore → Sources → + → `https://github.com/dzackgarza/ios-math-notes-app/releases/latest/download/source.json`, then install Math Notes.
+
+For background signature refresh: Background App Refresh on for SideStore, LocalDevVPN connected.
+
+## Free-account limits
+
+App IDs and profiles expire after 7 days (SideStore refreshes them). At most 3 sideloaded apps per device, and SideStore counts as one. Some entitlements (iCloud, push, etc.) need the paid Developer Program.
