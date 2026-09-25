@@ -107,4 +107,6 @@ The mockups add the following to FORMAT.md and FEATURES.md:
    new-note fields (paper, size, tags, and so on) that the user saves and
    reuses. The names in the mockup are sample content.
 4. **Tabs** of open notes in the editor.
-5. **Search, Recent, Favorites**: not yet specified.
+5. **Search, Recent, Favorites** are views of one table of notes: Search
+   filters by title, Recent sorts by modification time, and Favorites filters
+   by a favorite flag stored with the other metadata.
