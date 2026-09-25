@@ -131,6 +131,7 @@ jobs:
 
       # Re-running a run reuses its number, so replace that release's assets.
       - name: Publish IPA and source as a release
+        if: github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -143,6 +144,7 @@ jobs:
           fi
 
       - name: Check published source serves this build
+        if: github.ref == 'refs/heads/main'
         run: |
           url="https://github.com/$GITHUB_REPOSITORY/releases/latest/download/source.json"
           test "$(curl -fsSL "$url" | jq -r '.apps[0].versions[0].buildVersion')" = "$BUILD"
