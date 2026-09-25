@@ -1,0 +1,16 @@
+<svg class="write-page" color-interpolation="linearRGB" width="700px" height="800px" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+  <g class="write-content write-v3" xruling="0" yruling="0" marginLeft="0" papercolor="#FFFFFF" rulecolor="#FF0000FF">
+    <g class="ruleline write-std-ruling write-scale-down" fill="none" stroke="#0000FF" stroke-width="1" shape-rendering="crispEdges" vector-effect="non-scaling-stroke">
+      <rect class="pagerect" fill="#FFFFFF" stroke="none" x="0" y="0" width="700" height="800" />
+    </g>
+    <g class="hyperref">
+      <path class="write-stroke-pen" fill="none" stroke="#000000" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" __comx="139.85" __comy="80.011" d="M129.9 75.2 L149.8 90.1 130.3 105.1" />
+      <path class="write-stroke-pen" fill="none" stroke="#000000" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" __comx="149.95" __comy="80.489" d="M140 76.2 L159.9 90.1 140.2 102.4" />
+      <path class="write-stroke-pen" fill="none" stroke="#000000" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" __comx="190.05" __comy="80.011" d="M200 75.2 L180.1 90.1 199.8 105.1" />
+      <a xlink:href="#b-fP8EbDL3hu">
+        <rect fill-opacity="0" stroke-opacity="0" x="129.4" y="74.7" width="71.1" height="30.9" />
+      </a>
+    </g>
+    <path id="b-2ng5HY8JMw" class="bookmark" transform="translate(55,175)" fill="#0000FF" d="M0 0 L16 0 16 30 8 25 0 30 0 0" />
+  </g>
+</svg>
