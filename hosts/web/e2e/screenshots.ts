@@ -47,12 +47,6 @@ for (let line = 0; line < 4; line++) {
   await drawWithPen(page, Array.from({ length: 40 }, (_, i) => ({ x: box.x + 80 + i * 10, y: y + 6 * Math.sin(i / 2) })));
 }
 await page.screenshot({ path: `${out}/editor.png` });
-// Mid-pull past the last page, past the threshold: the wheel releases 250 ms
-// after the last wheel event.
-await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
-await page.mouse.wheel(0, 5000);
-await page.screenshot({ path: `${out}/editor-pull.png` });
-await page.waitForTimeout(500);
 await page.getByRole("button", { name: "Library" }).click();
 await page.getByRole("button", { name: "Algebraic Geometry", exact: true }).click();
 
