@@ -2,3 +2,9 @@
 Payload/
 *.ipa
 .DS_Store
+/build/
+core/build/
+node_modules/
+test-results/
+playwright-report/
+.ci/

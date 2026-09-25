@@ -1,0 +1,104 @@
+name: Engine (wasm32)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - core/**
+      - .github/workflows/engine.yml
+  pull_request:
+    paths:
+      - core/**
+      - .github/workflows/engine.yml
+
+env:
+  EMSDK_VERSION: 4.0.7
+  VCPKG_ROOT: ${{ github.workspace }}/.ci/vcpkg
+  VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}/.ci/vcpkg-bin,readwrite
+  BUILD_DIR: core/build/wasm
+
+jobs:
+  wasm:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install tools
+        run: sudo apt-get update && sudo apt-get install -y ninja-build wabt qpdf brotli
+
+      - uses: emscripten-core/setup-emsdk@v16
+        with:
+          version: ${{ env.EMSDK_VERSION }}
+
+      - name: Restore vcpkg binary cache
+        id: vcpkg-cache
+        uses: actions/cache@v6
+        with:
+          path: ${{ github.workspace }}/.ci/vcpkg-bin
+          key: vcpkg-wasm-${{ env.EMSDK_VERSION }}-${{ hashFiles('core/vcpkg.json', 'core/triplets/**') }}
+
+      - name: Set up vcpkg
+        run: |
+          git clone -q https://github.com/microsoft/vcpkg "$VCPKG_ROOT"
+          mkdir -p "$(dirname "$VCPKG_ROOT")/vcpkg-bin"
+          "$VCPKG_ROOT/bootstrap-vcpkg.sh" -disableMetrics
+
+      - name: Configure (vcpkg resolves wasm32-emscripten ports)
+        run: |
+          cmake -S core -B "$BUILD_DIR" -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" \
+            -DVCPKG_CHAINLOAD_TOOLCHAIN_FILE="$EMSDK/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake" \
+            -DVCPKG_TARGET_TRIPLET=wasm32-emscripten \
+            -DVCPKG_MANIFEST_FEATURES=tests \
+            -DINK_BUILD_TESTS=ON
+
+      # A cache hit must restore every port and build none.
+      - name: Check vcpkg built nothing on a cache hit
+        if: steps.vcpkg-cache.outputs.cache-hit == 'true'
+        run: |
+          grep -E 'Restored [0-9]+ package' "$BUILD_DIR/vcpkg-manifest-install.log"
+          if grep -E '^Building [a-z0-9-]+:wasm32-emscripten' "$BUILD_DIR/vcpkg-manifest-install.log"; then exit 1; fi
+
+      - name: Build
+        run: cmake --build "$BUILD_DIR"
+
+      - name: Test under Node
+        working-directory: ${{ env.BUILD_DIR }}
+        run: ctest --output-on-failure
+
+      - name: Check the PDF
+        working-directory: ${{ env.BUILD_DIR }}/tests
+        run: qpdf --check a4.pdf
+
+      - name: Check the wasm uses no threads
+        run: |
+          for f in "$BUILD_DIR"/tests/ink_tests.wasm "$BUILD_DIR"/tests/webgl/webgl_check.wasm; do
+            # Only the Memory and target_features sections; data segments hold
+            # unrelated strings such as "shared_ptr".
+            wasm-objdump -x -j Memory "$f" > sections.txt
+            wasm-objdump -x -j target_features "$f" >> sections.txt || true
+            cat sections.txt
+            if grep -Ei 'shared|atomics' sections.txt; then exit 1; fi
+          done
+
+      - name: Report wasm size
+        run: |
+          f="$BUILD_DIR/tests/webgl/webgl_check.wasm"
+          echo "webgl_check.wasm: $(stat -c %s "$f") bytes raw, $(brotli -c -q 11 "$f" | wc -c) bytes brotli" \
+            | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - uses: oven-sh/setup-bun@v2
+
+      - name: WebGL2 check in Chromium, Firefox and WebKit
+        working-directory: core/tests/webgl
+        env:
+          WEBGL_CHECK_DIR: ${{ github.workspace }}/core/build/wasm/tests/webgl
+        run: |
+          bun install --frozen-lockfile
+          bunx playwright install --with-deps chromium firefox webkit
+          sudo apt-get install -y xvfb libgl1-mesa-dri
+          xvfb-run -a bunx playwright test -c playwright.config.mjs

@@ -1,0 +1,17 @@
+find_package(Catch2 3 CONFIG REQUIRED)
+include(Catch)
+
+add_executable(ink_tests test_version.cpp test_pdf.cpp)
+target_link_libraries(ink_tests PRIVATE ink Catch2::Catch2WithMain)
+target_compile_definitions(ink_tests PRIVATE INK_TEST_VERSION="${PROJECT_VERSION}")
+if(EMSCRIPTEN)
+  # adobe/lagrange cmake/lagrange/lagrange_add_executable.cmake:53-69
+  target_link_options(ink_tests PRIVATE
+    -sENVIRONMENT=node -sNODERAWFS=1 -sEXIT_RUNTIME=1 -sALLOW_MEMORY_GROWTH=1)
+endif()
+# adobe/lagrange cmake/lagrange/lagrange_add_test.cmake:60-69
+catch_discover_tests(ink_tests DISCOVERY_MODE PRE_TEST)
+
+if(EMSCRIPTEN)
+  add_subdirectory(webgl)
+endif()

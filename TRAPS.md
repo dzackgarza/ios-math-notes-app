@@ -27,3 +27,11 @@
 - **Element ids changed between identical runs.** Ids keyed by `Element*` broke when freed elements' addresses were reused (reopen, undo history). The id now lives in `Element::uuid`.
 - **The upstream tests start at view `(-10, -10)`, not `(0, 0)`.** Recorded traces begin with a `view` line that restores it.
 - **The Write build is C++14 with `-fno-rtti`:** no `std::to_chars`, no `dynamic_cast`.
+
+## Engine
+
+- **The JetBrains/skia iOS prebuilts target iOS 12.0 and 14.0** (`otool -l` minos). The engine needs 18.0, so CI builds iOS Skia from source at the same commit (`core/scripts/build-skia-ios.sh`). The wasm prebuilt is used as shipped.
+- **`SkPDF::MakeDocument` aborts the process** (`Must set both a jpegDecoder and jpegEncoder`) with a default `SkPDF::Metadata`. Start from `SkPDF::JPEG::MetadataWithCallbacks()` (`include/docs/SkPDFJpegHelpers.h`).
+- **Headless Firefox on a runner without a GPU refuses every WebGL context** ("Exhausted GL driver options"; `webgl.force-enabled` does not help). CI runs Firefox headed under `xvfb-run`, where Mesa supplies GL.
+- **`wasm-objdump -x` dumps data segments,** whose strings (`shared_ptr`, SkSL `atomicStore`) match a thread check. Inspect only `-j Memory` and `-j target_features`.
+- **`actions/cache` rejects paths containing `..`** ("Relative pathing . and .. is not allowed") and then saves nothing, with only a warning. CI keeps its tool directories under `$GITHUB_WORKSPACE/.ci/`.
