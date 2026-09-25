@@ -88,7 +88,9 @@ test("bad page bytes give a parse error and its message", () => {
 test("a new notebook's files, and none after it is marked saved", () => {
   const document = engine.createDocument(1n);
   assert.deepEqual(document.dirtyFiles().map((f) => f.path), ["notebook.json", "pages/0001.svg"]);
-  const json = JSON.parse(new TextDecoder().decode(document.dirtyFiles()[0].bytes));
+  const [first] = document.dirtyFiles();
+  assert.equal(first.kind, "write");
+  const json = JSON.parse(new TextDecoder().decode(first.kind === "write" ? first.bytes : new Uint8Array()));
   assert.equal(json.format, "math-notes");
   document.markSaved();
   assert.deepEqual(document.dirtyFiles(), []);

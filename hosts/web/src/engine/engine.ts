@@ -41,7 +41,9 @@ export const PEN_SAMPLE = {
   reserved: 59,
 } as const;
 export const TOOL_SETTINGS = { byteLength: 12, brush: 0, rgb: 4, size: 8 } as const;
-export const INK_FILE = { byteLength: 12, path: 0, bytes: 4, size: 8 } as const;
+export const INK_FILE = { byteLength: 16, path: 0, bytes: 4, size: 8, kind: 12 } as const;
+export const FileKind = { write: 0, delete: 1 } as const;
+export const PageSize = { a4: 0, letter: 1, custom: 2 } as const;
 
 // InkStruct ids of ink_struct_layout.
 export const Struct = { penSample: 0, toolSettings: 1, file: 2 } as const;
@@ -73,6 +75,11 @@ export interface NotebookFile {
   path: string;
   bytes: Uint8Array<ArrayBuffer>;
 }
+
+// A file to write or delete after an edit (ink_document_dirty_files).
+export type FileChange =
+  | { kind: "write"; path: string; bytes: Uint8Array<ArrayBuffer> }
+  | { kind: "delete"; path: string };
 
 export function writePenSample(view: DataView, at: number, s: PenSample): void {
   const o = PEN_SAMPLE;
@@ -207,6 +214,30 @@ export class Engine {
     });
   }
 
+  builtinTemplates(): string[] {
+    const count = this.withScratch(4, (out) => {
+      this.check(this.module._ink_builtin_template_count(out));
+      return this.view().getUint32(out, true);
+    });
+    return Array.from({ length: count }, (_, i) =>
+      this.withScratch(4, (out) => {
+        this.check(this.module._ink_builtin_template_name(i, out));
+        return this.readCString(this.view().getUint32(out, true));
+      }),
+    );
+  }
+
+  // The notebook of a built-in template; its dirty files are the files to write.
+  createBuiltinTemplate(name: string, seed: bigint): InkDocument {
+    const pointer = this.withCString(name, (text) =>
+      this.withScratch(4, (out) => {
+        this.check(this.module._ink_builtin_template_create(text, seed, out));
+        return this.view().getUint32(out, true);
+      }),
+    );
+    return new InkDocument(this, pointer);
+  }
+
   createDocument(seed: bigint): InkDocument {
     const pointer = this.withScratch(4, (out) => {
       this.check(this.module._ink_document_create(seed, out));
@@ -261,28 +292,68 @@ export class InkDocument {
     });
   }
 
-  dirtyFiles(): NotebookFile[] {
+  dirtyFiles(): FileChange[] {
     const e = this.engine;
     return e.withScratch(8, (out) => {
       e.check(e.module._ink_document_dirty_files(this.pointer, out, out + 4));
       const view = e.view();
       const files = view.getUint32(out, true);
       const count = view.getUint32(out + 4, true);
-      const result: NotebookFile[] = [];
+      const result: FileChange[] = [];
       for (let i = 0; i < count; i++) {
         const at = files + i * INK_FILE.byteLength;
+        const path = e.readCString(view.getUint32(at + INK_FILE.path, true));
+        if (view.getUint32(at + INK_FILE.kind, true) === FileKind.delete) {
+          result.push({ kind: "delete", path });
+          continue;
+        }
         const bytes = view.getUint32(at + INK_FILE.bytes, true);
         const size = view.getUint32(at + INK_FILE.size, true);
-        result.push({
-          path: e.readCString(view.getUint32(at + INK_FILE.path, true)),
-          bytes: e.heap().slice(bytes, bytes + size),
-        });
+        result.push({ kind: "write", path, bytes: e.heap().slice(bytes, bytes + size) });
       }
       return result;
     });
   }
 
-  // The laid-out pages' extent in content coordinates (pt).
+  pageCount(): number {
+    const e = this.engine;
+    return e.withScratch(4, (out) => {
+      e.check(e.module._ink_document_page_count(this.pointer, out));
+      return e.view().getUint32(out, true);
+    });
+  }
+
+  // Before page `index`; the page count appends.
+  insertPage(index: number): void {
+    this.engine.check(this.engine.module._ink_document_insert_page(this.pointer, index));
+  }
+
+  deletePage(index: number): void {
+    this.engine.check(this.engine.module._ink_document_delete_page(this.pointer, index));
+  }
+
+  movePage(from: number, to: number): void {
+    this.engine.check(this.engine.module._ink_document_move_page(this.pointer, from, to));
+  }
+
+  setPageSize(size: number, width = 0, height = 0): void {
+    this.engine.check(this.engine.module._ink_document_set_page_size(this.pointer, size, width, height));
+  }
+
+  // `page1` is the template notebook's pages/0001.svg.
+  setTemplate(name: string, page1: Uint8Array): void {
+    const e = this.engine;
+    e.withCString(name, (text) => {
+      const bytes = e.copyIn(page1);
+      try {
+        e.check(e.module._ink_document_set_template(this.pointer, text, bytes, page1.length));
+      } finally {
+        e.free(bytes);
+      }
+    });
+  }
+
+  // The laid-out pages' extent in content coordinates (pt), the ghost page included.
   contentSize(): { width: number; height: number } {
     const e = this.engine;
     return e.withScratch(16, (out) => {
@@ -372,6 +443,16 @@ export class Canvas {
   inputUpdate(samples: readonly PenSample[]): void {
     const at = this.writeSamples(samples);
     this.engine.check(this.engine.module._ink_input_update(this.pointer, at, samples.length));
+  }
+
+  // The page under view point (x, y): its index, the page count for the
+  // ghost page, or -1.
+  pageAt(x: number, y: number): number {
+    const e = this.engine;
+    return e.withScratch(4, (out) => {
+      e.check(e.module._ink_canvas_page_at(this.pointer, x, y, out));
+      return e.view().getInt32(out, true);
+    });
   }
 
   // Draws a frame when something changed; returns whether it drew.
