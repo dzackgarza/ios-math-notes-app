@@ -128,8 +128,9 @@ conflict. Assets are separate files, not base64 inside SVG.
   (force 0..1), `OE` (altitude, rad), `OA` (azimuth, rad), `OR` (roll, rad).
   Every value is written in full: points separated by `,`, channels by one
   space. This is the form that existing InkML readers take, among them
-  microsoft/InkMLjs and the CROHME handwritten-math tools, so external
-  scripts can read the samples of any page.
+  Wacom's universal-ink-library, microsoft/InkMLjs, and the CROHME
+  handwritten-math tools, so external scripts can read the samples of any
+  page.
 - Stroke attributes, in this order: `id`, `class` (only for shape elements),
   `transform`, `fill`, `fill-opacity`, `mn:brush`, `mn:brush-version`,
   `mn:size`, `mn:time`, `d`. `mn:brush` names a google/ink stock brush

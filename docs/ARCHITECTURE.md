@@ -99,6 +99,7 @@ Work order and milestones: the GitHub issue tree rooted at
 | Number formatting | `std::to_chars` (fixed precision) | libc++ (iOS 16.3+, Emscripten) | [#3](https://github.com/dzackgarza/math-notes-app/issues/3) |
 | Document values, undo history | immer 0.9.1 | vcpkg | [#3](https://github.com/dzackgarza/math-notes-app/issues/3) |
 | Engine tests | Catch2 3.16.0 | vcpkg; tests run in the WASM build under Node | [#2](https://github.com/dzackgarza/math-notes-app/issues/2) |
+| InkML compatibility check of written pages | Wacom [universal-ink-library](https://github.com/Wacom-Developer/universal-ink-library) 2.1.1 (`InkMLParser`) | PyPI, run with `uvx` in CI; test-only | [#3](https://github.com/dzackgarza/math-notes-app/issues/3) |
 
 Toolchain: emsdk 4.0.7 for every WASM object (Emscripten has no ABI
 stability between versions, and the Skia prebuilt uses 4.0.7); Xcode on the
@@ -147,7 +148,7 @@ are in each work-unit issue; this table is the index.
 | Lasso select | google/ink `geometry_internal::CreateClosedShape`, `CreateMeshFromPolyline`, `PartitionedMesh::CoverageIsGreaterThan`, as in `ink/strokes/internal/jni/mesh_creation_native.cc`; lasso point handling from Write `LassoSelector::addPoint` | Apache-2.0, AGPL-3.0 |
 | Move, resize, rotate a selection | Write `selection.cpp` `Selection::translate`/`scale`/`commitTransform`, `RectSelector::scaleHandleHit`/`rotHandleHit` | AGPL-3.0 |
 | Stroke outline to SVG `d` and `SkPath` | google/ink `ink/rendering/skia/native/internal/path_drawable.cc`; Chromium `pdf/pdfium/pdfium_ink_writer.cc` (outline walk, nonzero fill) | Apache-2.0, BSD-3 |
-| InkML trace text and `traceFormat` | microsoft/InkMLjs `InkMLjs/inkml.js` (`InkTrace`, `InkTraceFormat`); W3C InkML Recommendation §3 | Apache-2.0 |
+| InkML trace text and `traceFormat` | W3C InkML Recommendation §3; microsoft/InkMLjs `InkMLjs/inkml.js` (`InkTrace`, `InkTraceFormat`); checked against Wacom universal-ink-library `uim/codec/parser/inkml.py` | Apache-2.0 |
 | google/ink without Bazel | Chromium `third_party/ink/BUILD.gn` (source list) | BSD-3 |
 | Undo history | lager `doc/modularity.rst` `history_model` (about 40 lines; lager itself is not a dependency) | MIT |
 | Page ruling and templates | Write `page.cpp` `Page::generateRuleLayer`, `rulingdialog.cpp` presets | AGPL-3.0 |
