@@ -32,6 +32,10 @@ ink-fixtures:
     cmake --build core/build/ink-host
     core/build/ink-host/ink_host_fixtures core/build/ink-host/_deps/google_ink-src core/tests/fixtures/ink
 
+# Rewrites core/tests/fixtures/documents: the engine's output for each notebook in tests/documents.
+document-fixtures: engine-wasm
+    node {{build}}/tests/write_documents.js tests/documents core/tests/fixtures/documents full custom-size
+
 # Stylus Labs Write fork with the replay harness (dzackgarza/Write, branch replay-harness).
 write_dir := env_var_or_default("WRITE_DIR", env_var("HOME") / ".cache/math-notes/Write")
 write_rev := "876de97"

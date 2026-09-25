@@ -1,0 +1,13 @@
+{
+  "format": "math-notes",
+  "version": 1,
+  "title": "Custom page size",
+  "pageSize": [500, 700.5],
+  "template": "blank",
+  "layers": [
+    { "id": "l-onlyly", "name": "Ink", "hidden": false, "locked": false }
+  ],
+  "pages": [
+    { "id": "p-custom", "file": "pages/0001.svg" }
+  ]
+}
