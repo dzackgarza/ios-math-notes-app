@@ -1,45 +1,43 @@
 # Architecture plan
 
-One portable document and ink engine (C++), with thin platform hosts.
+One portable document and ink engine (C++), with two platform hosts: a web
+app and an iPad app. This repository is the monorepo for all of it.
 [Stylus Labs Write](https://github.com/styluslabs/Write) is the behavioral
 reference: it shows which behaviors to build and supplies test fixtures for
 them. No Write code is used.
 
 ```text
-                   ink engine (C++, also built to WASM)
+            ink engine (C++, built to WASM and to iOS arm64)
    document/page model, stroke modeling, geometry,
    selection, reflow, undo/redo, rendering, import/export
                          │  stable C ABI
-          ┌──────────────┼──────────────────┐
-     Web host        iPadOS host         Linux dev host
-     JS + WASM       Swift/UIKit         SDL, libinput
-   primary on        full Apple Pencil   tests, raw
-   Linux/Win/macOS   and lowest latency  tablet axes
+                ┌────────┴─────────┐
+            Web host           iPadOS host
+            JS + WASM          Swift/UIKit
 ```
 
 | Host | Role |
 | --- | --- |
-| Web (WASM, PWA) | Primary product on desktop. Pointer Events give pen type, pressure, tilt, altitude/azimuth, buttons, hover, coalesced and predicted samples; Safari 18.2+ gives coalesced/predicted and altitude/azimuth, Safari 26.2 gives subpixel coordinates. |
-| iPadOS (UIKit) | Native host, not a WKWebView. Needed for Pencil double-tap, Pencil Pro squeeze, barrel roll, hover pose and distance, haptics, and the shortest input-to-display path. WebKit still reports `twist` as 0 for Pencil Pro. |
-| Linux native | Development executable: runs the fixture tests, and reads libinput/Wayland tablet axes (distance, rotation) that the web does not expose. Not a user-facing UI. |
+| Web (WASM, PWA) | Built first. The product on Linux, Windows, and macOS. Pointer Events give pen type, pressure, tilt, altitude/azimuth, buttons, hover, coalesced and predicted samples; Safari 18.2+ gives coalesced/predicted and altitude/azimuth, Safari 26.2 gives subpixel coordinates. |
+| iPadOS (UIKit) | Built second. Native host, not a WKWebView. Needed for Pencil double-tap, Pencil Pro squeeze, barrel roll, hover pose and distance, haptics, and the shortest input-to-display path. WebKit still reports `twist` as 0 for Pencil Pro. |
 
 ## Dependencies
 
 Write's stack is its own and about ten years old (`usvg`, `ulib`, `ugui`,
 `nanovgXC`, a patched SDL), and its UI patterns are dated. The engine uses
-mature libraries instead. Each one is confirmed by a build spike on all
-three targets before the engine depends on it.
+mature libraries instead. Each one is confirmed by a build spike on both
+targets before the engine depends on it.
 
-### Engine (C++20, one build for iOS, WASM, Linux)
+### Engine (C++20, one source for WASM and iOS)
 
 | Concern | Library | Notes |
 | --- | --- | --- |
 | Input smoothing and prediction | [google/ink-stroke-modeler](https://github.com/google/ink-stroke-modeler) | Apache-2.0, CMake, made for handwriting. |
 | Brush outline, stroke mesh, hit tests | [google/ink](https://github.com/google/ink) | Uses ink-stroke-modeler itself. Android-first, Bazel, unstable API: adopted only if the spike builds it for iOS and WASM. |
-| 2D rendering and PDF export | [Skia](https://skia.org) | PDF export through its PDF backend. Linked into the engine on every target: Metal on iOS, WebGL/WebGPU in the WASM build. The web host calls the engine, not CanvasKit, so one render path serves both hosts. |
+| 2D rendering and PDF export | [Skia](https://skia.org) | PDF export through its PDF backend. Linked into the engine on both targets: WebGL/WebGPU in the WASM build, Metal on iOS. The web host calls the engine, not CanvasKit, so one render path serves both hosts. |
 | PDF import | [MuPDF](https://mupdf.com) | Renders PDF pages to PNG backgrounds at import. Used nowhere else. |
 | Polygon operations (lasso, erase regions) | [Clipper2](https://github.com/AngusJohnson/Clipper2) | Only where google/ink geometry does not cover it. |
-| Tests | Catch2 | Engine unit tests and trace tests, run on native and WASM builds. |
+| Tests | Catch2 | Engine unit tests and trace tests, run in the WASM build under Node in CI. |
 
 ### Hosts
 
@@ -59,11 +57,11 @@ new engine code, specified by fixtures recorded from Write.
 
 ## Rules
 
-- `core/` calls no platform API: no UIKit, SDL, browser JS, X11.
+- `core/` calls no platform API: no UIKit, browser JS.
 - Swift and JS see only the C ABI: opaque handles plus plain structs. No C++
   classes cross the boundary.
-- One renderer: Skia, inside the engine. The host supplies a drawable surface (WebGL canvas,
-  Metal layer, SDL window).
+- One renderer: Skia, inside the engine. The host supplies a drawable surface
+  (WebGL canvas, Metal layer).
 - One input record. Every host fills what its platform gives and sets a
   capability bit for it; missing values are absent, never invented.
   ```c
@@ -79,9 +77,13 @@ new engine code, specified by fixtures recorded from Write.
   ```
   Sources: web `PointerEvent` + `getCoalescedEvents()`/`getPredictedEvents()`;
   UIKit `UITouch` coalesced/predicted touches, `UIPencilInteraction`,
-  `UIPencilHoverPose`; Linux libinput / Wayland `tablet-v2`.
-- Pages are standalone SVG files in a notebook directory; Write documents import.
-  Storage and file format: [FORMAT.md](FORMAT.md).
+  `UIPencilHoverPose`.
+- Pages are discrete, fixed-size, and printable: one notebook page is one
+  printed page. A4 by default; the size is a notebook setting. There is no
+  infinite canvas. Reflow and insert space that push ink past the bottom of
+  a page move it onto the next page, adding a page when needed.
+- Pages are standalone SVG files in a notebook directory; Write documents
+  import. Storage and file format: [FORMAT.md](FORMAT.md).
 - New features go in the engine or in a service, never in one host only.
   Layers belong to the document model; PDF import is an engine function.
 - Write fixtures: documents and input-event traces with their resulting SVG,
@@ -90,12 +92,11 @@ new engine code, specified by fixtures recorded from Write.
 
 ## Steps
 
-1. Build Write on the Linux dev host and record the fixtures and traces.
-2. Build spikes: ink-stroke-modeler, google/ink, Skia, MuPDF, Clipper2 for `linux-x86_64`,
-   `wasm`, and `ios-arm64`, in CI (Linux runners for Linux and WASM, macOS
-   runner for iOS).
-3. Engine: document model, strokes, selection, undo, rendering, then reflow
-   and ruled operations against the fixtures.
+1. Run the Write app on Linux and record the fixtures and traces.
+2. Build spikes: ink-stroke-modeler, google/ink, Skia, MuPDF, Clipper2 for
+   `wasm` and `ios-arm64` in CI (Linux runner for WASM, macOS runner for iOS).
+3. Engine: document model, fixed pages, strokes, selection, undo, rendering,
+   then reflow and ruled operations against the fixtures.
 4. C ABI:
    ```c
    InkDocument *ink_document_open(...);
@@ -105,14 +106,15 @@ new engine code, specified by fixtures recorded from Write.
    void ink_redo(InkDocument *);
    void ink_render(InkCanvas *, InkRenderTarget *);
    ```
-5. Web host: canvas, Pointer Events adapter, and the notebook-root access
-   modes in FORMAT.md. Upload/download import and export
-   always work.
-6. iPad host: Files/`UIDocument`, share sheet, lifecycle, and Pencil
+5. Write import: converts Write `.svg`/`.svgz` documents into notebook
+   directories. Needed at launch; existing notes are in Write format.
+6. Web host: canvas, Pointer Events adapter, and the notebook-root access
+   modes in FORMAT.md. Upload/download import and export always work.
+7. iPad host: Files/`UIDocument`, share sheet, lifecycle, and Pencil
    interactions. Replaces the current SwiftUI placeholder; the SideStore
    release pipeline stays.
-7. Services the hosts supply: Storage (the notebook root), Clipboard, Images.
-8. After Write parity, add the features in [FEATURES.md](FEATURES.md) in
+8. Services the hosts supply: Storage (the notebook root), Clipboard, Images.
+9. After Write parity, add the features in [FEATURES.md](FEATURES.md) in
    their listed order.
 
 ## Target layout
@@ -120,7 +122,7 @@ new engine code, specified by fixtures recorded from Write.
 ```text
 core/      document/ strokes/ reflow/ selection/ undo/ render/ io/
 services/  storage/
-hosts/     web/{wasm,shell}/  ios/{Swift,CoreBridge}/  linux/
+hosts/     web/{wasm,shell}/  ios/{Swift,CoreBridge}/
 tests/     documents/ input-traces/
-.github/workflows/  linux.yml wasm.yml ios.yml
+.github/workflows/  wasm.yml ios.yml
 ```

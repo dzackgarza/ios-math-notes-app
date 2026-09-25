@@ -42,6 +42,7 @@ Notes/                         root the user picked
   "format": "math-notes",
   "version": 1,
   "title": "Stable pairs",
+  "pageSize": "A4",
   "pages": [
     { "id": "c718…", "file": "pages/0001.svg" },
     { "id": "9a02…", "file": "pages/0002.svg" }
@@ -87,3 +88,20 @@ OPFS and IndexedDB hold only caches, never notes.
 
 Write's single-file `.svg`/`.svgz` documents import into a notebook
 directory. The app does not write that format.
+
+## Conventions
+
+- Page size is set per notebook in `notebook.json` (`"pageSize": "A4"` by
+  default); every page of a notebook prints as one sheet of that size.
+- Clippings and templates are ordinary notebook directories under the root,
+  in `Notes/.clippings/` and `Notes/.templates/`.
+- Links between notebooks are relative paths in SVG `<a href>`, so they keep
+  working when the whole tree moves.
+- Undo history is kept for the open session only.
+- Sync conflict copies are recognized by name (Dropbox
+  `0007 (… conflicted copy …).svg`, Nextcloud `0007 (conflicted copy …).svg`,
+  iCloud `0007 2.svg`). The app never merges them silently. It marks the
+  notebook as conflicted and opens a resolution view: the two versions side
+  by side with linked scrolling and zoom, and actions to keep one, keep both
+  as separate pages, or copy strokes from one into the other. Resolving
+  deletes the losing file.

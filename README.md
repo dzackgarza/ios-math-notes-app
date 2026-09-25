@@ -1,6 +1,6 @@
 # ios-math-notes-app
 
-Personal iPad app (SwiftUI), developed on Linux, built by GitHub Actions, installed with SideStore. No Mac, no App Store, free Apple Account.
+Handwritten math notes: a C++ ink engine with a web app and an iPad app, all in this repo. Plan: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). The iPad app is developed on Linux, built by GitHub Actions, and installed with SideStore: no Mac, no App Store, free Apple Account.
 
 ```
 push to main ──► GitHub Actions (macos-26) ──► release vN: MathNotes.ipa + source.json

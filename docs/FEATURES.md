@@ -11,6 +11,12 @@ need to interpret the ink.
 These define the app. New features must not break them.
 
 - Native format is a directory of standalone SVG pages ([FORMAT.md](FORMAT.md)).
+- Discrete fixed-size pages, one printed sheet each; A4 by default, size set
+  per notebook. No infinite canvas.
+- The pen draws; fingers pan and zoom.
+- Sync conflict copies of pages are detected and resolved side by side
+  ([FORMAT.md](FORMAT.md)).
+- Import of existing Write documents.
 - Handwriting-aware reflow: line, word, and column structure of ink.
 - Insert horizontal and vertical space into existing ink.
 - Ruled erase and ruled select.
