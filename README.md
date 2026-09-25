@@ -3,7 +3,7 @@
 Personal iPad app, developed on Linux.
 
 - `project.yml` defines the Xcode project ([XcodeGen](https://github.com/yonaskolb/XcodeGen)). The `.xcodeproj` is generated in CI and not tracked.
-- GitHub Actions (`macos-26` runner) builds an **unsigned** IPA on each push to `main`, versioned `0.1.<run number>`, and publishes it with a SideStore source (`sidestore-source.jq` → `source.json`) as the `latest` release.
+- GitHub Actions (`macos-26` runner) builds an **unsigned** IPA on each push to `main`, versioned `0.1.<run number>`, and publishes it with a SideStore source (`sidestore-source.jq` → `source.json`) as release `v<run number>`.
 - [SideStore](https://docs.sidestore.io/) on the iPad signs and installs the IPA with a free Apple Account and refreshes the 7-day signature on-device.
 
 ## Install on the iPad
