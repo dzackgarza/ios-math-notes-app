@@ -1,0 +1,68 @@
+<svg class="write-page" color-interpolation="linearRGB" width="768px" height="1024px" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+  <g class="write-content write-v3" xruling="30" yruling="30" marginLeft="30" papercolor="#FFFF00" rulecolor="#7F0000FF">
+    <g class="ruleline write-std-ruling write-scale-down" fill="none" stroke="#0000FF" stroke-opacity="0.498" stroke-width="1" shape-rendering="crispEdges" vector-effect="non-scaling-stroke">
+      <rect class="pagerect" fill="#FFFF00" stroke="none" x="0" y="0" width="768" height="1024" />
+      <path class="yrule_1" d="M0 30 L768 30" />
+      <path d="M0 60 L768 60" />
+      <path d="M0 90 L768 90" />
+      <path d="M0 120 L768 120" />
+      <path d="M0 150 L768 150" />
+      <path d="M0 180 L768 180" />
+      <path d="M0 210 L768 210" />
+      <path d="M0 240 L768 240" />
+      <path d="M0 270 L768 270" />
+      <path d="M0 300 L768 300" />
+      <path d="M0 330 L768 330" />
+      <path d="M0 360 L768 360" />
+      <path d="M0 390 L768 390" />
+      <path d="M0 420 L768 420" />
+      <path d="M0 450 L768 450" />
+      <path d="M0 480 L768 480" />
+      <path d="M0 510 L768 510" />
+      <path d="M0 540 L768 540" />
+      <path d="M0 570 L768 570" />
+      <path d="M0 600 L768 600" />
+      <path d="M0 630 L768 630" />
+      <path d="M0 660 L768 660" />
+      <path d="M0 690 L768 690" />
+      <path d="M0 720 L768 720" />
+      <path d="M0 750 L768 750" />
+      <path d="M0 780 L768 780" />
+      <path d="M0 810 L768 810" />
+      <path d="M0 840 L768 840" />
+      <path d="M0 870 L768 870" />
+      <path d="M0 900 L768 900" />
+      <path d="M0 930 L768 930" />
+      <path d="M0 960 L768 960" />
+      <path d="M0 990 L768 990" />
+      <path d="M0 1020 L768 1020" />
+      <path class="xrule_1" d="M30 0 L30 1024" />
+      <path d="M60 0 L60 1024" />
+      <path d="M90 0 L90 1024" />
+      <path d="M120 0 L120 1024" />
+      <path d="M150 0 L150 1024" />
+      <path d="M180 0 L180 1024" />
+      <path d="M210 0 L210 1024" />
+      <path d="M240 0 L240 1024" />
+      <path d="M270 0 L270 1024" />
+      <path d="M300 0 L300 1024" />
+      <path d="M330 0 L330 1024" />
+      <path d="M360 0 L360 1024" />
+      <path d="M390 0 L390 1024" />
+      <path d="M420 0 L420 1024" />
+      <path d="M450 0 L450 1024" />
+      <path d="M480 0 L480 1024" />
+      <path d="M510 0 L510 1024" />
+      <path d="M540 0 L540 1024" />
+      <path d="M570 0 L570 1024" />
+      <path d="M600 0 L600 1024" />
+      <path d="M630 0 L630 1024" />
+      <path d="M660 0 L660 1024" />
+      <path d="M690 0 L690 1024" />
+      <path d="M720 0 L720 1024" />
+      <path d="M750 0 L750 1024" />
+      <path class="leftmargin" stroke="#FF0000" d="M30 0 L30 1024" />
+    </g>
+    <path class="write-stroke-pen" fill="none" stroke="#000000" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" __comx="100.05" __comy="90.011" d="M110 85.2 L90.1 100.1 109.8 115.1" />
+  </g>
+</svg>

@@ -19,6 +19,15 @@
 - **Operation error 28** = `notAuthenticated` (Swift's implicit `CustomNSError` code for `OperationError`, payload cases first). Sign in inside SideStore's Settings; signing in to iloader is not enough.
 - **A changed source is cached.** After changing download URLs, remove and re-add the source.
 
+## Write replay harness (`just write-fixtures`)
+
+- **Write's `--test` exits with status 16 although every test passes.** The exit status is `256·failed + failed thumbnails`, and all 16 thumbnails differ from the refs on this host, as upstream. Check the log line `with 0 failed tests` instead. The run also leaves `test*_out.html` and `test*_{out,ref,diff}.png` in `scribbletest/`; the recipe trashes them.
+- **Stroke timestamps ignore the event time `t`.** `Page::addStroke` stamps each stroke with `mSecSinceEpoch()`, so `groupStrokes`' 2.5 s window depended on wall-clock speed. The fork adds `Page::clock`; replay sets it to the trace time.
+- **A converted upstream test passed alone but failed after other cases.** `screenRect`, config, and clipboard persist in a `ScribbleTest`, and paste position depends on the screen. Replay builds a fresh `ScribbleTest` for each case.
+- **Element ids changed between identical runs.** Ids keyed by `Element*` broke when freed elements' addresses were reused (reopen, undo history). The id now lives in `Element::uuid`.
+- **The upstream tests start at view `(-10, -10)`, not `(0, 0)`.** Recorded traces begin with a `view` line that restores it.
+- **The Write build is C++14 with `-fno-rtti`:** no `std::to_chars`, no `dynamic_cast`.
+
 ## Engine
 
 - **The JetBrains/skia iOS prebuilts target iOS 12.0 and 14.0** (`otool -l` minos). The engine needs 18.0, so CI builds iOS Skia from source at the same commit (`core/scripts/build-skia-ios.sh`). The wasm prebuilt is used as shipped.
