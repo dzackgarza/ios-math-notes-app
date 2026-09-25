@@ -100,4 +100,5 @@ jobs:
         run: |
           bun install --frozen-lockfile
           bunx playwright install --with-deps chromium firefox webkit
-          bunx playwright test -c playwright.config.mjs
+          sudo apt-get install -y xvfb libgl1-mesa-dri
+          xvfb-run -a bunx playwright test -c playwright.config.mjs

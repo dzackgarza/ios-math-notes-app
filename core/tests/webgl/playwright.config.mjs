@@ -8,8 +8,9 @@ export default defineConfig({
   webServer: { command: `python3 -m http.server 8123 -b 127.0.0.1 -d ${dir}`, url: "http://127.0.0.1:8123/index.html" },
   projects: [
     { name: "chromium", use: { ...devices["Desktop Chrome"] } },
-    // Headless Firefox on a GPU-less runner blocks WebGL unless forced.
-    { name: "firefox", use: { ...devices["Desktop Firefox"], launchOptions: { firefoxUserPrefs: { "webgl.force-enabled": true } } } },
+    // Headless Firefox on a GPU-less runner finds no GL driver; CI runs it
+    // headed under Xvfb, where Mesa supplies GL.
+    { name: "firefox", use: { ...devices["Desktop Firefox"], headless: !process.env.CI } },
     { name: "webkit", use: { ...devices["Desktop Safari"] } },
   ],
 });
