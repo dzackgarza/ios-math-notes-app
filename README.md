@@ -3,11 +3,11 @@
 Personal iPad app, developed on Linux.
 
 - `project.yml` defines the Xcode project ([XcodeGen](https://github.com/yonaskolb/XcodeGen)). The `.xcodeproj` is generated in CI and not tracked.
-- GitHub Actions (`macos-26` runner) builds an **unsigned** IPA on each push to `main` and uploads it as the `MathNotes-unsigned` artifact.
+- GitHub Actions (`macos-26` runner) builds an **unsigned** IPA on each push to `main`, versioned `0.1.<run number>`, and publishes it with a SideStore source (`sidestore-source.jq` → `source.json`) as the `latest` release.
 - [SideStore](https://docs.sidestore.io/) on the iPad signs and installs the IPA with a free Apple Account and refreshes the 7-day signature on-device.
 
 ## Install on the iPad
 
 1. One-time: install SideStore from Linux with `iloader` (see SideStore docs); enable Developer Mode on the iPad.
-2. On the iPad, open https://github.com/dzackgarza/ios-math-notes-app/releases/latest/download/MathNotes.ipa in Safari to download it.
-3. In SideStore, My Apps → + → Downloads → MathNotes.ipa.
+2. In SideStore, Sources → + → `https://github.com/dzackgarza/ios-math-notes-app/releases/latest/download/source.json`.
+3. Install Math Notes from that source. New pushes to `main` appear as updates in SideStore.

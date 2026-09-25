@@ -31,7 +31,9 @@ jobs:
             -archivePath "$RUNNER_TEMP/MathNotes.xcarchive" \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGNING_ALLOWED=NO
+            CODE_SIGNING_ALLOWED=NO \
+            MARKETING_VERSION="0.1.$GITHUB_RUN_NUMBER" \
+            CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER"
 
       - name: Make unsigned IPA
         run: |
@@ -39,16 +41,21 @@ jobs:
           cp -R "$RUNNER_TEMP/MathNotes.xcarchive/Products/Applications/"*.app Payload/
           zip -r MathNotes.ipa Payload
 
-      - name: Upload IPA
-        uses: actions/upload-artifact@v7
-        with:
-          name: MathNotes-unsigned
-          path: MathNotes.ipa
+      - name: Write SideStore source
+        run: |
+          jq -n \
+            --arg version "0.1.$GITHUB_RUN_NUMBER" \
+            --arg build "$GITHUB_RUN_NUMBER" \
+            --arg date "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --argjson size "$(stat -f %z MathNotes.ipa)" \
+            --arg base "https://github.com/$GITHUB_REPOSITORY/releases/download/latest" \
+            -f sidestore-source.jq > source.json
 
-      - name: Publish IPA as the "latest" release
+      - name: Publish IPA and source as the "latest" release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release delete latest --cleanup-tag --yes || true
-          gh release create latest MathNotes.ipa \
-            --title "Latest build ($GITHUB_SHA)" --notes "Unsigned; install with SideStore."
+          gh release create latest MathNotes.ipa source.json \
+            --title "Latest build ($GITHUB_SHA)" \
+            --notes "Unsigned; install with SideStore."
