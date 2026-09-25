@@ -93,17 +93,18 @@ chips, thin gray borders, system sans-serif type. Paper is warm off-white.
 | Pen, Highlighter, color palette | Pen presets (#25), google/ink brushes |
 | Eraser, Lasso, Shapes | #23, #24, shape recognition (#10) |
 | Undo and redo, zoom, page indicator | #22, #21 |
-| Tabs of open notes | Split view (#28) shows two documents side by side; tabs are not specified |
+| Tabs of open notes | A tab per open note, as in GoodNotes and Noteful |
 | Trash | `Notes/.trash/` |
 
-The mockups add the following, which FORMAT.md and FEATURES.md do not have:
+The mockups add the following to FORMAT.md and FEATURES.md:
 
-1. **Two levels: a notebook contains notes.** In FORMAT.md a notebook is a
-   directory of pages, and folders are the library. One reading: a mockup
-   "notebook" is a folder, and a mockup "note" is a FORMAT.md notebook.
-2. **Notebook and note metadata**: description, tags with colors, a
-   one-line summary per note, drafts.
-3. **Search, Recent, Favorites.**
-4. **Content templates** (Theorem / Proof, Lecture Notes): templates that
-   start a note with content, where the current templates are backgrounds.
-5. **Tabs** of open notes in the editor.
+1. **A notebook contains notes, and this is the directory structure.** A
+   mockup "notebook" is a folder; a mockup "note" is a FORMAT.md notebook
+   directory.
+2. **Metadata** (description, tags with colors, a one-line summary per note,
+   drafts) lives in a JSON sidecar or in the app's internal database.
+3. **Content templates** are saved settings: a named configuration of the
+   new-note fields (paper, size, tags, and so on) that the user saves and
+   reuses. The names in the mockup are sample content.
+4. **Tabs** of open notes in the editor.
+5. **Search, Recent, Favorites**: not yet specified.
