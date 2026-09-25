@@ -5,11 +5,15 @@ import { expect, test, type Page } from "@playwright/test";
 
 const APP = "?root=opfs";
 
-async function clearOpfs(page: Page): Promise<void> {
+// Opens the app on an empty origin-private file system. The clearing runs on
+// a page of the origin without the app, which holds no file of it open.
+async function startEmpty(page: Page): Promise<void> {
+  await page.goto("favicon.svg");
   await page.evaluate(async () => {
     const root = await navigator.storage.getDirectory();
     for await (const name of root.keys()) await root.removeEntry(name, { recursive: true });
   });
+  await page.goto(APP);
 }
 
 // A pen stroke through CDP Input.dispatchMouseEvent, in page coordinates.
@@ -46,12 +50,34 @@ async function readOpfsFile(page: Page, path: string): Promise<string> {
   }, path.split("/"));
 }
 
+// New Note from the library: in the selected folder, "My Notes" by default.
+async function newNote(page: Page, title: string, paper = "Plain Paper"): Promise<void> {
+  await page.getByRole("button", { name: "New Note", exact: true }).click();
+  await page.getByRole("textbox", { name: "Title" }).fill(title);
+  await page.getByText(paper, { exact: true }).click(); // the tile's label
+  await page.getByRole("button", { name: "Create Note" }).click();
+  await expect(page.locator("#ink-canvas")).toBeVisible();
+}
+
+// Opens a note from the selected folder's note list.
+async function openNote(page: Page, title: string): Promise<void> {
+  await page.getByRole("list", { name: "Notes" }).getByRole("listitem").filter({ hasText: title }).getByRole("button").first().click();
+  await expect(page.locator("#ink-canvas")).toBeVisible();
+}
+
+// The last saved write of `path` that has a stroke, as text.
+async function savedStrokes(page: Page, path: string): Promise<string> {
+  const written = await page.waitForFunction(
+    (p) => window.mathNotesWrites?.findLast((f) => f.path === p && new TextDecoder().decode(f.bytes).includes('<path id="s-')),
+    path,
+    { timeout: 5000 },
+  );
+  return written.evaluate((f) => new TextDecoder().decode(f!.bytes));
+}
+
 test("a pen stroke is saved, byte for byte as the engine wrote it, and renders after a reload", async ({ page }) => {
-  await page.goto(APP);
-  await clearOpfs(page);
-  await page.reload();
-  await page.getByRole("textbox", { name: "New notebook name" }).fill("Algebra");
-  await page.getByRole("button", { name: "Create" }).click();
+  await startEmpty(page);
+  await newNote(page, "Algebra");
   const canvas = page.locator("#ink-canvas");
   await expect(canvas).toBeVisible();
 
@@ -73,7 +99,7 @@ test("a pen stroke is saved, byte for byte as the engine wrote it, and renders a
   expect(svg).toMatch(/<inkml:trace contextRef="#[a-z]+">[^<]+<\/inkml:trace>/);
 
   await page.reload();
-  await page.getByRole("button", { name: "Algebra" }).click();
+  await openNote(page, "Algebra");
   await expect(canvas).toBeVisible();
   const [r, g, b] = await pixel(page, points[15].x, points[15].y);
   expect(Math.max(r, g, b)).toBeLessThan(80); // ink, not paper
@@ -94,19 +120,16 @@ test("after one visit the app starts offline", async ({ page, context }) => {
     await navigator.serviceWorker.ready;
   });
   await page.reload(); // now controlled by the service worker
-  await expect(page.getByRole("heading", { name: "Math Notes" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Library" })).toBeVisible();
   await context.setOffline(true);
   await page.reload();
-  await expect(page.getByRole("heading", { name: "Math Notes" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Create" })).toBeEnabled(); // the engine loaded from the cache
+  await expect(page.getByRole("heading", { name: "Library" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "New Note" })).toBeEnabled(); // the library shows once the engine loaded from the cache
 });
 
 test("Ctrl+Z undoes a stroke and the save removes it from the page file", async ({ page }) => {
-  await page.goto(APP);
-  await clearOpfs(page);
-  await page.reload();
-  await page.getByRole("textbox", { name: "New notebook name" }).fill("Undo");
-  await page.getByRole("button", { name: "Create" }).click();
+  await startEmpty(page);
+  await newNote(page, "Undo");
   const box = (await page.locator("#ink-canvas").boundingBox())!;
   await drawWithPen(page, Array.from({ length: 10 }, (_, i) => ({ x: box.x + 150 + i * 8, y: box.y + 100 })));
   await page.keyboard.press("Control+z");
@@ -117,4 +140,60 @@ test("Ctrl+Z undoes a stroke and the save removes it from the page file", async 
   await expect
     .poll(async () => Buffer.from(await readOpfsFile(page, "Undo/pages/0001.svg"), "base64").toString(), { timeout: 5000 })
     .toContain('<path id="s-');
+});
+
+test("a note created in a new folder with the dotted template is listed in its folder, before and after a reload", async ({ page }) => {
+  await startEmpty(page);
+  await page.getByRole("button", { name: "New Notebook" }).click();
+  await page.getByRole("textbox", { name: "Notebook Title" }).fill("Topology");
+  await page.getByRole("button", { name: "Create Notebook" }).click();
+  await page.getByRole("button", { name: "New Note in Topology" }).click();
+  await page.getByRole("textbox", { name: "Title" }).fill("Knots");
+  await page.getByText("Dot Paper", { exact: true }).click();
+  await page.getByRole("button", { name: "Create Note" }).click();
+  const box = (await page.locator("#ink-canvas").boundingBox())!;
+  await drawWithPen(page, Array.from({ length: 20 }, (_, i) => ({ x: box.x + 150 + i * 8, y: box.y + 100 })));
+  await savedStrokes(page, "pages/0001.svg");
+  await page.getByRole("button", { name: "Library" }).click();
+
+  const card = page.getByRole("list", { name: "Notebooks" }).getByRole("listitem").filter({
+    has: page.getByRole("button", { name: "Topology", exact: true }),
+  });
+  const notes = page.getByRole("list", { name: "Notes" });
+  for (const phase of ["before reload", "after reload"]) {
+    await expect(card, phase).toContainText("1 note");
+    await card.getByRole("button", { name: "Topology", exact: true }).click();
+    await expect(notes.getByRole("listitem"), phase).toHaveCount(1);
+    await expect(notes, phase).toContainText("Knots");
+    if (phase === "before reload") await page.reload();
+  }
+  const notebook = JSON.parse(Buffer.from(await readOpfsFile(page, "Topology/Knots/notebook.json"), "base64").toString());
+  expect(notebook.template).toBe("dotted");
+  const svg = Buffer.from(await readOpfsFile(page, "Topology/Knots/pages/0001.svg"), "base64").toString();
+  expect(svg).toContain('mn:ruling="dotted"');
+  expect(svg).toContain('<path id="s-');
+});
+
+test("the tool rail's pen, highlighter and color reach the saved strokes", async ({ page }) => {
+  await startEmpty(page);
+  await newNote(page, "Tools");
+  const box = (await page.locator("#ink-canvas").boundingBox())!;
+  const line = (y: number) => Array.from({ length: 20 }, (_, i) => ({ x: box.x + 150 + i * 8, y: box.y + y }));
+
+  await page.getByRole("button", { name: "Highlighter", exact: true }).click();
+  await page.getByRole("button", { name: "#2BB3C0" }).click();
+  await drawWithPen(page, line(100));
+  await page.getByRole("button", { name: "Pen", exact: true }).click();
+  await page.getByRole("button", { name: "#D6455D" }).click();
+  await drawWithPen(page, line(200));
+
+  await expect
+    .poll(async () => {
+      const svg = Buffer.from(await readOpfsFile(page, "Tools/pages/0001.svg"), "base64").toString();
+      return [...svg.matchAll(/<path id="s-[^>]*? fill="(#[0-9A-F]{6})"[^>]*? mn:brush="([a-z-]+)"/g)].map((m) => [m[2], m[1]]);
+    }, { timeout: 5000 })
+    .toEqual([
+      ["highlighter", "#2BB3C0"],
+      ["pressure-pen", "#D6455D"],
+    ]);
 });

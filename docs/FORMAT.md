@@ -26,6 +26,7 @@ new path. A directory is a notebook when it holds a `notebook.json`.
 ```text
 Notes/                         root the user picked
 ├── .pens.json                 pen presets, shared by all devices
+├── .library.json              library metadata: tags, favorites, descriptions
 ├── .templates/                page templates (notebook directories)
 ├── .clippings/                clippings library (a notebook directory)
 ├── .trash/                    notebooks deleted in the app
@@ -202,6 +203,29 @@ a notebook directory (send, archive, download).
   `grid-coarse`, `grid-medium`, `grid-fine` (16.8, 14.4, 9.6 pt) and
   `dotted` (16.8 pt) on first use, from Write's ruling presets. Rules are
   0.48 pt wide; dots are zero-length subpaths with `stroke-linecap="round"`.
+- `Notes/.library.json`: the library metadata of the tablet interface
+  ([specs/tablet-ui.md](specs/tablet-ui.md)). Keys in this order, two-space
+  indent, one trailing newline:
+
+  ```json
+  {
+    "format": "math-notes-library",
+    "version": 1,
+    "tags": [{ "name": "Research", "color": "#2F6FEB" }],
+    "notes": {
+      "Algebraic Geometry/stable-pairs": {
+        "favorite": true,
+        "tags": ["Research"],
+        "description": "Outline of the proof and key references."
+      }
+    }
+  }
+  ```
+
+  `tags` is the tag list in sidebar order. `notes` is keyed by a notebook
+  directory's path from the root, `/`-separated; a key whose notebook is no
+  longer at that path is ignored. The file is absent until the first tag,
+  favorite or description is set.
 - `Notes/.clippings/`: a notebook directory; each page is one clipping,
   sized to its content.
 

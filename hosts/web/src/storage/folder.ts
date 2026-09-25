@@ -125,7 +125,7 @@ export async function listTemplates(root: FileSystemDirectoryHandle): Promise<st
 }
 
 // Page 1 of template `name`, whose background new pages copy.
-export async function readTemplatePage(root: FileSystemDirectoryHandle, name: string): Promise<Uint8Array | null> {
+export async function readTemplatePage(root: FileSystemDirectoryHandle, name: string): Promise<Uint8Array<ArrayBuffer> | null> {
   try {
     const templates = await root.getDirectoryHandle(TEMPLATES);
     const pages = await (await templates.getDirectoryHandle(name)).getDirectoryHandle("pages");

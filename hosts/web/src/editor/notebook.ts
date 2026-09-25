@@ -3,6 +3,7 @@
 import type { Engine, FileChange, InkDocument } from "../engine/engine.ts";
 import { EngineError, Status } from "../engine/engine.ts";
 import { ensureTemplates, readNotebook, readTemplatePage, writeFiles } from "../storage/folder.ts";
+import { directoryAt } from "../storage/library.ts";
 
 export const SAVE_DELAY_MS = 1000;
 
@@ -11,6 +12,10 @@ export interface OpenNotebook {
   document: InkDocument;
   root: FileSystemDirectoryHandle;
   dir: FileSystemDirectoryHandle;
+  // The template new pages copy (notebook.json "template").
+  template: string;
+  // Path segments from the root, the notebook directory last.
+  path: string[];
   name: string;
   saver: Saver;
 }
@@ -63,19 +68,27 @@ export async function applyTemplate(root: FileSystemDirectoryHandle, document: I
   if (page1) document.setTemplate(name, page1);
 }
 
-export async function createNotebook(engine: Engine, root: FileSystemDirectoryHandle, name: string): Promise<OpenNotebook> {
+// A new notebook directory `name` in folder `parent`, with template `template`.
+export async function createNotebook(
+  engine: Engine,
+  root: FileSystemDirectoryHandle,
+  parent: readonly string[],
+  name: string,
+  template: string,
+): Promise<OpenNotebook> {
   await ensureTemplates(root, engine);
-  const dir = await root.getDirectoryHandle(name, { create: true });
+  const dir = await (await directoryAt(root, parent)).getDirectoryHandle(name, { create: true });
   const document = engine.createDocument(randomSeed());
-  await applyTemplate(root, document, "blank");
+  await applyTemplate(root, document, template);
   const saver = new Saver(document, dir);
   await saver.save();
-  return { engine, document, root, dir, name, saver };
+  return { engine, document, root, dir, template, path: [...parent, name], name, saver };
 }
 
-export async function openNotebook(engine: Engine, root: FileSystemDirectoryHandle, name: string): Promise<OpenNotebook> {
+export async function openNotebook(engine: Engine, root: FileSystemDirectoryHandle, path: readonly string[]): Promise<OpenNotebook> {
   await ensureTemplates(root, engine);
-  const dir = await root.getDirectoryHandle(name);
+  const dir = await directoryAt(root, path);
+  const name = path[path.length - 1];
   const files = await readNotebook(dir);
   const document = engine.createDocument(randomSeed());
   document.loadNotebook(files.notebookJson);
@@ -90,5 +103,5 @@ export async function openNotebook(engine: Engine, root: FileSystemDirectoryHand
   for (const asset of files.assets) document.loadAsset(asset.path, asset.bytes);
   const { template } = JSON.parse(new TextDecoder().decode(files.notebookJson)) as { template?: string };
   if (template) await applyTemplate(root, document, template);
-  return { engine, document, root, dir, name, saver: new Saver(document, dir) };
+  return { engine, document, root, dir, template: template ?? "blank", path: [...path], name, saver: new Saver(document, dir) };
 }
