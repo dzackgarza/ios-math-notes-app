@@ -43,7 +43,7 @@ jobs:
           printf 'server {\n  listen 80 default_server;\n  include %s;\n}\n' "$PWD/deploy/nginx-math-notes.conf" \
             | sudo tee /etc/nginx/sites-enabled/default
           sudo nginx -t
-          sudo systemctl reload nginx
+          sudo systemctl restart nginx
 
       - name: Playwright against the deployment
         run: bunx playwright test
