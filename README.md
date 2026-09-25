@@ -19,6 +19,7 @@ iPad: SideStore source ◄── releases/latest/download/source.json
 | `sidestore-source.jq` | Template for `source.json` ([AltStore source format](https://faq.altstore.io/developers/make-a-source)). |
 | `docs/FEATURES.md` | Feature spec. |
 | `docs/ARCHITECTURE.md` | Engine and host architecture plan. |
+| `docs/FORMAT.md` | Notebook storage and file format. |
 | `justfile` | `test-commit` / `test-push`: YAML lint. Swift compiles only in CI. |
 
 ## Releasing

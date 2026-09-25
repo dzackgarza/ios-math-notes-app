@@ -10,7 +10,7 @@ need to interpret the ink.
 
 These define the app. New features must not break them.
 
-- Native format is editable vector SVG, one note per file or directory.
+- Native format is a directory of standalone SVG pages ([FORMAT.md](FORMAT.md)).
 - Handwriting-aware reflow: line, word, and column structure of ink.
 - Insert horizontal and vertical space into existing ink.
 - Ruled erase and ruled select.
@@ -22,8 +22,8 @@ These define the app. New features must not break them.
 - Configurable pens.
 - Unlimited undo and redo.
 - PDF export.
-- Folders on the filesystem. Sync is the filesystem's job (iCloud Drive
-  through Files, Nextcloud, git). The free Apple Account cannot use the
+- Folders on the filesystem are the library. Sync is the filesystem's job (iCloud Drive,
+  Dropbox, Nextcloud, git through Files). The free Apple Account cannot use the
   iCloud entitlement, so the app must not need it.
 
 ## Features to add, in priority order

@@ -80,8 +80,8 @@ new engine code, specified by fixtures recorded from Write.
   Sources: web `PointerEvent` + `getCoalescedEvents()`/`getPredictedEvents()`;
   UIKit `UITouch` coalesced/predicted touches, `UIPencilInteraction`,
   `UIPencilHoverPose`; Linux libinput / Wayland `tablet-v2`.
-- Pages are SVG, so notes stay open vector files. Write documents import.
-  A note is a directory: `Note.note/{manifest.json, pages/*.svg, assets/}`.
+- Pages are standalone SVG files in a notebook directory; Write documents import.
+  Storage and file format: [FORMAT.md](FORMAT.md).
 - New features go in the engine or in a service, never in one host only.
   PDF and layers belong to the document model.
 - Write fixtures: documents and input-event traces with their resulting SVG,
@@ -105,13 +105,13 @@ new engine code, specified by fixtures recorded from Write.
    void ink_redo(InkDocument *);
    void ink_render(InkCanvas *, InkRenderTarget *);
    ```
-5. Web host: canvas, Pointer Events adapter, storage on Emscripten IDBFS
-   first and OPFS for the library later. Upload/download import and export
-   always work; `showOpenFilePicker()` is an extra where available.
+5. Web host: canvas, Pointer Events adapter, and the notebook-root access
+   modes in FORMAT.md. Upload/download import and export
+   always work.
 6. iPad host: Files/`UIDocument`, share sheet, lifecycle, and Pencil
    interactions. Replaces the current SwiftUI placeholder; the SideStore
    release pipeline stays.
-7. Services the hosts supply: Storage, Clipboard, PDF, Images, Sync.
+7. Services the hosts supply: Storage (the notebook root), Clipboard, PDF, Images.
 8. After Write parity, add the features in [FEATURES.md](FEATURES.md) in
    their listed order.
 
@@ -119,7 +119,7 @@ new engine code, specified by fixtures recorded from Write.
 
 ```text
 core/      document/ strokes/ reflow/ selection/ undo/ render/ io/
-services/  pdf/ sync/
+services/  pdf/ storage/
 hosts/     web/{wasm,shell}/  ios/{Swift,CoreBridge}/  linux/
 tests/     documents/ input-traces/
 .github/workflows/  linux.yml wasm.yml ios.yml
