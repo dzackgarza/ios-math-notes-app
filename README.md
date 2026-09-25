@@ -1,6 +1,6 @@
 # math-notes-app
 
-Handwritten math notes: a C++ ink engine with a web app and an iPad app, all in this repo. Plan: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). The iPad app is developed on Linux, built by GitHub Actions, and installed with SideStore: no Mac, no App Store, free Apple Account.
+Handwritten math notes: a C++ ink engine with a web app and an iPad app, all in this repo. Architecture: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Roadmap: the issue tree under [#11](https://github.com/dzackgarza/math-notes-app/issues/11). The iPad app is developed on Linux, built by GitHub Actions, and installed with SideStore: no Mac, no App Store, free Apple Account.
 
 ```
 push to main ──► GitHub Actions (macos-26) ──► release vN: MathNotes.ipa + source.json
@@ -18,7 +18,7 @@ iPad: SideStore source ◄── releases/latest/download/source.json
 | `.github/workflows/ios.yml` | Builds an unsigned IPA, checks it, publishes release `v<run number>`. |
 | `sidestore-source.jq` | Template for `source.json` ([AltStore source format](https://faq.altstore.io/developers/make-a-source)). |
 | `docs/FEATURES.md` | Feature spec. |
-| `docs/ARCHITECTURE.md` | Engine and host architecture plan. |
+| `docs/ARCHITECTURE.md` | Engine and host architecture, dependencies, reference implementations. |
 | `docs/FORMAT.md` | Notebook storage and file format. |
 | `justfile` | `test-commit` / `test-push`: YAML lint. Swift compiles only in CI. |
 

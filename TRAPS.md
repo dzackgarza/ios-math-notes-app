@@ -7,6 +7,11 @@
 - **Size in `source.json` must be the exact IPA byte count.** SideStore verifies it. macOS `stat` is `stat -f %z`, not `-c %s`.
 - **Workflow re-runs reuse `github.run_number`,** so the release step uploads with `--clobber` when the tag exists.
 
+## Issue tree
+
+- **The issue-dependencies API takes the blocker's database id, not its number.** `POST repos/{owner}/{repo}/issues/{n}/dependencies/blocked_by` with `issue_id=<number>` returns success and links whatever issue has that database id. Get the id with `gh api repos/{owner}/{repo}/issues/{n} --jq .id`, and pass it typed (`-F`).
+- **`itree milestone` refuses a forest.** Its preflight rejects the whole command while parentless issues exist. Attach them under the root ledger first (`itree attach`).
+
 ## Linux host
 
 - **iloader AppImage aborts with `Could not create surfaceless EGL display: EGL_BAD_ALLOC`** on this machine. The AppImage bundles an old libwayland (upstream nab138/iloader#576); `WEBKIT_DISABLE_DMABUF_RENDERER`, `GDK_BACKEND=x11` do not help. Use the `.deb` asset's `usr/bin/iloader` against system `webkit2gtk-4.1`.
