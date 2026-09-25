@@ -71,7 +71,7 @@ export interface ToolSettings {
 
 export interface NotebookFile {
   path: string;
-  bytes: Uint8Array;
+  bytes: Uint8Array<ArrayBuffer>;
 }
 
 export function writePenSample(view: DataView, at: number, s: PenSample): void {
@@ -127,9 +127,10 @@ export class Engine {
     return new Engine(await factory(options));
   }
 
-  // The current WASM memory. Emscripten declares HEAPU8 untyped.
-  heap(): Uint8Array {
-    return this.module.HEAPU8 as Uint8Array;
+  // The current WASM memory: an ArrayBuffer, the module being single-threaded.
+  // Emscripten declares HEAPU8 untyped.
+  heap(): Uint8Array<ArrayBuffer> {
+    return this.module.HEAPU8 as Uint8Array<ArrayBuffer>;
   }
 
   view(): DataView {
@@ -278,6 +279,16 @@ export class InkDocument {
         });
       }
       return result;
+    });
+  }
+
+  // The laid-out pages' extent in content coordinates (pt).
+  contentSize(): { width: number; height: number } {
+    const e = this.engine;
+    return e.withScratch(16, (out) => {
+      e.check(e.module._ink_document_content_size(this.pointer, out, out + 8));
+      const view = e.view();
+      return { width: view.getFloat64(out, true), height: view.getFloat64(out + 8, true) };
     });
   }
 

@@ -25,6 +25,14 @@ iPad: SideStore source ◄── releases/latest/download/source.json
 | `tests/fixtures/write/` | Traces and results recorded from Stylus Labs Write; see its README.md. |
 | `justfile` | `test-commit` / `test-push`: YAML lint. Swift compiles only in CI. `write-fixtures`: regenerates `tests/fixtures/write/`. |
 
+## Web app on this machine
+
+`just web-deploy` builds the site and copies it to `/var/www/math-notes`. nginx serves it at `http://localhost/math-notes/` with `include <repo>/hosts/web/deploy/nginx-math-notes.conf;` inside the `server` block for `localhost`, then `sudo nginx -s reload`. Only `assets/` gets a long cache lifetime. Use `localhost`, not a LAN address: the folder picker and coalesced pen events need a secure context.
+
+In Chrome, choose the notes folder once; after a restart, **Reconnect folder** grants access again (it needs a click). Firefox and Safari read the same folder through WebDAV: `rclone serve webdav ~/Notes --addr 127.0.0.1:31415 --allow-origin http://localhost --dir-cache-time 0s` (FORMAT.md, #27). On X11, Firefox reports pen pressure only with `MOZ_USE_XINPUT2=1`.
+
+`just web-test` runs the Vitest Browser Mode tests and the Playwright tests against the deployment.
+
 ## Releasing
 
 Push to `main` with a change under `Sources/`, `project.yml`, `sidestore-source.jq`, or the workflow. The run sets version `0.1.<run number>`, build `<run number>`. Other pushes do not build. Run manually with `gh workflow run ios.yml`.

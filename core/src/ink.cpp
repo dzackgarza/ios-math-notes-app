@@ -1,5 +1,6 @@
 #include "ink.h"
 
+#include <algorithm>
 #include <exception>
 #include <optional>
 #include <string>
@@ -8,6 +9,7 @@
 
 #include "editor/canvas.h"
 #include "format/notebook.h"
+#include "layout/layout.h"
 #include "include/core/SkData.h"
 #include "include/core/SkSurface.h"
 
@@ -146,6 +148,19 @@ InkStatus ink_document_mark_saved(InkDocument *document) {
   return Call([&] {
     if (!document) return NullArgument("document");
     document->history.MarkSaved();
+    return INK_OK;
+  });
+}
+
+InkStatus ink_document_content_size(InkDocument *document, double *width, double *height) {
+  return Call([&] {
+    if (!document) return NullArgument("document");
+    if (!width || !height) return NullArgument("width or height");
+    std::vector<ink_engine::PagePlacement> layout =
+        ink_engine::LayoutPages(document->history.current());
+    *width = 0;
+    *height = layout.empty() ? 0 : layout.back().y + layout.back().height;
+    for (const auto &page : layout) *width = std::max(*width, page.width);
     return INK_OK;
   });
 }
