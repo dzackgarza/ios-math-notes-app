@@ -1,0 +1,10 @@
+{
+"pages": [
+ {"elements": [
+  {"id": 1, "dx": 285, "dy": 640, "transform": [1, 0, 0, 1, 285, 640]},
+  {"id": 2, "dx": 285, "dy": 640, "transform": [1, 0, 0, 1, 285, 640]},
+  {"id": 3, "dx": 0, "dy": 0, "transform": [1, 0, 0, 1, 0, 0]},
+  {"id": 4, "dx": 0, "dy": 0, "transform": [1, 0, 0, 1, 0, 0]}]}],
+"selected": [],
+"deleted": [0]
+}

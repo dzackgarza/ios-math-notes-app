@@ -1,0 +1,12 @@
+{
+"pages": [
+ {"elements": [
+  {"id": 5, "dx": 0, "dy": 0, "transform": [1, 0, 0, 1, 0, 0],
+   "children": [
+    {"id": 6, "dx": 194, "dy": 0, "transform": [1, 0, 0, 1, 194, 0]},
+    {"id": 7, "dx": 194, "dy": 0, "transform": [1, 0, 0, 1, 194, 0]}]},
+  {"id": 3, "dx": 194, "dy": 0, "transform": [1, 0, 0, 1, 194, 0]},
+  {"id": 4, "dx": 194, "dy": 0, "transform": [1, 0, 0, 1, 194, 0]}]}],
+"selected": [],
+"deleted": [0, 1, 2, 8, 9, 10]
+}
