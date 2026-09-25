@@ -5,6 +5,9 @@ on:
   push:
     branches: [main]
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: macos-26
@@ -41,3 +44,11 @@ jobs:
         with:
           name: MathNotes-unsigned
           path: MathNotes.ipa
+
+      - name: Publish IPA as the "latest" release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete latest --cleanup-tag --yes || true
+          gh release create latest MathNotes.ipa \
+            --title "Latest build ($GITHUB_SHA)" --notes "Unsigned; install with SideStore."
