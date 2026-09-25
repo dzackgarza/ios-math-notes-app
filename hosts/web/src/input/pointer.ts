@@ -76,6 +76,14 @@ export function tiltToSpherical(tiltX: number, tiltY: number): { altitude: numbe
   return { altitude, azimuth };
 }
 
+// Whether the event's altitudeAngle is the browser's own. Desktop WebKit
+// leaves it at 0, an altitude that tilts of (0, 0) never give and that
+// otherwise needs a tilt of 90 degrees.
+function reportsAngles(p: PointerEvent): boolean {
+  if (p.altitudeAngle === undefined) return false;
+  return p.altitudeAngle !== 0 || Math.abs(p.tiltX) === 90 || Math.abs(p.tiltY) === 90;
+}
+
 // `origin` is the canvas's top-left in client coordinates (CSS px).
 export function penSamples(
   e: PointerEvent,
@@ -86,8 +94,7 @@ export function penSamples(
   const kind = tool(e);
   const eventPhase = phase(e);
   const sample = (p: PointerEvent, samplePhase: number, predicted: boolean): PenSample => {
-    const angles =
-      p.altitudeAngle === undefined ? tiltToSpherical(p.tiltX, p.tiltY) : { altitude: p.altitudeAngle, azimuth: p.azimuthAngle };
+    const angles = reportsAngles(p) ? { altitude: p.altitudeAngle, azimuth: p.azimuthAngle } : tiltToSpherical(p.tiltX, p.tiltY);
     return {
       x: p.clientX - origin.x,
       y: p.clientY - origin.y,
