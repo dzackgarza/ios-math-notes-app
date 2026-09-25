@@ -1,10 +1,10 @@
 // Screenshots of the library, New Notebook, New Note and editor screens at
-// 1366 × 1024, for review against docs/specs/ui/ (#47). Run against a served
-// app: `bun e2e/screenshots.ts [base URL] [output directory]`.
+// 1366 × 1024, for review against the mockups in docs/specs/ui/ (just screenshots).
+// Run against a served app: `bun e2e/screenshots.ts [base URL] [output directory]`.
 import { chromium, type Page } from "playwright";
 
 const base = process.argv[2] ?? process.env.MATH_NOTES_URL ?? "http://localhost/math-notes/";
-const out = process.argv[3] ?? "screenshots";
+const out = process.argv[3] ?? new URL("../../../docs/specs/ui/screenshots", import.meta.url).pathname;
 
 async function drawWithPen(page: Page, points: { x: number; y: number }[]): Promise<void> {
   const cdp = await page.context().newCDPSession(page);

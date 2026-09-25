@@ -125,3 +125,8 @@ write-fixtures:
     done
     # replay every case; upstream-test<N> cases are also compared with Write's test<N>_ref.html
     (cd "$W/syncscribble" && WRITE_REPLAY_DIR="$F" WRITE_REPLAY_TMP="$tmp/replay" run --replaytest)
+
+# Rewrites docs/specs/ui/screenshots: the library, New Notebook, New Note and editor
+# screens of the deployment at 1366 × 1024, for review against the mockups.
+screenshots: web-deploy
+    cd hosts/web && bun e2e/screenshots.ts
