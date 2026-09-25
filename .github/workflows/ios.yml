@@ -31,9 +31,9 @@ jobs:
     timeout-minutes: 150
 
     env:
-      SKIA_DIR: ${{ github.workspace }}/../skia
-      VCPKG_ROOT: ${{ github.workspace }}/../vcpkg
-      VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}/../vcpkg-bin,readwrite
+      SKIA_DIR: ${{ github.workspace }}/.ci/skia
+      VCPKG_ROOT: ${{ github.workspace }}/.ci/vcpkg
+      VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}/.ci/vcpkg-bin,readwrite
 
     steps:
       - uses: actions/checkout@v7
@@ -70,7 +70,7 @@ jobs:
       - name: Restore vcpkg binary cache
         uses: actions/cache@v6
         with:
-          path: ${{ github.workspace }}/../vcpkg-bin
+          path: ${{ github.workspace }}/.ci/vcpkg-bin
           key: vcpkg-ios-${{ hashFiles('core/vcpkg.json', 'core/triplets/**') }}
 
       - name: Set up vcpkg

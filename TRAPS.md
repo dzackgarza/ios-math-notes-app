@@ -25,3 +25,4 @@
 - **`SkPDF::MakeDocument` aborts the process** (`Must set both a jpegDecoder and jpegEncoder`) with a default `SkPDF::Metadata`. Start from `SkPDF::JPEG::MetadataWithCallbacks()` (`include/docs/SkPDFJpegHelpers.h`).
 - **Headless Firefox on a runner without a GPU refuses every WebGL context** ("Exhausted GL driver options"; `webgl.force-enabled` does not help). CI runs Firefox headed under `xvfb-run`, where Mesa supplies GL.
 - **`wasm-objdump -x` dumps data segments,** whose strings (`shared_ptr`, SkSL `atomicStore`) match a thread check. Inspect only `-j Memory` and `-j target_features`.
+- **`actions/cache` rejects paths containing `..`** ("Relative pathing . and .. is not allowed") and then saves nothing, with only a warning. CI keeps its tool directories under `$GITHUB_WORKSPACE/.ci/`.

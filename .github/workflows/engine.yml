@@ -14,8 +14,8 @@ on:
 
 env:
   EMSDK_VERSION: 4.0.7
-  VCPKG_ROOT: ${{ github.workspace }}/../vcpkg
-  VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}/../vcpkg-bin,readwrite
+  VCPKG_ROOT: ${{ github.workspace }}/.ci/vcpkg
+  VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}/.ci/vcpkg-bin,readwrite
   BUILD_DIR: core/build/wasm
 
 jobs:
@@ -37,7 +37,7 @@ jobs:
         id: vcpkg-cache
         uses: actions/cache@v6
         with:
-          path: ${{ github.workspace }}/../vcpkg-bin
+          path: ${{ github.workspace }}/.ci/vcpkg-bin
           key: vcpkg-wasm-${{ env.EMSDK_VERSION }}-${{ hashFiles('core/vcpkg.json', 'core/triplets/**') }}
 
       - name: Set up vcpkg
