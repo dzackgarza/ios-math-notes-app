@@ -84,3 +84,16 @@ Document SetPageSize(Document document, PageSize size) {
 }
 
 }  // namespace ink_engine
+
+namespace ink_engine {
+
+std::optional<size_t> FirstChangedPage(const Document &before, const Document &after) {
+  size_t a = ListedPageCount(before), b = ListedPageCount(after);
+  for (size_t i = 0; i < std::min(a, b); ++i) {
+    if (&*before.pages[i] != &*after.pages[i]) return i;
+  }
+  if (a == b || b == 0) return std::nullopt;
+  return std::min(a, b) == b ? b - 1 : a;
+}
+
+}  // namespace ink_engine

@@ -180,6 +180,7 @@ struct Notebook {
 struct Document {
   Notebook notebook;
   immer::flex_vector<immer::box<Page>> pages;  // listed pages, then unlisted
+  bool operator==(const Document &) const = default;
 };
 
 }  // namespace ink_engine

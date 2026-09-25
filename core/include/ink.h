@@ -194,9 +194,13 @@ InkStatus ink_input_update(InkCanvas *canvas, const InkPenSample *samples, size_
    since the last one. `*drew` is 1 when it drew. */
 InkStatus ink_render(InkCanvas *canvas, int32_t *drew);
 /* Moves the document one step back or forward in its history. `*moved` is 0
-   at either end. */
-InkStatus ink_undo(InkDocument *document, int32_t *moved);
-InkStatus ink_redo(InkDocument *document, int32_t *moved);
+   at either end. `*page` is the page the step changed, for the host to show,
+   or -1 when it changed no page (a page size or template). */
+InkStatus ink_undo(InkDocument *document, int32_t *moved, int32_t *page);
+InkStatus ink_redo(InkDocument *document, int32_t *moved, int32_t *page);
+/* A listed page's rectangle in content coordinates (pt). */
+InkStatus ink_document_page_rect(InkDocument *document, size_t index, double *x, double *y,
+                                 double *width, double *height);
 
 /* ---- Layout check ----------------------------------------------------- */
 

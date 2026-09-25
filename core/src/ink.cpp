@@ -53,6 +53,18 @@ ink_engine::Page GhostPage(const InkDocument &document) {
   return ink_engine::NewPage(document.history.current(), document.template_page);
 }
 
+// One undo or redo step: `*page` is the page the step changed, or -1.
+InkStatus Step(InkDocument *document, bool (ink_engine::DocumentHistory::*move)(), int32_t *moved,
+               int32_t *page) {
+  if (!document) return NullArgument("document");
+  if (!moved || !page) return NullArgument("moved or page");
+  ink_engine::Document before = document->history.current();
+  *moved = (document->history.*move)();
+  std::optional<size_t> changed = ink_engine::FirstChangedPage(before, document->history.current());
+  *page = changed ? int32_t(*changed) : -1;
+  return INK_OK;
+}
+
 ink_engine::PagePlacement GhostPlacement(const InkDocument &document,
                                          const std::vector<ink_engine::PagePlacement> &layout) {
   ink_engine::Page ghost = GhostPage(document);
@@ -436,20 +448,24 @@ InkStatus ink_render(InkCanvas *canvas, int32_t *drew) {
   });
 }
 
-InkStatus ink_undo(InkDocument *document, int32_t *moved) {
-  return Call([&] {
-    if (!document) return NullArgument("document");
-    if (!moved) return NullArgument("moved");
-    *moved = document->history.Undo();
-    return INK_OK;
-  });
+InkStatus ink_undo(InkDocument *document, int32_t *moved, int32_t *page) {
+  return Call([&] { return Step(document, &ink_engine::DocumentHistory::Undo, moved, page); });
 }
 
-InkStatus ink_redo(InkDocument *document, int32_t *moved) {
+InkStatus ink_redo(InkDocument *document, int32_t *moved, int32_t *page) {
+  return Call([&] { return Step(document, &ink_engine::DocumentHistory::Redo, moved, page); });
+}
+
+InkStatus ink_document_page_rect(InkDocument *document, size_t index, double *x, double *y,
+                                 double *width, double *height) {
   return Call([&] {
     if (!document) return NullArgument("document");
-    if (!moved) return NullArgument("moved");
-    *moved = document->history.Redo();
+    if (!x || !y || !width || !height) return NullArgument("rectangle");
+    std::vector<ink_engine::PagePlacement> layout =
+        ink_engine::LayoutPages(document->history.current());
+    if (index >= layout.size()) return BadPageIndex();
+    const ink_engine::PagePlacement &p = layout[index];
+    *x = p.x, *y = p.y, *width = p.width, *height = p.height;
     return INK_OK;
   });
 }

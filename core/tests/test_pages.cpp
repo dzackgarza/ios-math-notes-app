@@ -82,7 +82,8 @@ TEST_CASE("A deleted page's file is listed for deletion; a moved page changes on
 
   // Undo restores the saved value: nothing to write or delete.
   int32_t undone = 0;
-  ink_undo(session.document, &undone);
+  int32_t page = 0;
+  ink_undo(session.document, &undone, &page);
   CHECK(DirtyFiles(session.document).empty());
   CHECK(ink_document_delete_page(session.document, 3) == INK_ERROR_ARGUMENT);
 }

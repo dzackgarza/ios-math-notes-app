@@ -100,3 +100,21 @@ test("after one visit the app starts offline", async ({ page, context }) => {
   await expect(page.getByRole("heading", { name: "Math Notes" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Create" })).toBeEnabled(); // the engine loaded from the cache
 });
+
+test("Ctrl+Z undoes a stroke and the save removes it from the page file", async ({ page }) => {
+  await page.goto(APP);
+  await clearOpfs(page);
+  await page.reload();
+  await page.getByRole("textbox", { name: "New notebook name" }).fill("Undo");
+  await page.getByRole("button", { name: "Create" }).click();
+  const box = (await page.locator("#ink-canvas").boundingBox())!;
+  await drawWithPen(page, Array.from({ length: 10 }, (_, i) => ({ x: box.x + 150 + i * 8, y: box.y + 100 })));
+  await page.keyboard.press("Control+z");
+  await expect
+    .poll(async () => Buffer.from(await readOpfsFile(page, "Undo/pages/0001.svg"), "base64").toString(), { timeout: 5000 })
+    .not.toContain('<path id="s-');
+  await page.keyboard.press("Control+Shift+z");
+  await expect
+    .poll(async () => Buffer.from(await readOpfsFile(page, "Undo/pages/0001.svg"), "base64").toString(), { timeout: 5000 })
+    .toContain('<path id="s-');
+});

@@ -94,6 +94,6 @@ test("a new notebook's files, and none after it is marked saved", () => {
   assert.equal(json.format, "math-notes");
   document.markSaved();
   assert.deepEqual(document.dirtyFiles(), []);
-  assert.equal(document.undo(), false);
+  assert.equal(document.undo(), null);
   document.free();
 });
