@@ -65,6 +65,19 @@ specified.
 - **Bottom bar**: undo and redo; a zoom menu ("100%"); a paper menu ("Dot
   Paper"); a page indicator "1 / 12" with previous and next.
 
+## Pages in the editor
+
+- Pages follow each other with no gap. In the default view a page fills the
+  full width of the canvas.
+- The view cannot scroll past the pages. Pulling past the end of the last page
+  shows an indicator that grows with the pull. Past a threshold the indicator
+  changes to confirm that a release adds a page. Releasing there adds a page
+  after the last one; releasing before it adds nothing. The pull springs back
+  either way.
+- Ink cannot land outside a page. On pen-up, the parts of the stroke outside
+  its page are removed (Noteful's behavior); a stroke entirely outside is
+  removed.
+
 ## Visual style
 
 Light theme, white and very light gray panels, one blue accent (#2F6FEB,
