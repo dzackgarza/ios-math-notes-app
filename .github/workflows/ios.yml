@@ -4,13 +4,29 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
+    paths:
+      - Sources/**
+      - project.yml
+      - sidestore-source.jq
+      - .github/workflows/ios.yml
 
 permissions:
   contents: write
 
+# Releases must land in run order so the newest one is "latest".
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+env:
+  VERSION: 0.1.${{ github.run_number }}
+  BUILD: ${{ github.run_number }}
+  TAG: v${{ github.run_number }}
+
 jobs:
   build:
     runs-on: macos-26
+    timeout-minutes: 30
 
     steps:
       - uses: actions/checkout@v7
@@ -22,6 +38,7 @@ jobs:
 
       - name: Build unsigned archive
         run: |
+          set -o pipefail
           xcodebuild archive \
             -project MathNotes.xcodeproj \
             -scheme MathNotes \
@@ -32,29 +49,50 @@ jobs:
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
-            MARKETING_VERSION="0.1.$GITHUB_RUN_NUMBER" \
-            CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER"
+            MARKETING_VERSION="$VERSION" \
+            CURRENT_PROJECT_VERSION="$BUILD"
 
       - name: Make unsigned IPA
         run: |
           mkdir Payload
-          cp -R "$RUNNER_TEMP/MathNotes.xcarchive/Products/Applications/"*.app Payload/
-          zip -r MathNotes.ipa Payload
+          cp -R "$RUNNER_TEMP/MathNotes.xcarchive/Products/Applications/MathNotes.app" Payload/
+          zip -qr MathNotes.ipa Payload
+
+      # SideStore rejects an IPA whose Info.plist differs from its source entry.
+      - name: Check IPA version matches the source entry
+        run: |
+          plist=Payload/MathNotes.app/Info.plist
+          read_key() { /usr/libexec/PlistBuddy -c "Print :$1" "$plist"; }
+          test "$(read_key CFBundleShortVersionString)" = "$VERSION"
+          test "$(read_key CFBundleVersion)" = "$BUILD"
+          test "$(read_key CFBundleIdentifier)" = dev.zack.mathnotes
 
       - name: Write SideStore source
         run: |
           jq -n \
-            --arg version "0.1.$GITHUB_RUN_NUMBER" \
-            --arg build "$GITHUB_RUN_NUMBER" \
+            --arg version "$VERSION" \
+            --arg build "$BUILD" \
             --arg date "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
             --argjson size "$(stat -f %z MathNotes.ipa)" \
-            --arg base "https://github.com/$GITHUB_REPOSITORY/releases/download/v$GITHUB_RUN_NUMBER" \
+            --arg base "https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG" \
             -f sidestore-source.jq > source.json
 
+      # Re-running a run reuses its number, so replace that release's assets.
       - name: Publish IPA and source as a release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "v$GITHUB_RUN_NUMBER" MathNotes.ipa source.json --latest \
-            --title "0.1.$GITHUB_RUN_NUMBER ($GITHUB_SHA)" \
-            --notes "Unsigned; install with SideStore."
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" MathNotes.ipa source.json --clobber
+          else
+            gh release create "$TAG" MathNotes.ipa source.json --latest \
+              --title "$VERSION ($GITHUB_SHA)" \
+              --notes "Unsigned; install with SideStore."
+          fi
+
+      - name: Check published source serves this build
+        run: |
+          url="https://github.com/$GITHUB_REPOSITORY/releases/latest/download/source.json"
+          test "$(curl -fsSL "$url" | jq -r '.apps[0].versions[0].buildVersion')" = "$BUILD"
+          ipa=$(jq -r '.apps[0].versions[0].downloadURL' source.json)
+          test "$(curl -fsSL "$ipa" | wc -c | tr -d ' ')" = "$(stat -f %z MathNotes.ipa)"
