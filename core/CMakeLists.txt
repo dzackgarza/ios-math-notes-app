@@ -31,6 +31,7 @@ add_library(ink STATIC
   src/format/notebook.cpp
   src/document/pages.cpp
   src/document/templates.cpp
+  src/strokes/clip.cpp
   src/strokes/outline.cpp
   src/editor/editor.cpp
   src/editor/history.cpp

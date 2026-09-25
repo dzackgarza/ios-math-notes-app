@@ -218,3 +218,30 @@ TEST_CASE("One 16-sample event through ink_input") {
   std::printf("16-sample ink_input event: mean %.3f ms, worst %.3f ms\n", total / kEvents, worst);
   CHECK(canvas.canvas->editor.Drawing());
 }
+
+TEST_CASE("Pen-up keeps only the part of a stroke on its page") {
+  ink_test::Session canvas;
+  ink_document_insert_page(canvas.document, 1);
+  ink_test::SetTool(canvas.get(), INK_BRUSH_MARKER, 0x1A1A1A, 5);
+  // Down page 1 and across its bottom edge (841.89 pt) onto page 2.
+  std::vector<InkPenSample> event;
+  for (uint32_t i = 0; i <= 5; ++i) {
+    InkPhase phase = i == 0 ? INK_PHASE_BEGIN : i == 5 ? INK_PHASE_END : INK_PHASE_MOVE;
+    event.push_back(PenSample(100, 800 + i * 20, i * 8, phase, i));
+  }
+  ink_input(canvas.get(), event.data(), event.size());
+  const Stroke &kept = OnlyStroke(canvas.get());
+  REQUIRE(kept.samples.size() == 4);  // 800, 820, 840 and the edge
+  CHECK(kept.samples[2].y == 840);
+  CHECK(std::abs(kept.samples.back().y - 841.89) < 1e-9);
+  CHECK(std::abs(kept.samples.back().t - (16 + 8 * 1.89 / 20)) < 1e-9);
+  CHECK(canvas.doc().pages[1]->layers[0].elements.empty());
+
+  // Beside the page: nothing is committed.
+  size_t steps = canvas.document->history.size();
+  InkPenSample outside[] = {PenSample(650, 100, 100, INK_PHASE_BEGIN, 10),
+                            PenSample(700, 120, 110, INK_PHASE_END, 11)};
+  ink_input(canvas.get(), outside, 2);
+  CHECK(canvas.document->history.size() == steps);
+  CHECK(canvas.doc().pages[0]->layers[0].elements.size() == 1);
+}
