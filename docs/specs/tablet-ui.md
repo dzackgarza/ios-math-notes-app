@@ -1,0 +1,97 @@
+# Tablet interface
+
+The target interface for the web app and the iPad app on a tablet-sized
+screen. The four mockups below are the reference for layout, controls and
+visual style. They are illustrations: the handwriting, names, counts and dates
+in them are sample content. Phone layouts are not specified.
+
+## Screens
+
+### Library
+
+![Library](ui/tablet-library.png)
+
+- **Sidebar**, always visible: app mark and name; Library, Search, Recent,
+  Shared, Favorites, Trash; a Tags list with a color and a count per tag, and
+  **+** to add a tag; Settings at the bottom.
+- **Main pane**: title "Library" and a one-line description; **New Notebook**
+  (secondary) and **New Note** (primary) buttons; a search field; a filter
+  menu ("All Notebooks"); a sort menu ("Last Modified"); a grid/list toggle.
+- **Notebook cards** in a grid: a thumbnail of handwritten content, the
+  title, the note count, "Modified …", tag chips, and a **⋯** menu. The
+  selected card has a blue outline.
+- **Detail pane** for the selected notebook: a large thumbnail, title, note
+  count, modified time, tag chips with **+**, **Notes** and **Info** tabs, a
+  note search field, and the note list (thumbnail, title, a one-line
+  summary, modified time), ending with **New Note in <notebook>**.
+
+### New Notebook
+
+![New Notebook](ui/tablet-new-notebook.png)
+
+- **Cancel** at the top left, **Create Notebook** (primary) at the top right.
+- Fields: Notebook Title; Description (optional, 500-character counter);
+  Paper Style (Dot, Graph, Blank, Ruled, each with a preview tile); Cover
+  Color (ten swatches); Cover Style (Classic, Spine); Tags (removable chips
+  and "Add a tag…"); Location (a folder menu, "You can move this notebook
+  later").
+- **Preview** of the cover with the title and a drawing, and **Notebook
+  Details** summarizing paper, color, cover, location and tag count.
+
+### New Note
+
+![New Note](ui/tablet-new-note.png)
+
+- **Cancel**; title "New Note in <notebook>"; the target notebook's
+  thumbnail with **Change Notebook**.
+- Fields: Title; Paper Style (Dot, Grid, Lined, Plain, Graph); Tags; Starting
+  Template (Blank Note, Theorem / Proof, Grid Sketch, Lecture Notes) with a
+  one-line description of the selected template.
+- A large live preview of the first page with the paper and template.
+- **Save as Draft** and **Create Note** (primary) at the bottom right.
+
+### Editor
+
+![Editor](ui/tablet-editor.png)
+
+- **Top bar**: app mark; notebook title with a menu and a subtitle; a tab
+  per open note with close buttons, and **+**; share and **⋯** at the right.
+- **Tool rail** on the left: Pen, Thick Pen and Highlighter, each with its
+  size; Eraser; Lasso; Shapes; Image; Text; then a color palette of 15
+  swatches and **+**.
+- **Page** fills the rest: dot paper, a handwritten title, tag chips with
+  **+**, and ink with highlighter boxes, color and drawings.
+- **Bottom bar**: undo and redo; a zoom menu ("100%"); a paper menu ("Dot
+  Paper"); a page indicator "1 / 12" with previous and next.
+
+## Visual style
+
+Light theme, white and very light gray panels, one blue accent (#2F6FEB,
+approximately) for primary buttons, selection and links. Rounded cards and
+chips, thin gray borders, system sans-serif type. Paper is warm off-white.
+
+## Relation to the current model
+
+| Mockup | Current model ([FORMAT.md](../FORMAT.md), [FEATURES.md](../FEATURES.md)) |
+| --- | --- |
+| Paper Style, Starting Template (backgrounds) | Built-in templates: blank, lined-*, grid-*, dotted (#21) |
+| Pen, Highlighter, color palette | Pen presets (#25), google/ink brushes |
+| Eraser, Lasso, Shapes | #23, #24, shape recognition (#10) |
+| Undo and redo, zoom, page indicator | #22, #21 |
+| Tabs of open notes | Split view (#28) shows two documents side by side; tabs are not specified |
+| Trash | `Notes/.trash/` |
+
+The mockups add the following, which FORMAT.md and FEATURES.md do not have:
+
+1. **Two levels: a notebook contains notes.** In FORMAT.md a notebook is a
+   directory of pages, and folders are the library. One reading: a mockup
+   "notebook" is a folder, and a mockup "note" is a FORMAT.md notebook.
+2. **Notebook and note metadata**: description, tags with colors, cover
+   color and cover style, a one-line summary per note, drafts.
+3. **Search, Recent, Favorites, Shared.** Shared implies collaboration,
+   which FEATURES.md puts out of scope.
+4. **Text and Image tools**: typed text and inserted images on a page.
+5. **Content templates** (Theorem / Proof, Lecture Notes): templates that
+   start a note with content, where the current templates are backgrounds.
+6. **Tabs** of open notes in the editor.
+7. **The name "Notatio"**, where the app is Math Notes.

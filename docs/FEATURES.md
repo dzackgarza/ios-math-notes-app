@@ -6,6 +6,9 @@ notes are SVG files on the ordinary filesystem, and ink is reflowable. Because
 the files are plain SVG, external programs can process them; the app does not
 need to interpret the ink.
 
+The tablet interface (layout, controls, style) is in
+[specs/tablet-ui.md](specs/tablet-ui.md).
+
 ## Base: keep from Write
 
 These define the app. New features must not break them.
