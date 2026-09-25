@@ -37,24 +37,21 @@ three targets before the engine depends on it.
 | Input smoothing and prediction | [google/ink-stroke-modeler](https://github.com/google/ink-stroke-modeler) | Apache-2.0, CMake, made for handwriting. |
 | Brush outline, stroke mesh, hit tests | [google/ink](https://github.com/google/ink) | Uses ink-stroke-modeler itself. Android-first, Bazel, unstable API: adopted only if the spike builds it for iOS and WASM. |
 | 2D rendering | [Skia](https://skia.org) | Linked into the engine on every target: Metal on iOS, WebGL/WebGPU in the WASM build. The web host calls the engine, not CanvasKit, so one render path serves both hosts. |
-| Text layout and shaping | Skia `SkParagraph` (HarfBuzz, ICU) | Comes with Skia. Backs the text element. |
-| PDF render, text extraction, annotation, save | [MuPDF](https://mupdf.com) | One C engine on every target, so PDF import, search text, and export behave the same on iPad and web. PDF pages are background references; the overlay (ink, text, shapes) stays app objects. |
+| PDF render and export | [MuPDF](https://mupdf.com) | One C engine on every target, so PDF annotation and export behave the same on iPad and web. PDF pages are background references; the overlay (ink, shapes) stays app objects. |
 | Polygon operations (lasso, erase regions) | [Clipper2](https://github.com/AngusJohnson/Clipper2) | Only where google/ink geometry does not cover it. |
-| Library index: tags, bookmarks, full-text search | SQLite with FTS5 | In the engine, one schema. Browser persistence through the SQLite WASM OPFS VFS. The note files are the source of truth; the index is rebuilt from them. |
 | Tests | Catch2 | Engine unit tests and trace tests, run on native and WASM builds. |
 
 ### Hosts
 
 | Host | Stack |
 | --- | --- |
-| Web | TypeScript, SolidJS for chrome (toolbars, library, panels, search), Vite (run with bun). Pointer events go straight to the engine; no pen sample passes through Solid state. Playwright for Chrome, Firefox, WebKit tests. |
-| iPad | SwiftUI for chrome and library; UIKit view with a Metal layer for the canvas. Apple frameworks: Vision, VisionKit, UniformTypeIdentifiers, `UIDocument`. Swift Observation for shell state. |
+| Web | TypeScript, SolidJS for chrome (toolbars, library, panels), Vite (run with bun). Pointer events go straight to the engine; no pen sample passes through Solid state. Playwright for Chrome, Firefox, WebKit tests. |
+| iPad | SwiftUI for chrome and library; UIKit view with a Metal layer for the canvas. Apple frameworks: UniformTypeIdentifiers, `UIDocument`. Swift Observation for shell state. |
 
 ### Added with the feature that needs it
 
 | Feature | Library |
 | --- | --- |
-| Handwriting and math recognition | ONNX Runtime (web: WASM/WebGPU; iOS: Core ML provider) behind a recognition service; a math model is still to be chosen. Apple Vision on iPad for text. |
 | Import of arbitrary SVG clippings | [resvg](https://github.com/linebender/resvg) `usvg`, through its C API, to normalize foreign SVG. |
 
 Reflow, insert space, and ruled select and erase have no library. They are
@@ -84,10 +81,9 @@ new engine code, specified by fixtures recorded from Write.
   UIKit `UITouch` coalesced/predicted touches, `UIPencilInteraction`,
   `UIPencilHoverPose`; Linux libinput / Wayland `tablet-v2`.
 - Pages are SVG, so notes stay open vector files. Write documents import.
-  A note is a directory: `Note.note/{manifest.json, pages/*.svg, assets/, index/}`.
+  A note is a directory: `Note.note/{manifest.json, pages/*.svg, assets/}`.
 - New features go in the engine or in a service, never in one host only.
-  PDF and layers belong to the document model. OCR belongs to an indexing
-  service. The scanner is a host service.
+  PDF and layers belong to the document model.
 - Write fixtures: documents and input-event traces with their resulting SVG,
   for reflow, ruled selection, free erase, line insertion, clipping, undo,
   and stroke serialization. The engine must reproduce the behavior.
@@ -95,7 +91,7 @@ new engine code, specified by fixtures recorded from Write.
 ## Steps
 
 1. Build Write on the Linux dev host and record the fixtures and traces.
-2. Build spikes: ink-stroke-modeler, google/ink, Skia, MuPDF, Clipper2, SQLite for `linux-x86_64`,
+2. Build spikes: ink-stroke-modeler, google/ink, Skia, MuPDF, Clipper2 for `linux-x86_64`,
    `wasm`, and `ios-arm64`, in CI (Linux runners for Linux and WASM, macOS
    runner for iOS).
 3. Engine: document model, strokes, selection, undo, rendering, then reflow
@@ -112,19 +108,18 @@ new engine code, specified by fixtures recorded from Write.
 5. Web host: canvas, Pointer Events adapter, storage on Emscripten IDBFS
    first and OPFS for the library later. Upload/download import and export
    always work; `showOpenFilePicker()` is an extra where available.
-6. iPad host: Files/`UIDocument`, share sheet, camera and scanner, keyboard
-   text input, lifecycle, and Pencil interactions. Replaces
-   the current SwiftUI placeholder; the SideStore release pipeline stays.
-7. Services the hosts supply: Storage, Clipboard, PDF, Images, Search, Sync.
+6. iPad host: Files/`UIDocument`, share sheet, lifecycle, and Pencil
+   interactions. Replaces the current SwiftUI placeholder; the SideStore
+   release pipeline stays.
+7. Services the hosts supply: Storage, Clipboard, PDF, Images, Sync.
 8. After Write parity, add the features in [FEATURES.md](FEATURES.md) in
-   this order: PDF import and backgrounds, text elements, layers, metadata and
-   tags, indexing and search, scanner, handwriting OCR.
+   their listed order.
 
 ## Target layout
 
 ```text
 core/      document/ strokes/ reflow/ selection/ undo/ render/ io/
-services/  pdf/ search/ sync/
+services/  pdf/ sync/
 hosts/     web/{wasm,shell}/  ios/{Swift,CoreBridge}/  linux/
 tests/     documents/ input-traces/
 .github/workflows/  linux.yml wasm.yml ios.yml
