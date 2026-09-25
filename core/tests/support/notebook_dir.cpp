@@ -29,6 +29,18 @@ ink_engine::NotebookFiles ReadNotebookDir(const std::string &dir) {
   return files;
 }
 
+ink_engine::NotebookFiles ReadAssets(const std::string &dir) {
+  ink_engine::NotebookFiles files;
+  fs::path assets = fs::path(dir) / "assets";
+  if (!fs::exists(assets)) return files;
+  for (const auto &entry : fs::directory_iterator(assets)) {
+    files["assets/" + entry.path().filename().string()] = ReadFile(entry.path());
+  }
+  return files;
+}
+
+std::string ReadFile(const std::string &path) { return ReadFile(fs::path(path)); }
+
 void WriteNotebookFiles(const std::string &dir, const ink_engine::NotebookFiles &files) {
   for (const auto &[name, bytes] : files) {
     fs::path path = fs::path(dir) / name;

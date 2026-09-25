@@ -575,11 +575,11 @@ std::string WritePage(const Page &page) {
   Set(background, "mn:y-offset", Coord(bg.y_offset));
   Set(background, "mn:x-ruling", Coord(bg.x_ruling));
   Set(background, "mn:margin-left", Coord(bg.margin_left));
-  if (bg.image) WriteImage(background, *bg.image);
   pugi::xml_node rect = background.append_child("rect");
   Set(rect, "width", Coord(page.width));
   Set(rect, "height", Coord(page.height));
   Set(rect, "fill", WriteColor(bg.fill));
+  if (bg.image) WriteImage(background, *bg.image);
   for (const RulingPath &line : bg.lines) {
     pugi::xml_node path = background.append_child("path");
     Set(path, "d", WritePathData(line.d, /*closed=*/false));

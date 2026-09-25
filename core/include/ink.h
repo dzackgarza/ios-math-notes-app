@@ -66,7 +66,9 @@ typedef enum InkBrush {
 InkCanvas *ink_canvas_create(uint64_t seed);
 void ink_canvas_destroy(InkCanvas *canvas);
 
-/* The page -> view transform, as SVG matrix(a, b, c, d, e, f). */
+/* The content -> view transform, as SVG matrix(a, b, c, d, e, f). Content
+   coordinates are pt: the listed pages stacked top to bottom with a 9.6 pt
+   gap, each centered on the widest. */
 void ink_canvas_set_view(InkCanvas *canvas, double a, double b, double c, double d, double e,
                          double f);
 /* Pen for new strokes. `rgb` is 0xRRGGBB, `size` in pt. */
@@ -80,12 +82,24 @@ void ink_input(InkCanvas *canvas, const InkPenSample *samples, size_t count);
    properties arrive late, sometimes after the touch ends). */
 void ink_input_update(InkCanvas *canvas, const InkPenSample *samples, size_t count);
 
-#ifdef __APPLE__
-/* Draws one test frame (a red triangle on white) into a CAMetalLayer and
-   presents it. `ca_metal_layer` is a CAMetalLayer, passed unretained; its
-   drawableSize must already be set. Returns 0 on success. */
-int ink_metal_draw_test_frame(void *ca_metal_layer);
+/* ---- Rendering -------------------------------------------------------- */
+
+#ifdef __EMSCRIPTEN__
+/* Draws into the WebGL2 canvas matched by the CSS `selector`. Returns 0 on
+   success. */
+int ink_canvas_attach_webgl(InkCanvas *canvas, const char *selector);
 #endif
+#ifdef __APPLE__
+/* Draws into `ca_metal_layer`, a CAMetalLayer passed unretained, which must
+   outlive the canvas. Returns 0 on success. */
+int ink_canvas_attach_metal(InkCanvas *canvas, void *ca_metal_layer);
+#endif
+/* The surface size in device pixels, and device pixels per view unit (CSS
+   devicePixelRatio, UIKit contentScaleFactor). */
+void ink_canvas_set_surface_size(InkCanvas *canvas, int width, int height, float pixel_ratio);
+/* Draws a frame when the document, the view, or the live stroke changed
+   since the last one. Returns 1 when it drew. */
+int ink_render(InkCanvas *canvas);
 
 #ifdef __cplusplus
 }

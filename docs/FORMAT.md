@@ -167,8 +167,8 @@ conflict. Assets are separate files, not base64 inside SVG.
   ruled erase, reflow, and insert space read their line positions from
   these attributes. A `blank` page uses a line spacing of 28.8 pt, anchored
   at the pen-down point (Write's `blankYRuling`).
-- An imported PDF page is an `<image>` of its PNG in `assets/`, first
-  inside `g#background`.
+- An imported PDF page is an `<image>` of its PNG in `assets/`, inside
+  `g#background` after the paper `rect` and before the ruling.
 - A new page copies the background of the notebook's `template`.
 
 ### Links and bookmarks

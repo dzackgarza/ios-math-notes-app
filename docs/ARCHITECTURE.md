@@ -179,7 +179,7 @@ admits every source above.
 ## Target layout
 
 ```text
-core/      include/ink.h  src/{document,format,strokes,geometry,selection,
+core/      include/ink.h  src/{document,format,strokes,geometry,layout,selection,
            ruled,reflow,undo,render,export}/  tests/
 hosts/     web/  ios/
 tests/     fixtures/write/   (traces and expected results recorded from Write)
