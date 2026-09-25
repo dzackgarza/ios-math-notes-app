@@ -2,6 +2,7 @@
 
 ## Build / release
 
+- **The macOS runner's disk is case-insensitive.** Top-level `Tests/` and `tests/` were one directory there, and the iPad Simulator Catch2 run could not open `tests/documents/` ("cannot open …"). Keep top-level names distinct ignoring case; the Swift tests live in `AppTests/`.
 - **XcodeGen writes fixed `1.0` / `1` into Info.plist** when `info.properties` is used, ignoring `MARKETING_VERSION` / `CURRENT_PROJECT_VERSION`. `project.yml` must map `CFBundleShortVersionString: $(MARKETING_VERSION)` and `CFBundleVersion: $(CURRENT_PROJECT_VERSION)`. Symptom: SideStore "does not match the build number specified by the source".
 - **Never publish the IPA at a reused URL.** A rolling `latest` tag let the iPad install a cached older IPA (build mismatch). Deleting a tag breaks every cached `source.json` that points at it ("MathNotes.ipa doesn't exist"). Each build gets its own tag `v<run>`; old releases are kept.
 - **Size in `source.json` must be the exact IPA byte count.** SideStore verifies it. macOS `stat` is `stat -f %z`, not `-c %s`.
