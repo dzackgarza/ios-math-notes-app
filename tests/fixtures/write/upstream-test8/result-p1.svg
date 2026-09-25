@@ -1,0 +1,30 @@
+<svg class="write-page" color-interpolation="linearRGB" width="700px" height="800px" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+  <g class="write-content write-v3" xruling="0" yruling="40" marginLeft="100" papercolor="#FFFFFF" rulecolor="#FF0000FF">
+    <g class="ruleline write-std-ruling write-scale-down" fill="none" stroke="#0000FF" stroke-width="1" shape-rendering="crispEdges" vector-effect="non-scaling-stroke">
+      <rect class="pagerect" fill="#FFFFFF" stroke="none" x="0" y="0" width="700" height="800" />
+      <path class="yrule_1" d="M0 40 L700 40" />
+      <path d="M0 80 L700 80" />
+      <path d="M0 120 L700 120" />
+      <path d="M0 160 L700 160" />
+      <path d="M0 200 L700 200" />
+      <path d="M0 240 L700 240" />
+      <path d="M0 280 L700 280" />
+      <path d="M0 320 L700 320" />
+      <path d="M0 360 L700 360" />
+      <path d="M0 400 L700 400" />
+      <path d="M0 440 L700 440" />
+      <path d="M0 480 L700 480" />
+      <path d="M0 520 L700 520" />
+      <path d="M0 560 L700 560" />
+      <path d="M0 600 L700 600" />
+      <path d="M0 640 L700 640" />
+      <path d="M0 680 L700 680" />
+      <path d="M0 720 L700 720" />
+      <path d="M0 760 L700 760" />
+      <path class="leftmargin" stroke="#FF0000" d="M100 0 L100 800" />
+    </g>
+    <path class="write-stroke-pen" transform="translate(15,40)" fill="none" stroke="#000000" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" __comx="165.05" __comy="450.011" d="M160 405.2 L140.1 420.1 159.8 435.1" />
+    <path class="write-stroke-pen" transform="translate(15,40)" fill="none" stroke="#000000" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" __comx="215.05" __comy="450.011" d="M210 405.2 L190.1 420.1 209.8 435.1" />
+    <path class="write-flat-pen" transform="translate(15,40)" fill="#000000" stroke-width="1.2" __comx="265.1" __comy="449.897" d="M260.062 404.772 L239.773 419.663 239.769 420.534 259.885 435.731 260.431 435.015 240.431 419.666 240.427 420.537 260.428 405.262" />
+  </g>
+</svg>
