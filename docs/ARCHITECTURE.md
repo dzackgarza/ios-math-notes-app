@@ -9,7 +9,7 @@ ports those algorithms from Write's source onto its own data model and
 libraries (google/ink, Skia, immer) and checks them against fixtures recorded
 from Write.
 
-Work order, milestones, and blocker edges: the GitHub issue tree rooted at
+Work order and milestones: the GitHub issue tree rooted at
 [#11](https://github.com/dzackgarza/math-notes-app/issues/11)
 (`itree next dzackgarza/math-notes-app` gives the next work unit).
 
