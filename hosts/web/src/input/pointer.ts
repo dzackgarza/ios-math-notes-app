@@ -50,6 +50,32 @@ function tool(e: PointerEvent): number {
   return eraser ? Tool.eraser : Tool.pen;
 }
 
+// Altitude and azimuth from tiltX and tiltY, for browsers without
+// altitudeAngle (WebKit on the desktop). A port of tilt2spherical in W3C
+// Pointer Events Level 3, §"Converting between tiltX/tiltY and
+// altitudeAngle/azimuthAngle".
+export function tiltToSpherical(tiltX: number, tiltY: number): { altitude: number; azimuth: number } {
+  const x = (tiltX * Math.PI) / 180;
+  const y = (tiltY * Math.PI) / 180;
+  const vertical = Math.abs(tiltX) === 90 || Math.abs(tiltY) === 90;
+  let azimuth = 0;
+  if (tiltX === 0) {
+    if (tiltY > 0) azimuth = Math.PI / 2;
+    else if (tiltY < 0) azimuth = (3 * Math.PI) / 2;
+  } else if (tiltY === 0) {
+    if (tiltX < 0) azimuth = Math.PI;
+  } else if (!vertical) {
+    azimuth = Math.atan2(Math.tan(y), Math.tan(x));
+    if (azimuth < 0) azimuth += 2 * Math.PI;
+  }
+  let altitude = 0;
+  if (vertical) altitude = 0;
+  else if (tiltX === 0) altitude = Math.PI / 2 - Math.abs(y);
+  else if (tiltY === 0) altitude = Math.PI / 2 - Math.abs(x);
+  else altitude = Math.atan(1 / Math.sqrt(Math.tan(x) ** 2 + Math.tan(y) ** 2));
+  return { altitude, azimuth };
+}
+
 // `origin` is the canvas's top-left in client coordinates (CSS px).
 export function penSamples(
   e: PointerEvent,
@@ -59,22 +85,26 @@ export function penSamples(
 ): PenSample[] {
   const kind = tool(e);
   const eventPhase = phase(e);
-  const sample = (p: PointerEvent, samplePhase: number, predicted: boolean): PenSample => ({
-    x: p.clientX - origin.x,
-    y: p.clientY - origin.y,
-    time: p.timeStamp,
-    pressure: p.pressure,
-    altitude: p.altitudeAngle,
-    azimuth: p.azimuthAngle,
-    roll: (p.twist * Math.PI) / 180,
-    hoverHeight: 0,
-    buttons: p.buttons,
-    has,
-    id: ids.next++,
-    tool: kind,
-    phase: samplePhase,
-    predicted,
-  });
+  const sample = (p: PointerEvent, samplePhase: number, predicted: boolean): PenSample => {
+    const angles =
+      p.altitudeAngle === undefined ? tiltToSpherical(p.tiltX, p.tiltY) : { altitude: p.altitudeAngle, azimuth: p.azimuthAngle };
+    return {
+      x: p.clientX - origin.x,
+      y: p.clientY - origin.y,
+      time: p.timeStamp,
+      pressure: p.pressure,
+      altitude: angles.altitude,
+      azimuth: angles.azimuth,
+      roll: (p.twist * Math.PI) / 180,
+      hoverHeight: 0,
+      buttons: p.buttons,
+      has,
+      id: ids.next++,
+      tool: kind,
+      phase: samplePhase,
+      predicted,
+    };
+  };
   const coalesced = e.getCoalescedEvents?.() ?? [];
   const real = coalesced.length > 0 ? coalesced : [e];
   // Begin marks the first sample of the stroke; end and cancel the last.
