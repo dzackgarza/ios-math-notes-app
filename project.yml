@@ -41,7 +41,7 @@ targets:
     platform: iOS
     deploymentTarget: "18.0"
     sources:
-      - Tests
+      - AppTests
     dependencies:
       - target: MathNotes
       - framework: build/InkEngine.xcframework
