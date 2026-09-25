@@ -1,5 +1,4 @@
-# The iPad Simulator does not open paths with "..": normalize.
-cmake_path(SET INK_DOCUMENTS_DIR NORMALIZE "${PROJECT_SOURCE_DIR}/../tests/documents")
+set(INK_DOCUMENTS_DIR "${PROJECT_SOURCE_DIR}/../tests/documents")
 
 find_package(Catch2 3 CONFIG REQUIRED)
 include(Catch)
