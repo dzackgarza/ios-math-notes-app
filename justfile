@@ -106,7 +106,8 @@ write-fixtures:
       echo "$W is not at write_rev {{write_rev}}; check it out or update write_rev" >&2
       exit 1
     fi
-    make -C "$W/syncscribble" USE_SYSTEM_SDL=1 DEBUG=1 SANITIZE=0 -j"$(nproc)" >/dev/null
+    # the justfile exports EMSDK, which makes Write's Makefile build for wasm
+    env -u EMSDK make -C "$W/syncscribble" USE_SYSTEM_SDL=1 DEBUG=1 SANITIZE=0 -j"$(nproc)" >/dev/null
     cp "$W"/scribbleres/fonts/* "$W/syncscribble/Debug/"
     tmp=$(mktemp -d)
     trap 'trash "$tmp"' EXIT
