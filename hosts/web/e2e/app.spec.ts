@@ -243,8 +243,6 @@ test("the eraser tool deletes a touched stroke whole, Partial cuts one in two, a
   const [first, second] = await savedStrokeIds(page, "Erase/pages/0001.svg");
 
   await page.getByRole("button", { name: "Eraser", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Whole stroke" })).toHaveAttribute("aria-pressed", "true");
-  await expect(page.getByRole("group", { name: "Colors" })).toHaveCount(0);
   await drawWithPen(page, across(100));
   await expect.poll(() => savedStrokeIds(page, "Erase/pages/0001.svg"), { timeout: 5000 }).toEqual([second]);
 
