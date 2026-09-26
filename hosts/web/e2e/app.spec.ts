@@ -174,7 +174,7 @@ test("a note created in a new folder with the dotted template is listed in its f
   expect(svg).toContain('<path id="s-');
 });
 
-test("the tool rail's pen, highlighter and color reach the saved strokes", async ({ page }) => {
+test("the tool rail's presets and palette color reach the saved strokes", async ({ page }) => {
   await startEmpty(page);
   await newNote(page, "Tools");
   const box = (await page.locator("#ink-canvas").boundingBox())!;
@@ -183,7 +183,7 @@ test("the tool rail's pen, highlighter and color reach the saved strokes", async
   await page.getByRole("button", { name: "Highlighter", exact: true }).click();
   await page.getByRole("button", { name: "#2BB3C0" }).click();
   await drawWithPen(page, line(100));
-  await page.getByRole("button", { name: "Pen", exact: true }).click();
+  await page.getByRole("button", { name: "Black pen", exact: true }).click();
   await page.getByRole("button", { name: "#D6455D" }).click();
   await drawWithPen(page, line(200));
 
@@ -196,6 +196,85 @@ test("the tool rail's pen, highlighter and color reach the saved strokes", async
       ["highlighter", "#2BB3C0"],
       ["pressure-pen", "#D6455D"],
     ]);
+});
+
+// The strokes of a saved page: brush, fill and size, in document order.
+async function strokeAttributes(page: Page, path: string): Promise<string[][]> {
+  const svg = Buffer.from(await readOpfsFile(page, path), "base64").toString();
+  return [...svg.matchAll(/<path id="s-[^>]*? fill="(#[0-9A-F]{6})"[^>]*? mn:brush="([a-z-]+)"[^>]*? mn:size="([0-9.]+)"/g)].map((m) => [
+    m[2],
+    m[1],
+    m[3],
+  ]);
+}
+
+test("an edited pen is written to .pens.json in FORMAT.md key order, and earlier strokes keep their own pen", async ({ page }) => {
+  await startEmpty(page);
+  await newNote(page, "Pens");
+  const box = (await page.locator("#ink-canvas").boundingBox())!;
+  const line = (y: number) => Array.from({ length: 20 }, (_, i) => ({ x: box.x + 150 + i * 8, y: box.y + y }));
+
+  const blue = page.getByRole("button", { name: "Blue pen", exact: true });
+  await blue.click();
+  await drawWithPen(page, line(100));
+  await blue.click(); // the selected pen again: its editor
+  const editor = page.getByRole("dialog");
+  await editor.getByRole("button", { name: "Marker" }).click();
+  await editor.getByRole("textbox", { name: "Hex" }).fill("#3FA35B");
+  await editor.getByRole("textbox", { name: "Hex" }).press("Tab");
+  await editor.getByRole("slider", { name: "Size" }).focus();
+  for (let i = 0; i < 8; i++) await page.keyboard.press("ArrowRight"); // 1.2 + 8 × 0.1 pt
+  await page.keyboard.press("Escape");
+  await drawWithPen(page, line(200));
+
+  const pen = (id: string, name: string, brush: string, color: string, opacity: string, size: string) =>
+    `  {\n    "id": "${id}",\n    "name": "${name}",\n    "brush": "${brush}",\n    "brushVersion": 1,\n` +
+    `    "color": "${color}",\n    "opacity": ${opacity},\n    "size": ${size}\n  }`;
+  const expected =
+    "[\n" +
+    [
+      pen("black-pen", "Black pen", "pressure-pen", "#1A1A1A", "1", "1.2"),
+      pen("blue-pen", "Blue pen", "marker", "#3FA35B", "1", "2"),
+      pen("red-pen", "Red pen", "pressure-pen", "#B51F1F", "1", "1.2"),
+      pen("marker", "Marker", "marker", "#1A1A1A", "1", "2.4"),
+      pen("highlighter", "Highlighter", "highlighter", "#FFE066", "0.35", "9.6"),
+    ].join(",\n") +
+    "\n]\n";
+  await expect
+    .poll(async () => Buffer.from(await readOpfsFile(page, ".pens.json"), "base64").toString(), { timeout: 5000 })
+    .toBe(expected);
+  await expect
+    .poll(() => strokeAttributes(page, "Pens/pages/0001.svg"), { timeout: 5000 })
+    .toEqual([
+      ["pressure-pen", "#1F4FB5", "1.2"],
+      ["marker", "#3FA35B", "2"],
+    ]);
+});
+
+test("a .pens.json changed by another device is read when the note opens again", async ({ page }) => {
+  await startEmpty(page);
+  await newNote(page, "Shared");
+  await expect
+    .poll(async () => Buffer.from(await readOpfsFile(page, ".pens.json"), "base64").toString(), { timeout: 5000 })
+    .toContain('"id": "red-pen"');
+  // Another device on the same root renames the red pen and makes it thicker.
+  await page.evaluate(async () => {
+    const root = await navigator.storage.getDirectory();
+    const file = await (await root.getFileHandle(".pens.json")).getFile();
+    const text = (await file.text()).replace('"name": "Red pen"', '"name": "Proof red"').replace(/("id": "red-pen"[^}]*"size": )1.2/, "$13");
+    const writable = await (await root.getFileHandle(".pens.json")).createWritable();
+    await writable.write(text);
+    await writable.close();
+  });
+  await page.getByRole("button", { name: "Library" }).click();
+  await openNote(page, "Shared");
+
+  await page.getByRole("button", { name: "Proof red", exact: true }).click();
+  const box = (await page.locator("#ink-canvas").boundingBox())!;
+  await drawWithPen(page, Array.from({ length: 20 }, (_, i) => ({ x: box.x + 150 + i * 8, y: box.y + 100 })));
+  await expect
+    .poll(() => strokeAttributes(page, "Shared/pages/0001.svg"), { timeout: 5000 })
+    .toEqual([["pressure-pen", "#B51F1F", "3"]]);
 });
 
 test("pulling past the last page adds a page only past the threshold, and the view stops at the pages", async ({ page }) => {

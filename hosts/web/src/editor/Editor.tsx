@@ -145,9 +145,7 @@ function PenEditor(props: { pen: Pen; onChange: (change: Partial<ToolSettings>) 
         </div>
         <Slider.Track class="slider-track">
           <Slider.Fill class="slider-fill" />
-          <Slider.Thumb class="slider-thumb">
-            <Slider.Input />
-          </Slider.Thumb>
+          <Slider.Thumb class="slider-thumb" />
         </Slider.Track>
       </Slider>
     </div>
@@ -625,7 +623,13 @@ export function Editor(props: {
           </Switch>
           <Popover open={editing()} onOpenChange={setEditing} anchorRef={() => penButtons.get(penId())} placement="right-start" gutter={12}>
             <Popover.Portal>
-              <Popover.Content class="pen-editor" aria-label="Pen editor">
+              <Popover.Content
+                class="pen-editor"
+                aria-label="Pen editor"
+                // The tap on the pen that opened the editor focuses that pen
+                // afterwards; that focus stays with the editor open.
+                onFocusOutside={(e) => e.target === penButtons.get(penId()) && e.preventDefault()}
+              >
                 <Show when={pen()}>{(p) => <PenEditor pen={p()} onChange={editPen} />}</Show>
               </Popover.Content>
             </Popover.Portal>

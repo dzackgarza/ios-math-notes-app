@@ -51,3 +51,8 @@
 - **Playwright's Linux WebKit ignores tilt and angle fields of a constructed `PointerEvent`:** `tiltX` is 90, `tiltY` 0 and `altitudeAngle` undefined whatever the init. Adapter tests derive expected angles from the tilts the event reports.
 - **google/ink's modeled outline does not reach the input peaks.** The sliding-window modeler smooths the centerline, so a wave's outline box sat up to 1 Write unit inside the box of its samples padded by half the width. Write's selection bounds are the padded centerline (`SvgPainter::_bounds`); with the outline box, the selection rectangle's center moved by 0.3 units and a rotation drag differed by 0.2°. Selection bounds use the samples.
 - **A comma in a Catch2 test name splits the command-line filter:** `ink_tests.js "Resize, select all"` matched nothing and reported "No tests ran". Keep commas out of test names.
+
+## Web host
+
+- **A Kobalte `Popover` opened from a tap on another control closed at once** when that control did not have focus before the tap (the pen editor, after drawing on the canvas): the control takes focus after the tap, the popover sees focus outside and closes. The pen editor's `Popover.Content` ignores `onFocusOutside` whose target is the pen button that opened it.
+- **Kobalte `Slider.Input` adds a second `role="slider"`** (a hidden `input type="range"`) with the same label, so `getByRole("slider", { name })` matches two elements. The pen editor has no `Slider.Input`; it submits no form.
