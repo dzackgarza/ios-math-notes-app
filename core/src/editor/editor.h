@@ -28,6 +28,7 @@ struct Pen {
   InkBrush brush = INK_BRUSH_PRESSURE_PEN;
   Rgb color{26, 26, 26};
   float size = 1.6f;  // pt
+  float opacity = 1;  // the stroke's fill-opacity
 };
 
 // "pressure-pen", "marker", "highlighter": the family names in mn:brush.

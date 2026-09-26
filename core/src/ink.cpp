@@ -11,6 +11,7 @@
 #include "document/templates.h"
 #include "format/notebook.h"
 #include "format/page_svg.h"
+#include "format/pens.h"
 #include "geometry/affine.h"
 #include "layout/layout.h"
 #include "include/core/SkData.h"
@@ -72,6 +73,30 @@ InkStatus AttachSurface(InkDocument *document, std::unique_ptr<ink_engine::HostS
   *out = canvas.release();
   return INK_OK;
 }
+
+// The pen of tool settings, or an error message for a bad value.
+std::optional<std::string> CheckTool(const InkToolSettings &tool) {
+  if (tool.brush > INK_BRUSH_HIGHLIGHTER) return "unknown brush";
+  if (!(tool.size > 0)) return "non-positive size";
+  if (!(tool.opacity > 0 && tool.opacity <= 1)) return "opacity outside (0, 1]";
+  return std::nullopt;
+}
+
+ink_engine::Pen ToPen(const InkToolSettings &tool) {
+  uint32_t rgb = tool.rgb;
+  return {.brush = InkBrush(tool.brush),
+          .color = {uint8_t(rgb >> 16), uint8_t(rgb >> 8), uint8_t(rgb)},
+          .size = tool.size,
+          .opacity = tool.opacity};
+}
+
+// The results of the last ink_pens_* call.
+struct PenFile {
+  std::string json;
+  std::vector<ink_engine::PenPreset> presets;
+  std::vector<InkPen> pens;
+};
+PenFile gPenFile;
 
 }  // namespace
 
@@ -367,12 +392,56 @@ InkStatus ink_canvas_set_tool(InkCanvas *canvas, const InkToolSettings *tool) {
   return Call([&] {
     if (!canvas) return NullArgument("canvas");
     if (!tool) return NullArgument("tool");
-    if (tool->brush > INK_BRUSH_HIGHLIGHTER) return Fail(INK_ERROR_ARGUMENT, "unknown brush");
-    if (!(tool->size > 0)) return Fail(INK_ERROR_ARGUMENT, "non-positive size");
-    uint32_t rgb = tool->rgb;
-    canvas->editor.SetPen({.brush = InkBrush(tool->brush),
-                           .color = {uint8_t(rgb >> 16), uint8_t(rgb >> 8), uint8_t(rgb)},
-                           .size = tool->size});
+    if (auto error = CheckTool(*tool)) return Fail(INK_ERROR_ARGUMENT, *error);
+    canvas->editor.SetPen(ToPen(*tool));
+    return INK_OK;
+  });
+}
+
+InkStatus ink_pens_default(const uint8_t **json, size_t *size) {
+  return Call([&] {
+    if (!json || !size) return NullArgument("json or size");
+    gPenFile.json = ink_engine::WritePens(ink_engine::DefaultPens());
+    *json = reinterpret_cast<const uint8_t *>(gPenFile.json.data());
+    *size = gPenFile.json.size();
+    return INK_OK;
+  });
+}
+
+InkStatus ink_pens_read(const uint8_t *json, size_t size, const InkPen **pens, size_t *count) {
+  return Call([&] {
+    if (!json || !pens || !count) return NullArgument("json, pens or count");
+    gPenFile.presets = ink_engine::ReadPens(Bytes(json, size));
+    gPenFile.pens.clear();
+    for (const ink_engine::PenPreset &p : gPenFile.presets) {
+      InkToolSettings tool{.brush = uint32_t(ink_engine::BrushFromName(p.brush)),
+                           .rgb = uint32_t(p.color.r) << 16 | uint32_t(p.color.g) << 8 | p.color.b,
+                           .size = float(p.size),
+                           .opacity = float(p.opacity)};
+      if (auto error = CheckTool(tool)) return Fail(INK_ERROR_PARSE, "pen " + p.id + ": " + *error);
+      gPenFile.pens.push_back({p.id.c_str(), p.name.c_str(), tool});
+    }
+    *pens = gPenFile.pens.data();
+    *count = gPenFile.pens.size();
+    return INK_OK;
+  });
+}
+
+InkStatus ink_pens_write(const InkPen *pens, size_t count, const uint8_t **json, size_t *size) {
+  return Call([&] {
+    if ((!pens && count) || !json || !size) return NullArgument("pens, json or size");
+    std::vector<ink_engine::PenPreset> presets;
+    for (size_t i = 0; i < count; ++i) {
+      if (!pens[i].id || !pens[i].name) return NullArgument("pen id or name");
+      if (auto error = CheckTool(pens[i].tool)) return Fail(INK_ERROR_ARGUMENT, *error);
+      ink_engine::Pen pen = ToPen(pens[i].tool);
+      presets.push_back({.id = pens[i].id, .name = pens[i].name,
+                         .brush = ink_engine::BrushName(pen.brush), .color = pen.color,
+                         .opacity = pen.opacity, .size = pen.size});
+    }
+    gPenFile.json = ink_engine::WritePens(presets);
+    *json = reinterpret_cast<const uint8_t *>(gPenFile.json.data());
+    *size = gPenFile.json.size();
     return INK_OK;
   });
 }
@@ -564,7 +633,10 @@ InkStatus ink_render(InkCanvas *canvas, int32_t *drew) {
     SkSurface *screen = canvas->surface->BeginFrame(canvas->width, canvas->height);
     if (!screen) return Fail(INK_ERROR_GPU, "the host surface gave no frame");
     std::optional<ink_engine::LiveInk> live;
-    if (drawing) live = {editor.LivePage(), editor.LiveOutline(), editor.LivePen().color};
+    if (drawing) {
+      live = {editor.LivePage(), editor.LiveOutline(), editor.LivePen().color,
+              editor.LivePen().opacity};
+    }
     std::optional<ink_engine::SelectionOverlay> overlay = editor.Overlay();
     canvas->renderer->Draw(screen->getCanvas(), live ? &*live : nullptr, overlay ? &*overlay : nullptr);
     canvas->surface->EndFrame();
@@ -622,7 +694,8 @@ InkStatus ink_struct_layout(InkStruct which, uint32_t *out, size_t capacity, siz
         break;
       case INK_STRUCT_TOOL_SETTINGS:
         layout = {sizeof(InkToolSettings), offsetof(InkToolSettings, brush),
-                  offsetof(InkToolSettings, rgb), offsetof(InkToolSettings, size)};
+                  offsetof(InkToolSettings, rgb), offsetof(InkToolSettings, size),
+                  offsetof(InkToolSettings, opacity)};
         break;
       case INK_STRUCT_FILE:
         layout = {sizeof(InkFile), offsetof(InkFile, path), offsetof(InkFile, bytes),
@@ -633,6 +706,10 @@ InkStatus ink_struct_layout(InkStruct which, uint32_t *out, size_t capacity, siz
                   offsetof(InkSelectionInfo, page),  offsetof(InkSelectionInfo, x),
                   offsetof(InkSelectionInfo, y),     offsetof(InkSelectionInfo, width),
                   offsetof(InkSelectionInfo, height)};
+        break;
+      case INK_STRUCT_PEN:
+        layout = {sizeof(InkPen), offsetof(InkPen, id), offsetof(InkPen, name),
+                  offsetof(InkPen, tool)};
         break;
       default:
         return Fail(INK_ERROR_ARGUMENT, "unknown struct");

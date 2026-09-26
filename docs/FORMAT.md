@@ -200,8 +200,31 @@ a notebook directory (send, archive, download).
 ## Other files
 
 - `Notes/.pens.json`: the pen presets, an array of
-  `{ "id", "name", "brush", "brushVersion", "color", "size" }`, in toolbar
-  order.
+  `{ "id", "name", "brush", "brushVersion", "color", "opacity", "size" }`,
+  in toolbar order, with the keys in this order, two-space indent and one
+  trailing newline. `brush` and `brushVersion` are as `mn:brush` and
+  `mn:brush-version`; `color` is `#RRGGBB`; `opacity` (0 to 1, 3 decimals)
+  becomes the strokes' `fill-opacity`; `size` is in points (2 decimals).
+  Numbers have no trailing zeros. The app writes these presets on first use:
+
+  ```json
+  [
+    {
+      "id": "black-pen",
+      "name": "Black pen",
+      "brush": "pressure-pen",
+      "brushVersion": 1,
+      "color": "#1A1A1A",
+      "opacity": 1,
+      "size": 1.2
+    }
+  ]
+  ```
+
+  followed by `blue-pen` (`#1F4FB5`), `red-pen` (`#B51F1F`), `marker`
+  (`marker`, `#1A1A1A`, 2.4 pt) and `highlighter` (`highlighter`, `#FFE066`,
+  opacity 0.35, 9.6 pt). A stroke keeps the brush, color, opacity and size
+  it was drawn with; editing a preset changes only later strokes.
 - `Notes/.templates/<name>/`: a notebook directory. Page 1's background is
   the template. The app creates `blank`, `lined-wide`, `lined-medium`,
   `lined-narrow` (y-ruling 21.6, 19.2, 16.8 pt; margin 48 pt),

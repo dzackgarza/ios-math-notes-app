@@ -459,6 +459,7 @@ Stroke Editor::MakeElement(const std::string &id, const ink::Stroke &ink_stroke,
   Stroke element{
       .id = id,
       .fill = pen.color,
+      .fill_opacity = pen.opacity < 1 ? std::optional<double>(pen.opacity) : std::nullopt,
       .brush = BrushName(pen.brush),
       .brush_version = 1,
       .size = pen.size,

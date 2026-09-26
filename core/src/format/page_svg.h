@@ -21,4 +21,8 @@ std::string WritePage(const Page &page);
 std::string WritePathData(const std::vector<Polyline> &polylines, bool closed);
 std::vector<Polyline> ReadPathData(std::string_view d);
 
+// Colors as `#RRGGBB`, written in upper case; other text reads as black.
+Rgb ReadColor(std::string_view text);
+std::string WriteColor(Rgb c);
+
 }  // namespace ink_engine

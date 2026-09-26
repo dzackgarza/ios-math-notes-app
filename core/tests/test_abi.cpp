@@ -67,7 +67,7 @@ TEST_CASE("A null handle or pointer gives an argument status") {
   CHECK(ink_document_create(1, nullptr) == INK_ERROR_ARGUMENT);
   ink_test::Session session;
   CHECK(ink_canvas_set_tool(session.get(), nullptr) == INK_ERROR_ARGUMENT);
-  InkToolSettings unknown{7, 0, 1};
+  InkToolSettings unknown{7, 0, 1, 1};
   CHECK(ink_canvas_set_tool(session.get(), &unknown) == INK_ERROR_ARGUMENT);
   CHECK(ink_canvas_set_view(session.get(), 0, 0, 0, 0, 0, 0) == INK_ERROR_ARGUMENT);
 }

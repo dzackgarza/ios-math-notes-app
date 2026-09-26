@@ -321,7 +321,7 @@ void Renderer::Draw(SkCanvas *screen, const LiveInk *live, const SelectionOverla
     return false;
   };
   if (live && place(live->page)) {
-    screen->drawPath(OutlinePath(live->outline), FillPaint(live->color));
+    screen->drawPath(OutlinePath(live->outline), FillPaint(live->color, live->opacity));
   }
   if (overlay && place(overlay->page)) DrawOverlay(screen, *overlay);
   screen->restore();

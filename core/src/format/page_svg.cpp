@@ -34,6 +34,8 @@ double Num(const pugi::xml_node &node, const char *name, double fallback = 0) {
   return value ? *value : fallback;
 }
 
+}  // namespace
+
 Rgb ReadColor(std::string_view text) {
   unsigned r = 0, g = 0, b = 0;
   if (text.size() == 7 && text[0] == '#') {
@@ -47,6 +49,8 @@ std::string WriteColor(Rgb c) {
   std::snprintf(buffer, sizeof buffer, "#%02X%02X%02X", c.r, c.g, c.b);
   return buffer;
 }
+
+namespace {
 
 Transform ReadTransform(std::string_view text) {
   Transform t;
