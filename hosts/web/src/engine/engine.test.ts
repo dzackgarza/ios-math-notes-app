@@ -7,6 +7,7 @@ import {
   Engine,
   EngineError,
   INK_FILE,
+  INK_PEN,
   PEN_SAMPLE,
   SELECTION_INFO,
   Status,
@@ -72,6 +73,7 @@ test("the wrapper's struct layouts are the ones C exports", () => {
   assert.deepEqual(engine.structLayout(Struct.toolSettings), offsets(TOOL_SETTINGS));
   assert.deepEqual(engine.structLayout(Struct.file), offsets(INK_FILE));
   assert.deepEqual(engine.structLayout(Struct.selectionInfo), offsets(SELECTION_INFO));
+  assert.deepEqual(engine.structLayout(Struct.pen), offsets(INK_PEN));
 });
 
 test("bad page bytes give a parse error and its message", () => {
@@ -98,4 +100,14 @@ test("a new notebook's files, and none after it is marked saved", () => {
   assert.deepEqual(document.dirtyFiles(), []);
   assert.equal(document.undo(), null);
   document.free();
+});
+
+test("pen presets written through the wrapper read back unchanged, names in UTF-8", () => {
+  const pens = engine.readPens(engine.defaultPens());
+  assert.deepEqual(
+    pens.map((p) => p.id),
+    ["black-pen", "blue-pen", "red-pen", "marker", "highlighter"],
+  );
+  pens[1] = { id: "blue-pen", name: "Stift ✎ blau", tool: { brush: 1, rgb: 0x2f6feb, size: 3.25, opacity: 0.5 } };
+  assert.deepEqual(engine.readPens(engine.writePens(pens)), pens);
 });
