@@ -22,6 +22,7 @@ find_package(FastFloat CONFIG REQUIRED)
 find_package(Immer CONFIG REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
 find_package(boost_icl CONFIG REQUIRED)
+find_package(boost_geometry CONFIG REQUIRED)
 include(third_party/ink.cmake)
 
 add_library(ink STATIC
@@ -36,13 +37,15 @@ add_library(ink STATIC
   src/strokes/outline.cpp
   src/editor/editor.cpp
   src/editor/erase.cpp
+  src/editor/select.cpp
   src/editor/history.cpp
   src/layout/layout.cpp
-  src/render/renderer.cpp)
+  src/render/renderer.cpp
+  src/selection/selection.cpp)
 target_include_directories(ink PUBLIC include src)
 target_compile_definitions(ink PRIVATE INK_VERSION="${PROJECT_VERSION}")
 target_link_libraries(ink PUBLIC Skia::skia inkcore pugixml::pugixml FastFloat::fast_float immer
-  nlohmann_json::nlohmann_json Boost::icl)
+  nlohmann_json::nlohmann_json Boost::icl Boost::geometry)
 
 if(EMSCRIPTEN)
   target_sources(ink PRIVATE src/render/webgl_surface.cpp)

@@ -65,7 +65,7 @@ SkBitmap RenderPage(Renderer &renderer, const Document &document, const PagePlac
   View view{{1, 0, 0, 1, -placement.x, -placement.y}, 1, width, height};
   REQUIRE(renderer.Update(document, view, false));
   sk_sp<SkSurface> screen = Screen(width, height);
-  renderer.Draw(screen->getCanvas(), nullptr);
+  renderer.Draw(screen->getCanvas(), nullptr, nullptr);
   return Pixels(screen.get());
 }
 
@@ -199,7 +199,7 @@ TEST_CASE("While a stroke is drawn only the dirty regions are redrawn") {
     if (!drew) return false;
     std::optional<LiveInk> live;
     if (editor.Drawing()) live = LiveInk{editor.LivePage(), editor.LiveOutline(), editor.LivePen().color};
-    renderer.Draw(screen->getCanvas(), live ? &*live : nullptr);
+    renderer.Draw(screen->getCanvas(), live ? &*live : nullptr, nullptr);
     return true;
   };
   auto draw = [&](double x, double y, uint32_t id) {
@@ -237,7 +237,7 @@ TEST_CASE("While a stroke is drawn only the dirty regions are redrawn") {
   Renderer fresh(nullptr, canvas.document->assets);
   sk_sp<SkSurface> reference = Screen(view.width, view.height);
   REQUIRE(fresh.Update(editor.document(), view, false));
-  fresh.Draw(reference->getCanvas(), nullptr);
+  fresh.Draw(reference->getCanvas(), nullptr, nullptr);
   SkBitmap a = Pixels(screen.get()), b = Pixels(reference.get());
   int differing = 0;
   for (int y = 0; y < view.height; ++y) {

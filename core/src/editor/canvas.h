@@ -34,5 +34,6 @@ struct InkCanvas {
   int width = 0, height = 0;  // device pixels
   float pixel_ratio = 1;
   bool was_drawing = false;
+  std::string clipboard;  // the last ink_canvas_copy_selection result
   uint64_t assets_seen = 0;
 };

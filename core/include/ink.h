@@ -189,6 +189,50 @@ typedef enum InkEraser {
    uses. With `active` 1 the eraser tool is selected: pen and mouse input
    erase too. The radius is 7 view units. One gesture is one history step. */
 InkStatus ink_canvas_set_eraser(InkCanvas *canvas, InkEraser kind, int32_t active);
+
+typedef enum InkSelector {
+  INK_SELECTOR_LASSO = 0, /* selects what a drawn loop covers */
+  INK_SELECTOR_RECT = 1   /* selects what lies inside a dragged rectangle */
+} InkSelector;
+
+/* The selection tool. With `active` 1, pen and mouse input select, and
+   setting it turns the eraser tool off (as setting the eraser active turns
+   this off). Whatever the tool, a pen-down on the selection moves it, on a
+   corner handle scales it (the bottom-right corner keeping the aspect
+   ratio), and on the handle above it rotates it: one history step each. A
+   pen-down elsewhere clears the selection; with the pen tool it draws
+   nothing. */
+InkStatus ink_canvas_set_selector(InkCanvas *canvas, InkSelector kind, int32_t active);
+
+typedef struct InkSelectionInfo {
+  uint32_t count;       /* selected elements; 0: no selection */
+  int32_t page;         /* the selection's page, or -1 */
+  double x, y;          /* the selection rectangle in view coordinates */
+  double width, height;
+} InkSelectionInfo;
+
+InkStatus ink_canvas_selection(InkCanvas *canvas, InkSelectionInfo *out);
+/* Selects every element of page `index`'s visible, unlocked layers. */
+InkStatus ink_canvas_select_all(InkCanvas *canvas, size_t index);
+InkStatus ink_canvas_clear_selection(InkCanvas *canvas);
+/* Deletes the selected elements: one history step. */
+InkStatus ink_canvas_delete_selection(InkCanvas *canvas);
+/* The selection as a standalone SVG document (UTF-8), for the host's
+   clipboard. A copy's elements get new ids; with `cut` 1 they keep their ids
+   and the selection is deleted (one history step). `*svg` stays valid until
+   the next call on the canvas; `*size` is 0 when nothing is selected. */
+InkStatus ink_canvas_copy_selection(InkCanvas *canvas, int32_t cut, const uint8_t **svg,
+                                    size_t *size);
+/* Adds the elements of a clipboard document to the page under view point
+   (x, y) and selects them: one history step. They keep their position when
+   their center and top left corner are on that page, and are centered on
+   (x, y) otherwise. An element whose id is already on the page gets a new
+   id. INK_ERROR_PARSE when `svg` is not a page SVG. */
+InkStatus ink_canvas_paste(InkCanvas *canvas, const uint8_t *svg, size_t size, double x,
+                           double y);
+/* Copies the selection 10 pt right and down, with new ids, and selects the
+   copy: one history step. */
+InkStatus ink_canvas_duplicate_selection(InkCanvas *canvas);
 /* UTC ms since the Unix epoch minus the host's sample clock, for mn:time. */
 InkStatus ink_canvas_set_utc_offset(InkCanvas *canvas, double utc_minus_host_ms);
 InkStatus ink_canvas_free(InkCanvas *canvas);
@@ -220,7 +264,8 @@ InkStatus ink_document_page_rect(InkDocument *document, size_t index, double *x,
 typedef enum InkStruct {
   INK_STRUCT_PEN_SAMPLE = 0,
   INK_STRUCT_TOOL_SETTINGS = 1,
-  INK_STRUCT_FILE = 2
+  INK_STRUCT_FILE = 2,
+  INK_STRUCT_SELECTION_INFO = 3
 } InkStruct;
 
 /* The struct's size, then the offset of each field in declaration order,
@@ -259,6 +304,14 @@ static_assert(offsetof(InkFile, bytes) == sizeof(void *));
 static_assert(offsetof(InkFile, size) == 2 * sizeof(void *));
 static_assert(offsetof(InkFile, kind) == 3 * sizeof(void *));
 static_assert(sizeof(InkFile) == 4 * sizeof(void *));
+
+static_assert(offsetof(InkSelectionInfo, count) == 0);
+static_assert(offsetof(InkSelectionInfo, page) == 4);
+static_assert(offsetof(InkSelectionInfo, x) == 8);
+static_assert(offsetof(InkSelectionInfo, y) == 16);
+static_assert(offsetof(InkSelectionInfo, width) == 24);
+static_assert(offsetof(InkSelectionInfo, height) == 32);
+static_assert(sizeof(InkSelectionInfo) == 40);
 #endif
 
 #endif

@@ -11,6 +11,7 @@
 #include "document/templates.h"
 #include "format/notebook.h"
 #include "format/page_svg.h"
+#include "geometry/affine.h"
 #include "layout/layout.h"
 #include "include/core/SkData.h"
 #include "include/core/SkSurface.h"
@@ -385,6 +386,102 @@ InkStatus ink_canvas_set_eraser(InkCanvas *canvas, InkEraser kind, int32_t activ
   });
 }
 
+InkStatus ink_canvas_set_selector(InkCanvas *canvas, InkSelector kind, int32_t active) {
+  return Call([&] {
+    if (!canvas) return NullArgument("canvas");
+    if (kind != INK_SELECTOR_LASSO && kind != INK_SELECTOR_RECT) {
+      return Fail(INK_ERROR_ARGUMENT, "unknown selector");
+    }
+    canvas->editor.SetSelector(kind, active != 0);
+    return INK_OK;
+  });
+}
+
+InkStatus ink_canvas_selection(InkCanvas *canvas, InkSelectionInfo *out) {
+  return Call([&] {
+    if (!canvas) return NullArgument("canvas");
+    if (!out) return NullArgument("out");
+    *out = {.count = 0, .page = -1};
+    const ink_engine::Selection *selection = canvas->editor.CurrentSelection();
+    if (!selection) return INK_OK;
+    std::vector<ink_engine::PagePlacement> layout =
+        ink_engine::LayoutPages(canvas->document->history.current());
+    auto placement = std::find_if(layout.begin(), layout.end(),
+                                  [&](const auto &p) { return p.page == selection->page; });
+    if (placement == layout.end()) return INK_OK;
+    const ink_engine::Rect &r = selection->rect;
+    const ink_engine::Transform &v = canvas->editor.view();
+    ink_engine::Point a = ink_engine::Apply(v, {placement->x + r.left, placement->y + r.top});
+    ink_engine::Point b = ink_engine::Apply(v, {placement->x + r.right, placement->y + r.bottom});
+    *out = {.count = uint32_t(selection->items.size()),
+            .page = int32_t(selection->page),
+            .x = std::min(a.x, b.x),
+            .y = std::min(a.y, b.y),
+            .width = std::abs(b.x - a.x),
+            .height = std::abs(b.y - a.y)};
+    return INK_OK;
+  });
+}
+
+InkStatus ink_canvas_select_all(InkCanvas *canvas, size_t index) {
+  return Call([&] {
+    if (!canvas) return NullArgument("canvas");
+    if (index >= ink_engine::ListedPageCount(canvas->document->history.current())) {
+      return BadPageIndex();
+    }
+    canvas->editor.SelectAll(index);
+    return INK_OK;
+  });
+}
+
+InkStatus ink_canvas_clear_selection(InkCanvas *canvas) {
+  return Call([&] {
+    if (!canvas) return NullArgument("canvas");
+    canvas->editor.ClearSelection();
+    return INK_OK;
+  });
+}
+
+InkStatus ink_canvas_delete_selection(InkCanvas *canvas) {
+  return Call([&] {
+    if (!canvas) return NullArgument("canvas");
+    canvas->editor.DeleteSelection();
+    return INK_OK;
+  });
+}
+
+InkStatus ink_canvas_copy_selection(InkCanvas *canvas, int32_t cut, const uint8_t **svg,
+                                    size_t *size) {
+  return Call([&] {
+    if (!canvas) return NullArgument("canvas");
+    if (!svg || !size) return NullArgument("svg or size");
+    canvas->clipboard = canvas->editor.CopySelection(cut != 0);
+    *svg = reinterpret_cast<const uint8_t *>(canvas->clipboard.data());
+    *size = canvas->clipboard.size();
+    return INK_OK;
+  });
+}
+
+InkStatus ink_canvas_paste(InkCanvas *canvas, const uint8_t *svg, size_t size, double x,
+                           double y) {
+  return Call([&] {
+    if (!canvas) return NullArgument("canvas");
+    if (!svg && size) return NullArgument("svg");
+    if (!canvas->editor.Paste(Bytes(svg, size), x, y)) {
+      return Fail(INK_ERROR_PARSE, "the clipboard text is not a page SVG");
+    }
+    return INK_OK;
+  });
+}
+
+InkStatus ink_canvas_duplicate_selection(InkCanvas *canvas) {
+  return Call([&] {
+    if (!canvas) return NullArgument("canvas");
+    canvas->editor.DuplicateSelection();
+    return INK_OK;
+  });
+}
+
 InkStatus ink_canvas_set_utc_offset(InkCanvas *canvas, double utc_minus_host_ms) {
   return Call([&] {
     if (!canvas) return NullArgument("canvas");
@@ -451,6 +548,7 @@ InkStatus ink_render(InkCanvas *canvas, int32_t *drew) {
     }
     bool drawing = editor.Drawing();
     bool live_changed = !editor.TakeUpdatedRegion().IsEmpty() || drawing != canvas->was_drawing;
+    live_changed = editor.TakeOverlayChanged() || live_changed;
     canvas->was_drawing = drawing;
     ink_engine::View view{editor.view(), canvas->pixel_ratio, canvas->width, canvas->height};
     if (!canvas->renderer->Update(editor.Shown(), view, live_changed)) return INK_OK;
@@ -458,7 +556,8 @@ InkStatus ink_render(InkCanvas *canvas, int32_t *drew) {
     if (!screen) return Fail(INK_ERROR_GPU, "the host surface gave no frame");
     std::optional<ink_engine::LiveInk> live;
     if (drawing) live = {editor.LivePage(), editor.LiveOutline(), editor.LivePen().color};
-    canvas->renderer->Draw(screen->getCanvas(), live ? &*live : nullptr);
+    std::optional<ink_engine::SelectionOverlay> overlay = editor.Overlay();
+    canvas->renderer->Draw(screen->getCanvas(), live ? &*live : nullptr, overlay ? &*overlay : nullptr);
     canvas->surface->EndFrame();
     *drew = 1;
     return INK_OK;
@@ -519,6 +618,12 @@ InkStatus ink_struct_layout(InkStruct which, uint32_t *out, size_t capacity, siz
       case INK_STRUCT_FILE:
         layout = {sizeof(InkFile), offsetof(InkFile, path), offsetof(InkFile, bytes),
                   offsetof(InkFile, size), offsetof(InkFile, kind)};
+        break;
+      case INK_STRUCT_SELECTION_INFO:
+        layout = {sizeof(InkSelectionInfo),        offsetof(InkSelectionInfo, count),
+                  offsetof(InkSelectionInfo, page),  offsetof(InkSelectionInfo, x),
+                  offsetof(InkSelectionInfo, y),     offsetof(InkSelectionInfo, width),
+                  offsetof(InkSelectionInfo, height)};
         break;
       default:
         return Fail(INK_ERROR_ARGUMENT, "unknown struct");
