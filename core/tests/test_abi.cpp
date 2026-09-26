@@ -1,10 +1,17 @@
 // The C ABI's documents, statuses and errors (issue #4).
 #include <catch2/catch_test_macros.hpp>
 
+#include <array>
+#include <cstdlib>
 #include <map>
 #include <string>
 
 #include "editor/canvas.h"
+#include "include/codec/SkCodec.h"
+#include "include/codec/SkPngDecoder.h"
+#include "include/core/SkBitmap.h"
+#include "include/core/SkColorSpace.h"
+#include "include/core/SkData.h"
 #include "format/notebook.h"
 #include "ink.h"
 #include "support/notebook_dir.h"
@@ -122,4 +129,50 @@ TEST_CASE("Undo and redo move through the document values") {
   DrawLine(session.get(), 300);
   ink_redo(session.document, &moved, &page);
   CHECK((moved == 0 && strokes() == 2));
+}
+
+TEST_CASE("A page thumbnail is a PNG of the page's ink and image and paper at the given width") {
+  // As the library loads a notebook for its thumbnail: notebook.json, page 1
+  // and the assets, with no canvas.
+  NotebookFiles files = ink_test::ReadNotebookDir(kDocuments + "/full");
+  InkDocument *document = nullptr;
+  REQUIRE(ink_document_create(1, &document) == INK_OK);
+  const std::string &json = files.at("notebook.json");
+  const std::string &page = files.at("pages/0001.svg");
+  REQUIRE(ink_document_load_notebook(document, Data(json), json.size()) == INK_OK);
+  REQUIRE(ink_document_load_page(document, "pages/0001.svg", Data(page), page.size()) == INK_OK);
+  for (const auto &[path, bytes] : ink_test::ReadAssets(kDocuments + "/full")) {
+    REQUIRE(ink_document_load_asset(document, path.c_str(), Data(bytes), bytes.size()) == INK_OK);
+  }
+  const uint8_t *png = nullptr;
+  size_t size = 0;
+  REQUIRE(ink_document_page_png(document, 0, 240, &png, &size) == INK_OK);
+
+  auto codec = SkPngDecoder::Decode(SkData::MakeWithCopy(png, size), nullptr);
+  REQUIRE(codec);
+  CHECK(codec->getInfo().width() == 240);
+  CHECK(codec->getInfo().height() == 339);  // 841.89 pt × 240 / 595.28
+  SkBitmap bitmap;
+  bitmap.allocPixels(SkImageInfo::Make(240, 339, kRGBA_8888_SkColorType, kUnpremul_SkAlphaType,
+                                       SkColorSpace::MakeSRGB()));
+  REQUIRE(codec->getPixels(bitmap.pixmap()) == SkCodec::kSuccess);
+  const double scale = 240 / 595.28;
+  auto rgb = [&](double x_pt, double y_pt) {
+    SkColor c = bitmap.getColor(int(x_pt * scale), int(y_pt * scale));
+    return std::array<int, 3>{int(SkColorGetR(c)), int(SkColorGetG(c)), int(SkColorGetB(c))};
+  };
+  auto near = [](std::array<int, 3> a, std::array<int, 3> b) {
+    for (int i = 0; i < 3; ++i) {
+      if (std::abs(a[i] - b[i]) > 3) return false;
+    }
+    return true;
+  };
+  // The highlighter stroke: #003399 at fill-opacity 0.4 over white paper,
+  // translated by (12.5, -4) from its outline at (200..250, 100..108).
+  CHECK(near(rgb(237.5, 100), {153, 173, 214}));
+  // diagram.png, one red pixel at alpha 127, scaled over (60..180, 400..490).
+  CHECK(near(rgb(120, 445), {255, 128, 128}));
+  CHECK(near(rgb(500, 700), {255, 255, 255}));  // the paper
+
+  ink_document_free(document);
 }
