@@ -163,6 +163,7 @@ are in each work-unit issue; this table is the index.
 | Page ruling and templates | Write `page.cpp` `Page::generateRuleLayer`, `rulingdialog.cpp` presets | AGPL-3.0 |
 | Bookmarks and links | Write `scribblearea.cpp` (`MODE_BOOKMARK`, hyperref groups), `page.cpp` `Page::getHyperRef`, `bookmarkview.cpp` | AGPL-3.0 |
 | Clippings | Write `clippingview.cpp` | AGPL-3.0 |
+| Library list: sort orders, name checks, rename, move, delete | Write `syncscribble/documentlist.cpp` `DocumentList::setCurrDir` (sort), `NewDocDialog` (name checks), `renameItem`, `pasteItem`, `deleteItem` | AGPL-3.0 |
 | Shape recognition | Xournal `src/xo-shapes.c` (inertia fitting, `try_rectangle`, `try_arrow`, `try_closed_polygon`, recent-stroke queue); ellipse by Halíř–Flusser direct least squares (OpenCV `fitEllipseDirect`); hold trigger from mathnotes-app/mobile-ink `cpp/ShapeRecognition.cpp` | GPL-2.0+, Apache-2.0 |
 | PDF export, link annotations | Skia `docs/examples/PDF.cpp`, `include/core/SkAnnotation.h` | BSD-3 |
 | WebGL surface | Skia `modules/canvaskit/canvaskit_bindings.cpp` (`MakeGrContext`, `MakeOnScreenGLSurface`) | BSD-3 |
