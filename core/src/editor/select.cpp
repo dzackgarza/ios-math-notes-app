@@ -449,7 +449,7 @@ bool Editor::Paste(std::string_view svg, double x, double y, double view_width, 
   return true;
 }
 
-void Editor::DuplicateSelection() {
+void Editor::DuplicateSelection(Assets &assets, NotebookFiles &added) {
   const Selection *selection = CurrentSelection();
   if (!selection) return;
   Document next = document();
@@ -457,8 +457,9 @@ void Editor::DuplicateSelection() {
   std::vector<ElementRef> items;
   for (const ElementRef &item : selection->items) {
     const Element &original = *page.layers[item.layer].elements[item.index];
-    Element copy = Transformed(WithNewIds(original, history_->ids()),
-                               Translation(kDuplicateOffset, kDuplicateOffset));
+    Element copy = InlineImages(original, page.file, assets);
+    copy = StoreImages(WithNewIds(copy, history_->ids()), page.file, assets, added);
+    copy = Transformed(copy, Translation(kDuplicateOffset, kDuplicateOffset));
     std::vector<ElementRef> added =
         Append(page, page.layers[item.layer].layer_id, Elements{immer::box<Element>(std::move(copy))});
     items.insert(items.end(), added.begin(), added.end());

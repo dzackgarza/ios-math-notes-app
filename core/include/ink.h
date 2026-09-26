@@ -204,6 +204,16 @@ InkStatus ink_canvas_set_view(InkCanvas *canvas, double a, double b, double c, d
 InkStatus ink_canvas_set_surface_size(InkCanvas *canvas, int32_t width, int32_t height,
                                       float pixel_ratio);
 InkStatus ink_canvas_set_tool(InkCanvas *canvas, const InkToolSettings *tool);
+/* Captures pen strokes on one page and layer as one editable TikZ figure.
+   The scene is FreeTikZ scene JSON with the original ink samples. The host
+   generates TikZ from that scene before completion. Returned bytes remain
+   valid until the next figure call on this canvas. An empty capture returns
+   an empty figure id. */
+InkStatus ink_canvas_figure_begin(InkCanvas *canvas, size_t page, size_t layer);
+InkStatus ink_canvas_figure_scene(InkCanvas *canvas, const uint8_t **json, size_t *size);
+InkStatus ink_canvas_figure_complete(InkCanvas *canvas, const uint8_t *scene, size_t scene_size,
+                                     const uint8_t *tikz, size_t tikz_size,
+                                     const uint8_t **figure_id, size_t *id_size);
 typedef enum InkEraser {
   INK_ERASER_STROKE = 0, /* deletes each stroke or shape it touches */
   INK_ERASER_FREE = 1    /* removes only the touched parts, splitting strokes */

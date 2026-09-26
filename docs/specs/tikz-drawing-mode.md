@@ -14,8 +14,9 @@ TikZ source. The user can inspect the resulting figure and source in a preview
 sidebar, revise either view, and reopen the figure later. The page remains a
 standalone SVG that shows the figure without the app.
 
-The drawing editor is a fork of
-[FreeTikZ](https://github.com/chrisheunen/freetikz), integrated with Math Notes.
+The drawing editor is the
+[Math Notes FreeTikZ fork](https://github.com/dzackgarza/freetikz/tree/semantic-scene),
+based on [FreeTikZ](https://github.com/chrisheunen/freetikz), integrated with Math Notes.
 FreeTikZ's pen-first capture is the starting interaction. General mathematical
 figures use standard TikZ and only the libraries they need. The custom
 `freetikz.sty` remains relevant to its specialized string-diagram vocabulary.
@@ -78,10 +79,9 @@ Math Notes stores the figure with the notebook files. The page SVG contains a
 standalone visible representation and a stable figure reference. The editable
 scene, ink, and `.tikz` source are documented files in the notebook, not a
 private app database or a raster-only image. A figure copied to another note
-brings those files and receives new object IDs. The exact on-disk schema is a
-child-plan decision that must preserve the invariants of
-[FORMAT.md](../FORMAT.md): independent SVG pages, in-place saves, rebuild from
-the folder, and deterministic bytes across hosts.
+brings those files and receives new object IDs. The on-disk figure schema is
+in [FORMAT.md](../FORMAT.md); it preserves independent SVG pages, in-place
+saves, rebuild from the folder, and deterministic bytes across hosts.
 
 ## Recognition and geometry
 
@@ -192,8 +192,6 @@ figure workflow before a PR is opened.
 
 ## Decisions still needed at the child-plan boundary
 
-- The exact page-to-figure file reference and file schema, including how a
-  standalone SVG embeds a useful visible figure without losing the ink.
 - Whether completion draws a persistent visible border or a selection outline
   that appears only while the figure is selected. The bounding rectangle and
   its selection behavior are required either way.

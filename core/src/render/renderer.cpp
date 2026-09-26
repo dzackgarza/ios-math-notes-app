@@ -73,6 +73,7 @@ void CollectElements(const Elements &elements, std::unordered_set<const Element 
   for (const auto &box : elements) {
     out->insert(&*box);
     if (auto *b = std::get_if<Bookmark>(&box->value)) CollectElements(b->children, out);
+    if (auto *f = std::get_if<Figure>(&box->value)) CollectElements(f->children, out);
     if (auto *l = std::get_if<Link>(&box->value)) CollectElements(l->children, out);
   }
 }
@@ -119,6 +120,10 @@ const Renderer::CachedElement &Renderer::Cached(const immer::box<Element> &box) 
           Rect bounds = ink_engine::ElementBounds(*box);
           entry.bounds = SkRect::MakeLTRB(float(bounds.left), float(bounds.top),
                                          float(bounds.right), float(bounds.bottom));
+        } else if constexpr (std::is_same_v<T, Figure>) {
+          SkRect children = SkRect::MakeEmpty();
+          for (const auto &child : e.children) children.join(Cached(child).bounds);
+          entry.bounds = ToSkMatrix(e.transform).mapRect(children);
         } else {
           for (const auto &child : e.children) entry.bounds.join(Cached(child).bounds);
         }
@@ -316,6 +321,11 @@ void Renderer::DrawElements(SkCanvas *canvas, const Page &page, const Elements &
             }
             canvas->restore();
             ++stats_.elements_drawn;
+          } else if constexpr (std::is_same_v<T, Figure>) {
+            canvas->save();
+            canvas->concat(ToSkMatrix(e.transform));
+            DrawElements(canvas, page, e.children, SkRect::MakeLTRB(-1e9f, -1e9f, 1e9f, 1e9f));
+            canvas->restore();
           } else {
             DrawElements(canvas, page, e.children, cull);
           }

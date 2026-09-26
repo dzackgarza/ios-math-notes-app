@@ -148,9 +148,9 @@ conflict. Assets are separate files, not base64 inside SVG.
 - The engine regenerates a stroke's outline only when the stroke is created
   or its samples or brush change. A loaded outline is written back as it was
   read.
-- IDs: `p-` pages, `l-` layers, `s-` strokes, `b-`
-  bookmarks. Each is the prefix plus 6 (pages, layers) or 12 (strokes,
-  bookmarks) characters of lowercase base32 from a seedable generator.
+- IDs: `p-` pages, `l-` layers, `s-` strokes, `b-` bookmarks, `f-`
+  figures. Each is the prefix plus 6 (pages, layers) or 12 (strokes,
+  bookmarks, figures) characters of lowercase base32 from a seedable generator.
   Reordering or renaming never changes an id. A pasted element whose id
   already exists on the page gets a new id.
 - Clipboard: copy and cut write the selected elements as a standalone page
@@ -191,6 +191,41 @@ conflict. Assets are separate files, not base64 inside SVG.
   `../../MMP/flips/pages/0001.svg#b-…` for another notebook. The link then
   works in a browser that opens the page file, and keeps working when the
   whole tree moves.
+
+### TikZ figures
+
+One Drawing mode session completes as one figure. Its page element is a group
+with stable `f-` id, `class="mn-figure"`, optional `transform`, and
+`mn:scene` and `mn:tikz` paths relative to the page file. The group contains
+the current vector view of the figure as ordinary SVG children. A browser
+that opens the page file draws those children without loading either sidecar.
+The group is one selectable page object; its children are edited through the
+figure editor, not as separate page strokes.
+
+```xml
+<g id="f-c718xa2kq9mz" class="mn-figure"
+   mn:scene="../assets/f-c718xa2kq9mz.scene.json"
+   mn:tikz="../assets/f-c718xa2kq9mz.tikz">
+  <path id="s-3kd92lq0mzpa" ...>
+    <metadata><inkml:trace contextRef="#xytfa">…</inkml:trace></metadata>
+  </path>
+</g>
+```
+
+The `.scene.json` file is the forked FreeTikZ scene: stable object ids,
+original pen samples, interpreted geometric objects, and their relations.
+The `.tikz` file holds the exact TikZ source, including user edits. A canvas
+edit changes only the source range owned by that operation. A page save must
+not regenerate the `.tikz` file from the scene. A scene edit updates the
+group's vector children so page SVG, thumbnails, and PDF export show the
+current figure. Figure move and resize change the group transform and bounds
+together. Copy gives the figure and its sidecars new ids and paths. Deleting
+the last reference deletes the sidecars as part of the notebook save.
+
+Both sidecars belong to the notebook's `assets/` directory and follow the
+same in-place save and dirty-file contract as page files. A missing or invalid
+sidecar is an explicit figure error; the page's visible SVG children remain
+available for viewing and recovery.
 
 Plain `.svg` only; `.svgz` is not written. ZIP is only a transport form of
 a notebook directory (send, archive, download).

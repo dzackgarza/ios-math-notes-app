@@ -267,7 +267,14 @@ Elements ReadElements(const pugi::xml_node &parent, const ReadContext &context) 
     } else if (tag == "text") {
       element.value = ReadText(node);
     } else if (tag == "g") {
-      element.value = Bookmark{node.attribute("id").value(), ReadElements(node, context)};
+      if (std::string_view(node.attribute("class").value()) == "mn-figure") {
+        element.value = Figure{node.attribute("id").value(),
+                               ReadTransform(node.attribute("transform").value()),
+                               node.attribute("mn:scene").value(),
+                               node.attribute("mn:tikz").value(), ReadElements(node, context)};
+      } else {
+        element.value = Bookmark{node.attribute("id").value(), ReadElements(node, context)};
+      }
     } else if (tag == "a") {
       std::string href = node.attribute("href") ? node.attribute("href").value()
                                                 : node.attribute("xlink:href").value();
@@ -431,6 +438,14 @@ void WriteElements(pugi::xml_node &parent, const Elements &elements) {
             Set(g, "id", e.id);
             Set(g, "class", "mn-bookmark");
             WriteElements(g, e.children);
+          } else if constexpr (std::is_same_v<T, Figure>) {
+            pugi::xml_node g = parent.append_child("g");
+            Set(g, "id", e.id);
+            Set(g, "class", "mn-figure");
+            AppendTransform(g, e.transform);
+            Set(g, "mn:scene", e.scene_href);
+            Set(g, "mn:tikz", e.tikz_href);
+            WriteElements(g, e.children);
           } else {
             pugi::xml_node a = parent.append_child("a");
             Set(a, "href", e.href);
@@ -449,6 +464,8 @@ void CollectChannelSets(const Elements &elements, std::vector<uint32_t> &sets) {
       }
     } else if (auto *b = std::get_if<Bookmark>(&box->value)) {
       CollectChannelSets(b->children, sets);
+    } else if (auto *f = std::get_if<Figure>(&box->value)) {
+      CollectChannelSets(f->children, sets);
     } else if (auto *l = std::get_if<Link>(&box->value)) {
       CollectChannelSets(l->children, sets);
     }

@@ -119,6 +119,15 @@ struct Bookmark {
   bool operator==(const Bookmark &) const = default;
 };
 
+struct Figure {
+  std::string id;
+  Transform transform;
+  std::string scene_href;  // relative to the page SVG
+  std::string tikz_href;   // relative to the page SVG
+  Elements children;       // standalone SVG view, including original ink and InkML
+  bool operator==(const Figure &) const = default;
+};
+
 struct Link {
   std::string href;
   Elements children;
@@ -126,7 +135,7 @@ struct Link {
 };
 
 struct Element {
-  std::variant<Stroke, Shape, Image, Text, Bookmark, Link> value;
+  std::variant<Stroke, Shape, Image, Text, Bookmark, Figure, Link> value;
   bool operator==(const Element &) const = default;
 };
 
