@@ -107,13 +107,17 @@ class Editor {
   // The selection as a clipboard document (selection/selection.h
   // ClipboardSvg). A copy's elements get new ids; `cut` keeps the ids and
   // deletes the selection (Write scribbledoc.cpp:723-756, ID_COPYSEL and
-  // ID_CUTSEL). Empty when nothing is selected.
-  std::string CopySelection(bool cut);
+  // ID_CUTSEL). Images carry their files from `assets` inline. Empty when
+  // nothing is selected.
+  std::string CopySelection(bool cut, const Assets &assets);
   // Adds the clipboard document's elements to the page under view point
   // (x, y), as the new selection: one history step. They keep their position
-  // when their center and top left corner are on that page; otherwise they
-  // are centered on (x, y), kept on the page. False when `svg` does not parse.
-  bool Paste(std::string_view svg, double x, double y);
+  // when it overlaps the view (`view_width` × `view_height` view units) and
+  // their center and top left corner are on that page; otherwise they are
+  // centered on (x, y), kept on the page. Inline images become files of
+  // `assets`, the new ones also in `added`. False when `svg` does not parse.
+  bool Paste(std::string_view svg, double x, double y, double view_width, double view_height,
+             Assets &assets, NotebookFiles &added);
   // Copies the selection kDuplicateOffset right and down, new ids, as the
   // new selection: one history step.
   void DuplicateSelection();

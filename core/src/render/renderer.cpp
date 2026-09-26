@@ -64,12 +64,6 @@ SkPaint FillPaint(Rgb color, double opacity = 1) {
   return paint;
 }
 
-// A path relative to the page file, as a path relative to the notebook.
-std::string NotebookPath(const std::string &page_file, const std::string &href) {
-  namespace fs = std::filesystem;
-  return (fs::path(page_file).parent_path() / href).lexically_normal().generic_string();
-}
-
 void CollectElements(const Elements &elements, std::unordered_set<const Element *> *out) {
   for (const auto &box : elements) {
     out->insert(&*box);
@@ -388,6 +382,15 @@ void Renderer::DrawOverlay(SkCanvas *screen, const SelectionOverlay &overlay) {
   screen->drawLine(top, rotate, StrokePaint(accent, 1 * unit));
   for (SkPoint corner : corners) handle(corner);
   handle(rotate);
+}
+
+}  // namespace ink_engine
+
+namespace ink_engine {
+
+std::string NotebookPath(const std::string &page_file, const std::string &href) {
+  namespace fs = std::filesystem;
+  return (fs::path(page_file).parent_path() / href).lexically_normal().generic_string();
 }
 
 }  // namespace ink_engine

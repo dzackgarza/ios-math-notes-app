@@ -225,9 +225,13 @@ InkStatus ink_canvas_copy_selection(InkCanvas *canvas, int32_t cut, const uint8_
                                     size_t *size);
 /* Adds the elements of a clipboard document to the page under view point
    (x, y) and selects them: one history step. They keep their position when
-   their center and top left corner are on that page, and are centered on
-   (x, y) otherwise. An element whose id is already on the page gets a new
-   id. INK_ERROR_PARSE when `svg` is not a page SVG. */
+   it overlaps the surface (ink_canvas_set_surface_size) and their center and
+   top left corner are on that page, and are centered on (x, y) otherwise.
+   An element whose id is already on the page gets a new id. An image copied
+   from another notebook carries its file inline; paste adds it to this
+   notebook's assets (reusing a file with the same bytes), and
+   ink_document_dirty_files lists the new file. INK_ERROR_PARSE when `svg` is
+   not a page SVG. */
 InkStatus ink_canvas_paste(InkCanvas *canvas, const uint8_t *svg, size_t size, double x,
                            double y);
 /* Copies the selection 10 pt right and down, with new ids, and selects the

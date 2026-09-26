@@ -2,12 +2,15 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
+#include <filesystem>
 #include <limits>
 
 #include <boost/geometry/algorithms/simplify.hpp>
 #include <boost/geometry/geometries/linestring.hpp>
 #include <boost/geometry/geometries/point_xy.hpp>
 
+#include "absl/strings/escaping.h"
 #include "editor/erase.h"
 #include "format/page_svg.h"
 #include "geometry/affine.h"
@@ -259,6 +262,75 @@ void CollectIds(const Elements &elements, std::vector<std::string> &ids) {
     if (const std::string *id = IdOf(*box)) ids.push_back(*id);
     if (const Elements *children = Children(*box)) CollectIds(*children, ids);
   }
+}
+
+namespace {
+
+constexpr std::string_view kDataPrefix = "data:";
+
+std::string MediaType(const std::string &path) {
+  std::string ext = std::filesystem::path(path).extension().string();
+  if (ext == ".jpg" || ext == ".jpeg") return "image/jpeg";
+  return "image/png";
+}
+
+std::string Extension(std::string_view media_type) {
+  return media_type == "image/jpeg" ? ".jpg" : ".png";
+}
+
+template <class Visit>
+Element MapImages(const Element &element, Visit &&visit) {
+  if (Children(element)) {
+    return MapChildren(element, [&](const Element &c) { return MapImages(c, visit); });
+  }
+  Element copy = element;
+  if (auto *image = std::get_if<Image>(&copy.value)) visit(*image);
+  return copy;
+}
+
+}  // namespace
+
+Element InlineImages(const Element &element, const std::string &page_file, const Assets &assets) {
+  return MapImages(element, [&](Image &image) {
+    std::string path = NotebookPath(page_file, image.href);
+    auto file = assets.find(path);
+    if (file == assets.end()) return;
+    std::string_view bytes(static_cast<const char *>(file->second->data()), file->second->size());
+    image.href = std::string(kDataPrefix) + MediaType(path) + ";base64," + absl::Base64Escape(bytes);
+  });
+}
+
+Element StoreImages(const Element &element, const std::string &page_file, Assets &assets,
+                    NotebookFiles &added) {
+  namespace fs = std::filesystem;
+  return MapImages(element, [&](Image &image) {
+    std::string_view href = image.href;
+    size_t comma = href.find(',');
+    if (!href.starts_with(kDataPrefix) || comma == std::string_view::npos ||
+        !href.substr(0, comma).ends_with(";base64")) {
+      return;
+    }
+    std::string bytes;
+    if (!absl::Base64Unescape(href.substr(comma + 1), &bytes)) return;
+    std::string_view media_type = href.substr(kDataPrefix.size(), href.find(';') - kDataPrefix.size());
+    sk_sp<SkData> data = SkData::MakeWithCopy(bytes.data(), bytes.size());
+    std::string path;
+    for (const auto &[name, file] : assets) {
+      if (file->equals(data.get())) path = name;
+    }
+    if (path.empty()) {
+      // A name from the content; a different file under that name gets a suffix.
+      char hash[17];
+      std::snprintf(hash, sizeof hash, "%016zx", std::hash<std::string>{}(bytes));
+      path = "assets/" + std::string(hash) + Extension(media_type);
+      for (int n = 2; assets.contains(path); ++n) {
+        path = "assets/" + std::string(hash) + "-" + std::to_string(n) + Extension(media_type);
+      }
+      assets[path] = data;
+      added[path] = std::move(bytes);
+    }
+    image.href = fs::path(path).lexically_relative(fs::path(page_file).parent_path()).generic_string();
+  });
 }
 
 std::string ClipboardSvg(const Elements &elements, const std::string &layer_id) {

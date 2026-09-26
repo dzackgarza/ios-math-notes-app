@@ -155,6 +155,7 @@ InkStatus ink_document_dirty_files(InkDocument *document, const InkFile **files,
     if (!files || !count) return NullArgument("files");
     const ink_engine::DocumentHistory &history = document->history;
     ink_engine::NotebookFiles changed = ink_engine::ChangedFiles(history.current(), history.saved());
+    changed.insert(document->new_assets.begin(), document->new_assets.end());
     document->dirty.assign(changed.begin(), changed.end());
     document->dirty_removed = ink_engine::RemovedFiles(history.current(), history.saved());
     document->dirty_view.clear();
@@ -175,6 +176,7 @@ InkStatus ink_document_mark_saved(InkDocument *document) {
   return Call([&] {
     if (!document) return NullArgument("document");
     document->history.MarkSaved();
+    document->new_assets.clear();
     return INK_OK;
   });
 }
@@ -455,7 +457,7 @@ InkStatus ink_canvas_copy_selection(InkCanvas *canvas, int32_t cut, const uint8_
   return Call([&] {
     if (!canvas) return NullArgument("canvas");
     if (!svg || !size) return NullArgument("svg or size");
-    canvas->clipboard = canvas->editor.CopySelection(cut != 0);
+    canvas->clipboard = canvas->editor.CopySelection(cut != 0, canvas->document->assets);
     *svg = reinterpret_cast<const uint8_t *>(canvas->clipboard.data());
     *size = canvas->clipboard.size();
     return INK_OK;
@@ -467,8 +469,15 @@ InkStatus ink_canvas_paste(InkCanvas *canvas, const uint8_t *svg, size_t size, d
   return Call([&] {
     if (!canvas) return NullArgument("canvas");
     if (!svg && size) return NullArgument("svg");
-    if (!canvas->editor.Paste(Bytes(svg, size), x, y)) {
+    InkDocument &document = *canvas->document;
+    ink_engine::NotebookFiles added;
+    if (!canvas->editor.Paste(Bytes(svg, size), x, y, canvas->width / canvas->pixel_ratio,
+                              canvas->height / canvas->pixel_ratio, document.assets, added)) {
       return Fail(INK_ERROR_PARSE, "the clipboard text is not a page SVG");
+    }
+    if (!added.empty()) {
+      document.new_assets.insert(added.begin(), added.end());
+      ++document.assets_version;
     }
     return INK_OK;
   });

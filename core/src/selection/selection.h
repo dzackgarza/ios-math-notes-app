@@ -18,7 +18,9 @@
 
 #include "document/document.h"
 #include "document/ids.h"
+#include "format/notebook.h"
 #include "ink/geometry/partitioned_mesh.h"
+#include "render/renderer.h"
 #include "strokes/clip.h"
 
 namespace ink_engine {
@@ -105,6 +107,18 @@ Element WithFreeIds(const Element &element, const std::vector<std::string> &take
 
 // The ids of the elements, groups' children included.
 void CollectIds(const Elements &elements, std::vector<std::string> &ids);
+
+// Each image whose file is in `assets` (href relative to `page_file`) with
+// the file inline as a base64 data: URL (RFC 2397), so that a clipboard
+// document carries its images to another notebook.
+Element InlineImages(const Element &element, const std::string &page_file, const Assets &assets);
+
+// Each image with a data: URL gets a file of the notebook: the asset with the
+// same bytes when there is one, otherwise a new "assets/<hash>.<ext>", added
+// to `assets` and to `added` for the host to write. Hrefs become relative to
+// `page_file`.
+Element StoreImages(const Element &element, const std::string &page_file, Assets &assets,
+                    NotebookFiles &added);
 
 // The clipboard document: `elements` as a standalone page SVG
 // (format/page_svg WritePage) whose one layer holds them at their page

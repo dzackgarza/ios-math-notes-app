@@ -15,7 +15,9 @@
 struct InkDocument {
   ink_engine::DocumentHistory history;
   ink_engine::Assets assets;
-  uint64_t assets_version = 0;  // counts ink_document_load_asset calls
+  uint64_t assets_version = 0;  // counts changes to `assets`
+  // Image files a paste added, which the next ink_document_dirty_files lists.
+  ink_engine::NotebookFiles new_assets;
   // Page 1 of the notebook's template notebook (ink_document_set_template).
   std::optional<ink_engine::Page> template_page;
   // The last ink_document_dirty_files result, which the host reads in place.

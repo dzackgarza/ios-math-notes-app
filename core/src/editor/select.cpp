@@ -369,13 +369,14 @@ bool Editor::DeleteSelection() {
   return true;
 }
 
-std::string Editor::CopySelection(bool cut) {
+std::string Editor::CopySelection(bool cut, const Assets &assets) {
   const Selection *selection = CurrentSelection();
   if (!selection) return {};
   Elements elements;
   for (const auto &box : Selected(*selection)) {
+    Element element = InlineImages(*box, selection->value->file, assets);
     elements = std::move(elements).push_back(
-        cut ? box : immer::box<Element>(WithNewIds(*box, history_->ids())));
+        immer::box<Element>(cut ? std::move(element) : WithNewIds(element, history_->ids())));
   }
   const std::string &layer_id = selection->value->layers[selection->items[0].layer].layer_id;
   std::string svg = ClipboardSvg(elements, layer_id);
@@ -383,7 +384,8 @@ std::string Editor::CopySelection(bool cut) {
   return svg;
 }
 
-bool Editor::Paste(std::string_view svg, double x, double y) {
+bool Editor::Paste(std::string_view svg, double x, double y, double view_width, double view_height,
+                   Assets &assets, NotebookFiles &added) {
   std::optional<Elements> pasted = ReadClipboard(svg);
   if (!pasted) return false;
   if (pasted->empty()) return true;
@@ -398,18 +400,26 @@ bool Editor::Paste(std::string_view svg, double x, double y) {
   for (const LayerContent &layer : page.layers) CollectIds(layer.elements, taken);
   Elements elements;
   for (const auto &box : *pasted) {
-    elements = std::move(elements).push_back(immer::box<Element>(WithFreeIds(*box, taken, history_->ids())));
+    Element element = StoreImages(WithFreeIds(*box, taken, history_->ids()), page.file, assets, added);
+    elements = std::move(elements).push_back(immer::box<Element>(std::move(element)));
   }
 
-  // Write doPasteAt (scribblearea.cpp:738-750): the content keeps its place
-  // when its center and top left corner are on the page; otherwise its center
-  // goes to (x, y), kept half a ruling inside the page.
+  // Write ScribbleArea::doPasteAt (scribblearea.cpp:738-750): the content
+  // keeps its place when it is in view (ScribbleView::isVisible,
+  // scribbleview.cpp:247-250: it overlaps the screen) and its center and top
+  // left corner are on the page; otherwise its center goes to (x, y), kept
+  // half a ruling inside the page.
   Rect b = Bounds(elements);
   auto on_page = [&](double px, double py) {
     return px >= 0 && px <= page.width && py >= 0 && py <= page.height;
   };
+  Point view_a = ToContent(view_, 0, 0), view_b = ToContent(view_, view_width, view_height);
+  Rect screen{std::min(view_a.x, view_b.x) - placement->x, std::min(view_a.y, view_b.y) - placement->y,
+              std::max(view_a.x, view_b.x) - placement->x, std::max(view_a.y, view_b.y) - placement->y};
+  bool visible = b.left <= screen.right && screen.left <= b.right && b.top <= screen.bottom &&
+                 screen.top <= b.bottom;
   Point center{(b.left + b.right) / 2, (b.top + b.bottom) / 2};
-  if (!IsEmpty(b) && !(on_page(center.x, center.y) && on_page(b.left, b.top))) {
+  if (!IsEmpty(b) && !(visible && on_page(center.x, center.y) && on_page(b.left, b.top))) {
     double w = b.right - b.left, h = b.bottom - b.top;
     double xr = page.background.x_ruling, yr = page.background.y_ruling;
     Point p{at.x - placement->x, at.y - placement->y};

@@ -13,7 +13,14 @@
 #include <pugixml.hpp>
 
 #include "editor/canvas.h"
+#include "format/notebook.h"
 #include "format/page_svg.h"
+#include "include/core/SkBitmap.h"
+#include "include/core/SkColorSpace.h"
+#include "include/core/SkSurface.h"
+#include "layout/layout.h"
+#include "render/renderer.h"
+#include "support/notebook_dir.h"
 #include "geometry/affine.h"
 #include "selection/selection.h"
 #include "support/session.h"
@@ -236,6 +243,7 @@ TEST_CASE("Copy in one notebook and paste in another: the same outline bytes and
   std::string clipboard(reinterpret_cast<const char *>(svg), size);
 
   ink_test::Session target(2);
+  REQUIRE(ink_canvas_set_surface_size(target.get(), 600, 850, 1) == INK_OK);
   REQUIRE(ink_canvas_paste(target.get(), reinterpret_cast<const uint8_t *>(clipboard.data()),
                            clipboard.size(), 300, 400) == INK_OK);
   InkSelectionInfo info;
@@ -257,6 +265,7 @@ TEST_CASE("Copy in one notebook and paste in another: the same outline bytes and
 
 TEST_CASE("Cut keeps ids; pasting where an id exists gives the copy a new one") {
   ink_test::Session canvas;
+  REQUIRE(ink_canvas_set_surface_size(canvas.get(), 600, 850, 1) == INK_OK);
   Gesture(canvas.get(), Line({120, 200}, {320, 260}, 24), 0);
   const std::string id = StrokeAt(canvas.doc(), 0, 0).id;
   REQUIRE(ink_canvas_select_all(canvas.get(), 0) == INK_OK);
@@ -276,4 +285,103 @@ TEST_CASE("Cut keeps ids; pasting where an id exists gives the copy a new one") 
   CHECK(StrokeAt(canvas.doc(), 0, 0).id == id);
   CHECK(StrokeAt(canvas.doc(), 0, 1).id != id);
   CHECK(StrokeAt(canvas.doc(), 0, 1).outline == StrokeAt(canvas.doc(), 0, 0).outline);
+}
+
+TEST_CASE("Paste keeps the position only when it is in view; otherwise it centers on the view point") {
+  ink_test::Session source(1);
+  Gesture(source.get(), Line({120, 100}, {320, 160}, 20), 0);
+  REQUIRE(ink_canvas_select_all(source.get(), 0) == INK_OK);
+  const uint8_t *svg = nullptr;
+  size_t size = 0;
+  REQUIRE(ink_canvas_copy_selection(source.get(), 0, &svg, &size) == INK_OK);
+  std::string clipboard(reinterpret_cast<const char *>(svg), size);
+  Rect original = ElementBounds(*Layer0(source.doc())[0]);
+
+  // The view shows content y 400 to 800; the copied stroke sits near y 130.
+  ink_test::Session target(2);
+  REQUIRE(ink_canvas_set_surface_size(target.get(), 600, 400, 1) == INK_OK);
+  REQUIRE(ink_canvas_set_view(target.get(), 1, 0, 0, 1, 0, -400) == INK_OK);
+  REQUIRE(ink_canvas_paste(target.get(), reinterpret_cast<const uint8_t *>(clipboard.data()),
+                           clipboard.size(), 300, 200) == INK_OK);
+  Rect pasted = ElementBounds(*Layer0(target.doc())[0]);
+  CHECK(std::abs((pasted.left + pasted.right) / 2 - 300) < 1e-9);
+  CHECK(std::abs((pasted.top + pasted.bottom) / 2 - 600) < 1e-9);
+  CHECK(std::abs((pasted.right - pasted.left) - (original.right - original.left)) < 1e-3);
+
+  // Scrolled back to the top, the same text pastes in place.
+  REQUIRE(ink_canvas_set_view(target.get(), 1, 0, 0, 1, 0, 0) == INK_OK);
+  REQUIRE(ink_canvas_paste(target.get(), reinterpret_cast<const uint8_t *>(clipboard.data()),
+                           clipboard.size(), 300, 200) == INK_OK);
+  Rect in_place = ElementBounds(*Layer0(target.doc())[1]);
+  CHECK(std::abs(in_place.left - original.left) < 1e-3);
+  CHECK(std::abs(in_place.top - original.top) < 1e-3);
+}
+
+TEST_CASE("An image pasted into another notebook gets its own asset file and renders from it") {
+  const std::string dir = std::string(INK_DOCUMENTS_DIR) + "/full";
+  ink_test::Session source(LoadNotebook(ink_test::ReadNotebookDir(dir)));
+  const std::string diagram = ink_test::ReadFile(dir + "/assets/diagram.png");
+  for (const auto &[path, bytes] : ink_test::ReadAssets(dir)) {
+    REQUIRE(ink_document_load_asset(source.document, path.c_str(),
+                                    reinterpret_cast<const uint8_t *>(bytes.data()), bytes.size()) == INK_OK);
+  }
+  // The image s-pastedimage fills (60, 400)-(180, 490) of page 1.
+  ink_canvas_set_selector(source.get(), INK_SELECTOR_RECT, 1);
+  Gesture(source.get(), Line({50, 390}, {190, 500}, 4), 0);
+  InkSelectionInfo info;
+  REQUIRE(ink_canvas_selection(source.get(), &info) == INK_OK);
+  REQUIRE(info.count == 1);
+  const uint8_t *svg = nullptr;
+  size_t size = 0;
+  REQUIRE(ink_canvas_copy_selection(source.get(), 0, &svg, &size) == INK_OK);
+  std::string clipboard(reinterpret_cast<const char *>(svg), size);
+
+  ink_test::Session target(2);
+  REQUIRE(ink_canvas_set_surface_size(target.get(), 600, 850, 1) == INK_OK);
+  auto paste = [&] {
+    REQUIRE(ink_canvas_paste(target.get(), reinterpret_cast<const uint8_t *>(clipboard.data()),
+                             clipboard.size(), 300, 400) == INK_OK);
+  };
+  paste();
+  std::map<std::string, std::string> files = DirtyFiles(target.document);
+  std::vector<std::string> assets;
+  for (const auto &[path, bytes] : files) {
+    if (path.starts_with("assets/")) assets.push_back(path);
+  }
+  REQUIRE(assets.size() == 1);
+  CHECK(files.at(assets[0]) == diagram);
+  const Image &image = std::get<Image>(Layer0(target.doc())[0]->value);
+  CHECK(image.href == "../" + assets[0]);
+  REQUIRE(ink_document_mark_saved(target.document) == INK_OK);
+
+  // A second paste reuses the file.
+  paste();
+  for (const auto &[path, bytes] : DirtyFiles(target.document)) CHECK_FALSE(path.starts_with("assets/"));
+
+  // Reopened from its own files, the target draws the image from its asset:
+  // without that one file, the same page shows paper there.
+  NotebookFiles saved(files.begin(), files.end());
+  ink_test::Session reopened(LoadNotebook(saved), 3), without_asset(LoadNotebook(saved), 4);
+  REQUIRE(ink_document_load_asset(reopened.document, assets[0].c_str(),
+                                  reinterpret_cast<const uint8_t *>(files.at(assets[0]).data()),
+                                  files.at(assets[0]).size()) == INK_OK);
+  auto image_pixels = [](InkDocument *document) {
+    Renderer renderer(nullptr, document->assets);
+    const Document &doc = document->history.current();
+    View view{{1, 0, 0, 1, 0, 0}, 1, 600, 850};
+    REQUIRE(renderer.Update(doc, view, false));
+    sk_sp<SkSurface> screen =
+        SkSurfaces::Raster(SkImageInfo::MakeN32Premul(600, 850, SkColorSpace::MakeSRGB()));
+    renderer.Draw(screen->getCanvas(), nullptr, nullptr);
+    SkBitmap bitmap;
+    bitmap.allocPixels(SkImageInfo::Make(600, 850, kRGBA_8888_SkColorType, kUnpremul_SkAlphaType));
+    REQUIRE(screen->readPixels(bitmap, 0, 0));
+    int count = 0;  // pixels of the image's box that are not paper
+    for (int y = 400; y < 490; ++y) {
+      for (int x = 60; x < 180; ++x) count += bitmap.getColor(x, y) != bitmap.getColor(590, 840);
+    }
+    return count;
+  };
+  CHECK(image_pixels(reopened.document) > 1000);
+  CHECK(image_pixels(without_asset.document) == 0);
 }

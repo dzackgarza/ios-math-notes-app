@@ -69,6 +69,10 @@ struct SelectionOverlay {
 // "assets/p0017.png".
 using Assets = std::map<std::string, sk_sp<SkData>>;
 
+// A path relative to the page file, e.g. "../assets/p0017.png", as a path
+// relative to the notebook, "assets/p0017.png".
+std::string NotebookPath(const std::string &page_file, const std::string &href);
+
 // What one frame shows.
 struct View {
   Transform content_to_view;  // SVG matrix order; content = layout coordinates
