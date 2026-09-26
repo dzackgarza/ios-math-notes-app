@@ -10,6 +10,8 @@ interprets captured ink as an editable mathematical figure.
 
 The tablet interface (layout, controls, style) is in
 [specs/tablet-ui.md](specs/tablet-ui.md).
+The [component-ownership contract](ARCHITECTURE.md#component-ownership)
+governs implementation of every feature, including ink editing and reflow.
 
 ## Base: keep from Write
 

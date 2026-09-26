@@ -21,6 +21,29 @@ FreeTikZ's pen-first capture is the starting interaction. General mathematical
 figures use standard TikZ and only the libraries they need. The custom
 `freetikz.sty` remains relevant to its specialized string-diagram vocabulary.
 
+## Component ownership
+
+The fork composes the components selected under the
+[component-ownership rules](../ARCHITECTURE.md#component-ownership).
+Each delivery stage needs the issue's search record, candidate evidence,
+selected owner and version, and exact adapter boundary. Any custom mechanism
+needs the required necessity argument and approval. The mathematical figure
+contract defines required behavior; it does not grant a general implementation
+exception to the fork.
+
+| Capability | Integration boundary |
+| --- | --- |
+| Ink capture and figure persistence | Math Notes engine and page format own note data; the FreeTikZ fork receives a figure's editable scene and ink. |
+| Vector editing, handles, transforms, snapping, and layers | Select a maintained vector-editing component or integrate an established editor through a fork before extending its canvas tools. The scene retains stable Math Notes figure identity. |
+| Geometric constraints and recognition | Select established geometry and constraint mechanisms for the fork before implementing relation solving or stroke classification. Recognition remains reversible. |
+| TikZ parsing and source-preserving edits | Select an existing TikZ parser or editor implementation that can retain source spans and opaque syntax before enabling source round-trip. Authored source remains authoritative. |
+| TeX compilation and preview | Use a TeX engine and project-preamble integration. The browser preview can be approximate; final output comes from TeX. |
+| Semantic TikZ generation | Adapt established TikZ libraries and domain editors to the shared scene. Each backend declares its required TeX packages. |
+
+The selected components and their versions belong in
+[ARCHITECTURE.md](../ARCHITECTURE.md); the figure behaviors below remain the
+product contract independent of those selections.
+
 ## Mode and page interaction
 
 1. Turning Drawing mode on starts one capture session on the current page.
@@ -71,9 +94,9 @@ them to this geometric scene; it must not replace the general scene.
 The scene is the editable interpretation of the figure, not a coordinate trace.
 The source is authoritative wherever the user has edited it. A visual edit
 changes only the syntax owned by the edited object or property. Unrecognized
-TikZ remains intact as opaque source. A parser must retain source ranges,
-comments, spacing, and unknown commands. A source edit updates the visual
-object when its syntax is understood; otherwise it stays visible as authored
+TikZ remains intact as opaque source. The selected parser or editor must retain
+source ranges, comments, spacing, and unknown commands. A source edit updates
+the visual object when its syntax is understood; otherwise it stays visible as authored
 source and reports the visual limitation. Saving never replaces authored TikZ
 with regenerated output.
 
@@ -96,7 +119,8 @@ creation and selection work without recognition. Initial recognition reduces
 strokes to salient endpoints, extrema, inflections, intersections, and pinned
 points. The user can retain raw ink, accept a suggested primitive, or select a
 different one. Sophisticated automatic classification comes after the editable
-scene and source workflow.
+scene and source workflow. The geometry and recognition components are selected
+under [Component ownership](#component-ownership) before this stage begins.
 
 Beautification uses relations before independent coordinate snapping. It can
 infer a common coordinate frame, exact parallelism and perpendicularity,
@@ -115,7 +139,9 @@ tools. Selection exposes handles and numeric position, dimension, radius,
 angle, and control-point fields. Bézier nodes support cusp, smooth, and
 symmetric modes. The user can group, set layers and z-order, duplicate,
 rotate, reflect, align, and distribute objects. Constraints can be created
-from a selection, such as two parallel segments or a point on a curve.
+from a selection, such as two parallel segments or a point on a curve. These
+editing mechanisms come from the selected vector component or established
+editor integrated through the FreeTikZ fork.
 
 A label stores arbitrary project TeX, including macros. The figure reads the
 project preamble or a designated figure preamble. Label properties include

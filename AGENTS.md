@@ -2,7 +2,9 @@
 
 Read README.md (pipeline, layout) and TRAPS.md (known failures) first.
 
-Work plan: the GitHub issue tree rooted at #11, one milestone per sub-issue. `uvx --from git+https://github.com/dzackgarza/itree itree next dzackgarza/math-notes-app` names the next work unit in tree order. Each work unit lists the reference code to port before writing any; docs/ARCHITECTURE.md indexes the references and dependencies.
+Work plan: the GitHub issue tree rooted at #11, one milestone per sub-issue. `uvx --from git+https://github.com/dzackgarza/itree itree next dzackgarza/math-notes-app` names the next work unit in tree order.
+
+Implementation ownership: read [docs/ARCHITECTURE.md#component-ownership](docs/ARCHITECTURE.md#component-ownership) before changing a plan or implementation. Every custom behavior needs a linked ownership decision with actual dependency searches, candidate evidence, the exact integration gap, and a reason Math Notes must own it. Evaluate complete frameworks, SDKs, and forks, including large dependencies. The rule covers adapters, reference ports, existing custom code, and ink reflow. Standard application behavior belongs to its framework. Extending the core's responsibilities or building a custom subsystem requires the completed decision and explicit user approval. A feature specification alone grants neither.
 
 Invariants:
 - The IPA's `CFBundleShortVersionString`, `CFBundleVersion`, `CFBundleIdentifier`, and byte size must equal the `source.json` entry. The workflow checks all of these before and after publishing; keep those checks when editing it.

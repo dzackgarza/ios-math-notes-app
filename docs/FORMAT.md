@@ -123,9 +123,11 @@ conflict. Assets are separate files, not base64 inside SVG.
   of the stroke as one `M…Z` subpath, `fill-rule` nonzero (the default). Any
   SVG renderer draws the variable-width ink correctly.
 - A typed text box is an SVG `text` element with `x`, `y`, `font-size`,
-  `font-family="sans-serif"`, and `fill`. Each line is a `tspan`; later
-  lines use `dy` equal to 1.2 times the font size. Its `transform` stores
-  a move or resize. The first `y` is the text baseline.
+  `font-family`, and `fill`. Each line is a `tspan`; its baseline and the
+  later lines' `dy` values come from the selected text-layout engine with
+  the same font and layout properties used for rendering. Its `transform`
+  stores a move or resize. The first `y` is the text baseline. Preserve the
+  authored text and its explicit line breaks through layout and save.
 - The stroke's input samples are an [InkML](https://www.w3.org/TR/InkML/)
   `trace` in the path's `metadata`. The page's root `metadata` declares one
   `inkml:traceFormat` per channel set that its strokes use. Channels, in

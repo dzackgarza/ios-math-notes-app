@@ -71,20 +71,22 @@ are the reference for look and interaction.
 - Pages have a 6 pt desk-colored gap between them. In the default view a page
   fills the full width of the canvas.
 - One finger pans the pages. Two fingers pinch to zoom. Pen input draws.
-- The view cannot scroll past the pages. Pulling past the end of the last page
-  shows an indicator that grows with the pull. Past a threshold the indicator
-  changes to confirm that a release adds a page. Releasing there adds a page
-  after the last one; releasing before it adds nothing. The pull springs back
-  either way.
+- The host scroll component owns page motion and boundary behavior. The
+  page-end action uses a mature interaction component selected in #21. It
+  lets the user deliberately append a page with a held pull and release;
+  ordinary scrolling leaves the document unchanged. Math Notes handles the
+  completed add-page command. The component supplies the interaction.
 - Ink cannot land outside a page. On pen-up, the parts of the stroke outside
   its page are removed (Noteful's behavior); a stroke entirely outside is
   removed.
 
 ## Visual style
 
-Both hosts use iOS controls: SwiftUI on the iPad, Ionic in iOS mode on the web
-(ARCHITECTURE.md). The web chrome takes its look from Ionic, not from
-hand-written CSS; the colors below are Ionic theme variables.
+Both hosts use complete iOS-style controls: SwiftUI and UIKit on the iPad,
+Ionic in iOS mode on the web. Their behavior and accessibility belong to the
+components identified in [ARCHITECTURE.md](../ARCHITECTURE.md#component-ownership).
+The colors below are Ionic theme variables. App CSS supplies document layout
+and theme values.
 
 Light theme, white and very light gray panels, one blue accent (#2F6FEB,
 approximately) for primary buttons, selection and links. Rounded cards and
