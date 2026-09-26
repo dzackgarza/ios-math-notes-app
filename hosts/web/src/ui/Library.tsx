@@ -21,11 +21,11 @@ import {
   Star,
   Trash2,
 } from "lucide-solid";
-import { createMemo, createSignal, For, type JSX, Match, Show, Switch } from "solid-js";
+import { createMemo, createSignal, For, type JSX, Match, mergeProps, Show, Switch } from "solid-js";
 
-import { type Folder, type Note, pathKey } from "../storage/library.ts";
+import { compareBy, type Folder, MY_NOTES, nameError, type Note, pathKey, type Sort } from "../storage/library.ts";
 import { emptyNote, type LibraryMetadata, type NoteMetadata, TAG_COLORS } from "../storage/metadata.ts";
-import { PaperTile } from "./paper.tsx";
+import { NoteCover, type Thumbnails } from "./paper.tsx";
 
 export type Section = "library" | "search" | "recent" | "favorites" | "trash" | "settings" | `tag:${string}`;
 
@@ -42,7 +42,10 @@ export interface LibraryProps {
   onNewNotebook: () => void;
   onNewNote: (folder: string[]) => void;
   onMetadata: (change: (metadata: LibraryMetadata) => LibraryMetadata) => void;
-  onTrash: (note: Note) => void;
+  onTrash: (path: string[]) => void;
+  onRename: (path: string[], name: string) => void;
+  onMove: (path: string[], parent: string[]) => void;
+  thumbnail: Thumbnails;
   onChooseFolder: () => void;
 }
 
@@ -169,17 +172,55 @@ function TagChips(props: { metadata: LibraryMetadata; tags: string[] }) {
   );
 }
 
-// The ⋯ menu of a note: favorite, tags, move to the trash.
-function NoteMenu(props: { note: Note; metadata: LibraryProps["metadata"]; onMetadata: LibraryProps["onMetadata"]; onTrash: (note: Note) => void }) {
+// Rename or move a notebook or folder: the dialogs of EntryDialog.
+interface EntryAction {
+  kind: "rename" | "move";
+  path: string[];
+  folder: boolean;
+}
+
+// The library's props, with the sort order and the entry dialogs.
+interface View extends LibraryProps {
+  sort: Sort;
+  onSort: (sort: Sort) => void;
+  onAction: (action: EntryAction) => void;
+}
+
+// Rename…, Move to… and Move to Trash, in a note's or a folder's ⋯ menu.
+function EntryItems(props: { path: string[]; folder: boolean; view: View }) {
+  const act = (kind: EntryAction["kind"]) => props.view.onAction({ kind, path: props.path, folder: props.folder });
+  return (
+    <>
+      <DropdownMenu.Item class="menu-item" onSelect={() => act("rename")}>
+        Rename…
+      </DropdownMenu.Item>
+      <DropdownMenu.Item class="menu-item" onSelect={() => act("move")}>
+        Move to…
+      </DropdownMenu.Item>
+      <DropdownMenu.Item class="menu-item danger" onSelect={() => props.view.onTrash(props.path)}>
+        Move to Trash
+      </DropdownMenu.Item>
+    </>
+  );
+}
+
+function MenuTrigger(props: { name: string }) {
+  return (
+    <DropdownMenu.Trigger class="icon-button" aria-label={`${props.name} actions`} onClick={(e: MouseEvent) => e.stopPropagation()}>
+      <Ellipsis size={18} />
+    </DropdownMenu.Trigger>
+  );
+}
+
+// The ⋯ menu of a note: favorite, tags, rename, move, move to the trash.
+function NoteMenu(props: { note: Note; view: View }) {
   const key = () => pathKey(props.note.path);
-  const meta = (): NoteMetadata => props.metadata.notes[key()] ?? emptyNote();
+  const meta = (): NoteMetadata => props.view.metadata.notes[key()] ?? emptyNote();
   const change = (update: (note: NoteMetadata) => NoteMetadata) =>
-    props.onMetadata((m) => ({ ...m, notes: { ...m.notes, [key()]: update(m.notes[key()] ?? emptyNote()) } }));
+    props.view.onMetadata((m) => ({ ...m, notes: { ...m.notes, [key()]: update(m.notes[key()] ?? emptyNote()) } }));
   return (
     <DropdownMenu>
-      <DropdownMenu.Trigger class="icon-button" aria-label={`${props.note.name} actions`} onClick={(e: MouseEvent) => e.stopPropagation()}>
-        <Ellipsis size={18} />
-      </DropdownMenu.Trigger>
+      <MenuTrigger name={props.note.name} />
       <DropdownMenu.Portal>
         <DropdownMenu.Content class="menu">
           <DropdownMenu.CheckboxItem
@@ -189,12 +230,12 @@ function NoteMenu(props: { note: Note; metadata: LibraryProps["metadata"]; onMet
           >
             Favorite
           </DropdownMenu.CheckboxItem>
-          <Show when={props.metadata.tags.length > 0}>
+          <Show when={props.view.metadata.tags.length > 0}>
             <DropdownMenu.Sub>
               <DropdownMenu.SubTrigger class="menu-item">Tags</DropdownMenu.SubTrigger>
               <DropdownMenu.Portal>
                 <DropdownMenu.SubContent class="menu">
-                  <For each={props.metadata.tags}>
+                  <For each={props.view.metadata.tags}>
                     {(tag) => (
                       <DropdownMenu.CheckboxItem
                         class="menu-item"
@@ -212,9 +253,8 @@ function NoteMenu(props: { note: Note; metadata: LibraryProps["metadata"]; onMet
             </DropdownMenu.Sub>
           </Show>
           <Show when={props.note.path[0] !== ".trash"}>
-            <DropdownMenu.Item class="menu-item danger" onSelect={() => props.onTrash(props.note)}>
-              Move to Trash
-            </DropdownMenu.Item>
+            <DropdownMenu.Separator class="menu-separator" />
+            <EntryItems path={props.note.path} folder={false} view={props.view} />
           </Show>
         </DropdownMenu.Content>
       </DropdownMenu.Portal>
@@ -222,12 +262,12 @@ function NoteMenu(props: { note: Note; metadata: LibraryProps["metadata"]; onMet
   );
 }
 
-function NoteRow(props: { note: Note; subtitle: string; library: LibraryProps }) {
-  const meta = () => props.library.metadata.notes[pathKey(props.note.path)];
+function NoteRow(props: { note: Note; subtitle: string; view: View }) {
+  const meta = () => props.view.metadata.notes[pathKey(props.note.path)];
   return (
     <li class="note-row">
-      <Button class="note-open" onClick={() => props.library.onOpen(props.note)}>
-        <PaperTile root={props.library.root} template={props.note.template} class="note-thumb" />
+      <Button class="note-open" onClick={() => props.view.onOpen(props.note)}>
+        <NoteCover root={props.view.root} note={props.note} thumbnail={props.view.thumbnail} class="note-thumb" />
         <span class="note-text">
           <span class="note-title">
             {props.note.name}
@@ -239,22 +279,28 @@ function NoteRow(props: { note: Note; subtitle: string; library: LibraryProps })
           <span class="note-time">{ago(props.note.modified)}</span>
         </span>
       </Button>
-      <NoteMenu note={props.note} metadata={props.library.metadata} onMetadata={props.library.onMetadata} onTrash={props.library.onTrash} />
+      <NoteMenu note={props.note} view={props.view} />
     </li>
   );
 }
 
-type Sort = "modified" | "name";
+// A folder's cover: its first note's page 1 (spec, "New Notebook").
+function FolderCover(props: { folder: Folder; view: View; class: string }) {
+  return (
+    <Show when={[...props.folder.notes].sort(compareBy(props.view.sort))[0]} fallback={<div class={`paper-tile ${props.class} empty-cover`} />}>
+      {(first) => <NoteCover root={props.view.root} note={first()} thumbnail={props.view.thumbnail} class={props.class} />}
+    </Show>
+  );
+}
 
-function FolderCards(props: LibraryProps) {
+function FolderCards(props: View) {
   const [query, setQuery] = createSignal("");
-  const [sort, setSort] = createSignal<Sort>("modified");
   const [layout, setLayout] = createSignal<"grid" | "list">("grid");
   const shown = createMemo(() => {
     const q = query().trim().toLowerCase();
     // "My Notes" shows only when notes sit at the top level.
     const folders = props.folders.filter((f) => (f.path.length > 0 || f.notes.length > 0) && f.name.toLowerCase().includes(q));
-    return sort() === "name" ? folders.sort((a, b) => a.name.localeCompare(b.name)) : folders.sort((a, b) => b.modified - a.modified);
+    return folders.sort(compareBy(props.sort));
   });
   const folderTags = (folder: Folder) => [
     ...new Set(folder.notes.flatMap((n) => props.metadata.notes[pathKey(n.path)]?.tags ?? [])),
@@ -268,11 +314,11 @@ function FolderCards(props: LibraryProps) {
         </TextField>
         <DropdownMenu>
           <DropdownMenu.Trigger class="select-button" aria-label="Sort">
-            {sort() === "name" ? "Name" : "Last Modified"} <ChevronDown size={14} />
+            {props.sort === "name" ? "Name" : "Last Modified"} <ChevronDown size={14} />
           </DropdownMenu.Trigger>
           <DropdownMenu.Portal>
             <DropdownMenu.Content class="menu">
-              <DropdownMenu.RadioGroup value={sort()} onChange={(v) => setSort(v as Sort)}>
+              <DropdownMenu.RadioGroup value={props.sort} onChange={(v) => props.onSort(v as Sort)}>
                 <DropdownMenu.RadioItem class="menu-item" value="modified">
                   Last Modified
                 </DropdownMenu.RadioItem>
@@ -297,9 +343,7 @@ function FolderCards(props: LibraryProps) {
           {(folder) => (
             <li class="card" aria-current={pathKey(props.selected) === pathKey(folder.path) ? "true" : undefined}>
               <Button class="card-open" aria-label={folder.name} onClick={() => props.onSelect(folder.path)}>
-                <Show when={folder.notes[0]} fallback={<div class="paper-tile card-cover empty-cover" />}>
-                  {(first) => <PaperTile root={props.root} template={first().template} class="card-cover" />}
-                </Show>
+                <FolderCover folder={folder} view={props} class="card-cover" />
                 <span class="card-text">
                   <span class="card-title">{folder.name}</span>
                   <span class="card-meta">{noteCount(folder.notes.length)}</span>
@@ -308,7 +352,19 @@ function FolderCards(props: LibraryProps) {
                   </Show>
                 </span>
               </Button>
-              <TagChips metadata={props.metadata} tags={folderTags(folder)} />
+              <div class="card-footer">
+                <TagChips metadata={props.metadata} tags={folderTags(folder)} />
+                <Show when={folder.path.length > 0}>
+                  <DropdownMenu>
+                    <MenuTrigger name={folder.name} />
+                    <DropdownMenu.Portal>
+                      <DropdownMenu.Content class="menu">
+                        <EntryItems path={folder.path} folder view={props} />
+                      </DropdownMenu.Content>
+                    </DropdownMenu.Portal>
+                  </DropdownMenu>
+                </Show>
+              </div>
             </li>
           )}
         </For>
@@ -317,16 +373,14 @@ function FolderCards(props: LibraryProps) {
   );
 }
 
-function DetailPane(props: LibraryProps) {
+function DetailPane(props: View) {
   const folder = () => props.folders.find((f) => pathKey(f.path) === pathKey(props.selected));
   const [query, setQuery] = createSignal("");
   return (
     <Show when={folder()}>
       {(f) => (
         <aside class="detail" aria-label={`${f().name} notes`}>
-          <Show when={f().notes[0]} fallback={<div class="paper-tile detail-cover empty-cover" />}>
-            {(first) => <PaperTile root={props.root} template={first().template} class="detail-cover" />}
-          </Show>
+          <FolderCover folder={f()} view={props} class="detail-cover" />
           <h2 class="detail-title">{f().name}</h2>
           <div class="detail-meta">
             {noteCount(f().notes.length)}
@@ -338,8 +392,8 @@ function DetailPane(props: LibraryProps) {
             <TextField.Input class="search-input" placeholder="Search notes…" aria-label="Search notes" />
           </TextField>
           <ul class="note-list" aria-label="Notes">
-            <For each={f().notes.filter((n) => n.name.toLowerCase().includes(query().trim().toLowerCase()))}>
-              {(note) => <NoteRow note={note} subtitle={f().name} library={props} />}
+            <For each={f().notes.filter((n) => n.name.toLowerCase().includes(query().trim().toLowerCase())).sort(compareBy(props.sort))}>
+              {(note) => <NoteRow note={note} subtitle={f().name} view={props} />}
             </For>
           </ul>
           <Button class="button new-in" onClick={() => props.onNewNote(f().path)}>
@@ -352,10 +406,10 @@ function DetailPane(props: LibraryProps) {
 }
 
 // Search, Recent, Favorites, a tag, or the trash: one list of notes.
-function NoteTable(props: { library: LibraryProps; title: string; notes: Note[]; search?: boolean }) {
+function NoteTable(props: { view: View; title: string; notes: Note[]; search?: boolean }) {
   const [query, setQuery] = createSignal("");
   const folderName = (note: Note) =>
-    props.library.folders.find((f) => f.notes.includes(note))?.name ?? (note.path[0] === ".trash" ? "Trash" : "");
+    props.view.folders.find((f) => f.notes.includes(note))?.name ?? (note.path[0] === ".trash" ? "Trash" : "");
   const shown = () => props.notes.filter((n) => n.name.toLowerCase().includes(query().trim().toLowerCase()));
   return (
     <>
@@ -369,14 +423,109 @@ function NoteTable(props: { library: LibraryProps; title: string; notes: Note[];
       </Show>
       <ul class="note-list table" aria-label={props.title}>
         <For each={shown()} fallback={<li class="empty">No notes.</li>}>
-          {(note) => <NoteRow note={note} subtitle={folderName(note)} library={props.library} />}
+          {(note) => <NoteRow note={note} subtitle={folderName(note)} view={props.view} />}
         </For>
       </ul>
     </>
   );
 }
 
+// The names in folder `parent` (path segments; [] is the root) that the scan
+// found: its notes and its subfolders.
+function namesIn(folders: readonly Folder[], parent: readonly string[]): string[] {
+  const key = pathKey(parent);
+  const notes = folders.find((f) => pathKey(f.path) === key)?.notes.map((n) => n.name) ?? [];
+  const subfolders = folders.filter((f) => f.path.length === parent.length + 1 && pathKey(f.path.slice(0, -1)) === key);
+  return [...notes, ...subfolders.map((f) => f.path[f.path.length - 1])];
+}
+
+// The rename dialog (a name field, checked as Write's NewDocDialog checks it)
+// and the move dialog (the folders it can go to).
+function EntryDialog(props: { action: EntryAction; view: View; onClose: () => void }) {
+  const name = () => props.action.path[props.action.path.length - 1];
+  const parent = () => props.action.path.slice(0, -1);
+  const [text, setText] = createSignal(name());
+  const error = () => (text().trim() === name() ? null : nameError(text(), namesIn(props.view.folders, parent())));
+  // The folders a move can reach: not the current one, and for a folder not
+  // itself or a folder inside it.
+  const targets = () =>
+    props.view.folders
+      .map((f) => f.path)
+      .filter((path) => pathKey(path) !== pathKey(parent()))
+      .filter((path) => !(props.action.folder && path.length >= props.action.path.length && props.action.path.every((p, i) => path[i] === p)))
+      .sort((a, b) => (a.length === 0 ? -1 : b.length === 0 ? 1 : pathKey(a).localeCompare(pathKey(b))));
+  const title = () => `${props.action.kind === "rename" ? "Rename" : "Move"} ${props.action.folder ? "Notebook" : "Note"}`;
+  return (
+    <Dialog open onOpenChange={(open) => !open && props.onClose()}>
+      <Dialog.Portal>
+        <Dialog.Overlay class="dialog-overlay" />
+        <Dialog.Content class="dialog">
+          <Dialog.Title class="dialog-title">{title()}</Dialog.Title>
+          <Show
+            when={props.action.kind === "rename"}
+            fallback={
+              <>
+                <p class="dialog-lede">Move “{name()}” to:</p>
+                <ul class="move-targets" aria-label="Folders">
+                  <For each={targets()} fallback={<li class="empty">No other folder.</li>}>
+                    {(path) => (
+                      <li>
+                        <Button
+                          class="move-target"
+                          onClick={() => {
+                            props.view.onMove(props.action.path, path);
+                            props.onClose();
+                          }}
+                        >
+                          <FolderOpen size={16} /> {path.length === 0 ? MY_NOTES : path.join(" / ")}
+                        </Button>
+                      </li>
+                    )}
+                  </For>
+                </ul>
+                <div class="dialog-actions">
+                  <Dialog.CloseButton class="button">Cancel</Dialog.CloseButton>
+                </div>
+              </>
+            }
+          >
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (error()) return;
+                if (text().trim() !== name()) props.view.onRename(props.action.path, text().trim());
+                props.onClose();
+              }}
+            >
+              <TextField value={text()} onChange={setText} validationState={error() ? "invalid" : "valid"} class="field">
+                <TextField.Label class="field-label">Name</TextField.Label>
+                <TextField.Input class="input" autofocus />
+                <TextField.ErrorMessage class="field-error">{error()}</TextField.ErrorMessage>
+              </TextField>
+              <div class="dialog-actions">
+                <Dialog.CloseButton class="button">Cancel</Dialog.CloseButton>
+                <Button class="button primary" type="submit" disabled={error() !== null}>
+                  Rename
+                </Button>
+              </div>
+            </form>
+          </Show>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog>
+  );
+}
+
 export function Library(props: LibraryProps) {
+  const [sort, setSort] = createSignal<Sort>("modified");
+  const [action, setAction] = createSignal<EntryAction>();
+  const view: View = mergeProps(props, {
+    get sort() {
+      return sort();
+    },
+    onSort: setSort,
+    onAction: setAction,
+  });
   const notes = () => props.folders.flatMap((f) => f.notes);
   const meta = (n: Note) => props.metadata.notes[pathKey(n.path)];
   const tag = () => (props.section.startsWith("tag:") ? props.section.slice(4) : "");
@@ -413,19 +562,19 @@ export function Library(props: LibraryProps) {
         </header>
         <Switch>
           <Match when={props.section === "library"}>
-            <FolderCards {...props} />
+            <FolderCards {...view} />
           </Match>
           <Match when={props.section === "search"}>
-            <NoteTable library={props} title="Search results" notes={notes()} search />
+            <NoteTable view={view} title="Search results" notes={notes()} search />
           </Match>
           <Match when={props.section === "recent"}>
-            <NoteTable library={props} title="Recent notes" notes={[...notes()].sort((a, b) => b.modified - a.modified)} />
+            <NoteTable view={view} title="Recent notes" notes={[...notes()].sort(compareBy("modified"))} />
           </Match>
           <Match when={props.section === "favorites"}>
-            <NoteTable library={props} title="Favorite notes" notes={notes().filter((n) => meta(n)?.favorite)} />
+            <NoteTable view={view} title="Favorite notes" notes={notes().filter((n) => meta(n)?.favorite)} />
           </Match>
           <Match when={props.section === "trash"}>
-            <NoteTable library={props} title="Trashed notes" notes={props.trash} />
+            <NoteTable view={view} title="Trashed notes" notes={props.trash} />
           </Match>
           <Match when={props.section === "settings"}>
             <section class="settings">
@@ -437,12 +586,15 @@ export function Library(props: LibraryProps) {
             </section>
           </Match>
           <Match when={tag()}>
-            <NoteTable library={props} title={`Notes tagged ${tag()}`} notes={notes().filter((n) => meta(n)?.tags.includes(tag()))} />
+            <NoteTable view={view} title={`Notes tagged ${tag()}`} notes={notes().filter((n) => meta(n)?.tags.includes(tag()))} />
           </Match>
         </Switch>
       </main>
       <Show when={props.section === "library"}>
-        <DetailPane {...props} />
+        <DetailPane {...view} />
+      </Show>
+      <Show when={action()} keyed>
+        {(a) => <EntryDialog action={a} view={view} onClose={() => setAction(undefined)} />}
       </Show>
     </div>
   );

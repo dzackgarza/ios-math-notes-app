@@ -439,3 +439,162 @@ test("ink copied in one note and pasted into another keeps its path data and get
   expect(target.map((p) => p.d)).toEqual(source.map((p) => p.d));
   for (const { id } of target) expect(source.map((p) => p.id)).not.toContain(id);
 });
+
+// Whether each path (from the notes root) is a directory in the
+// origin-private file system.
+async function directoriesExist(page: Page, paths: string[]): Promise<boolean[]> {
+  return page.evaluate(async (all) => {
+    const exists = async (path: string) => {
+      let dir = await navigator.storage.getDirectory();
+      try {
+        for (const part of path.split("/")) dir = await dir.getDirectoryHandle(part);
+        return true;
+      } catch {
+        return false;
+      }
+    };
+    return Promise.all(all.map(exists));
+  }, paths);
+}
+
+// The window gets focus, as when the user comes back from another program.
+async function focusWindow(page: Page): Promise<void> {
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+}
+
+// Chooses `item` in the ⋯ menu of the note or folder `name`.
+async function entryMenu(page: Page, name: string, item: string): Promise<void> {
+  await page.getByRole("button", { name: `${name} actions` }).click();
+  await page.getByRole("menuitem", { name: item }).click();
+}
+
+test("a notebook renamed outside the app is listed at its new path once the window regains focus", async ({ page }) => {
+  await startEmpty(page);
+  await newNote(page, "Knots");
+  await page.getByRole("button", { name: "Library" }).click();
+  await page.getByRole("button", { name: "My Notes", exact: true }).click();
+  const notes = page.getByRole("list", { name: "Notes" });
+  await expect(notes).toContainText("Knots");
+
+  // `mv Knots Braids` by another program.
+  await page.evaluate(async () => {
+    const copy = async (from: FileSystemDirectoryHandle, to: FileSystemDirectoryHandle) => {
+      for await (const [name, handle] of from.entries()) {
+        if (handle.kind === "directory") {
+          await copy(handle, await to.getDirectoryHandle(name, { create: true }));
+          continue;
+        }
+        const writable = await (await to.getFileHandle(name, { create: true })).createWritable();
+        await writable.write(await handle.getFile());
+        await writable.close();
+      }
+    };
+    const root = await navigator.storage.getDirectory();
+    await copy(await root.getDirectoryHandle("Knots"), await root.getDirectoryHandle("Braids", { create: true }));
+    await root.removeEntry("Knots", { recursive: true });
+  });
+  await focusWindow(page);
+  await expect(notes).toContainText("Braids");
+  await expect(notes).not.toContainText("Knots");
+  await openNote(page, "Braids");
+});
+
+test("rename, move and delete from the ⋯ menus change the notebook and folder directories", async ({ page }) => {
+  await startEmpty(page);
+  await page.getByRole("button", { name: "New Notebook" }).click();
+  await page.getByRole("textbox", { name: "Notebook Title" }).fill("Topology");
+  await page.getByRole("button", { name: "Create Notebook" }).click();
+  await page.getByRole("button", { name: "Topology", exact: true }).click();
+  await page.getByRole("button", { name: "New Note in Topology" }).click();
+  await page.getByRole("textbox", { name: "Title" }).fill("Knots");
+  await page.getByRole("button", { name: "Create Note" }).click();
+  await expect(page.locator("#ink-canvas")).toBeVisible();
+  await page.getByRole("button", { name: "Library" }).click();
+  await page.getByRole("button", { name: "Topology", exact: true }).click();
+
+  await entryMenu(page, "Knots", "Rename…");
+  await page.getByRole("textbox", { name: "Name" }).fill("Braids");
+  await page.getByRole("button", { name: "Rename" }).click();
+  await expect.poll(() => directoriesExist(page, ["Topology/Braids/pages", "Topology/Knots"])).toEqual([true, false]);
+
+  await entryMenu(page, "Braids", "Move to…");
+  await page.getByRole("button", { name: "My Notes" }).last().click();
+  await expect.poll(() => directoriesExist(page, ["Braids/pages", "Topology/Braids"])).toEqual([true, false]);
+
+  await entryMenu(page, "Topology", "Rename…");
+  await page.getByRole("textbox", { name: "Name" }).fill("Geometry");
+  await page.getByRole("button", { name: "Rename" }).click();
+  await expect.poll(() => directoriesExist(page, ["Geometry", "Topology"])).toEqual([true, false]);
+
+  await page.getByRole("button", { name: "My Notes", exact: true }).click();
+  await entryMenu(page, "Braids", "Move to…");
+  await page.getByRole("button", { name: "Geometry" }).last().click();
+  await expect.poll(() => directoriesExist(page, ["Geometry/Braids/pages", "Braids"])).toEqual([true, false]);
+
+  await entryMenu(page, "Geometry", "Move to Trash");
+  await expect.poll(() => directoriesExist(page, [".trash/Geometry/Braids/pages", "Geometry"])).toEqual([true, false]);
+  const notebook = JSON.parse(Buffer.from(await readOpfsFile(page, ".trash/Geometry/Braids/notebook.json"), "base64").toString());
+  expect(notebook.format).toBe("math-notes");
+});
+
+test("deleting a notebook moves it to Notes/.trash/", async ({ page }) => {
+  await startEmpty(page);
+  await newNote(page, "Knots");
+  const svg = await readOpfsFile(page, "Knots/pages/0001.svg");
+  await page.getByRole("button", { name: "Library" }).click();
+  await page.getByRole("button", { name: "My Notes", exact: true }).click();
+  await entryMenu(page, "Knots", "Move to Trash");
+  await expect.poll(() => directoriesExist(page, [".trash/Knots", "Knots"])).toEqual([true, false]);
+  expect(await readOpfsFile(page, ".trash/Knots/pages/0001.svg")).toBe(svg);
+});
+
+test("a thumbnail shows page 1's ink and is rendered again only when page 1's file changes", async ({ page }) => {
+  await startEmpty(page);
+  await newNote(page, "Knots");
+  const box = (await page.locator("#ink-canvas").boundingBox())!;
+  for (let line = 0; line < 6; line++) {
+    await drawWithPen(page, Array.from({ length: 30 }, (_, i) => ({ x: box.x + 80 + i * 12, y: box.y + 100 + line * 12 })));
+  }
+  await savedStrokes(page, "pages/0001.svg");
+  await page.getByRole("button", { name: "Library" }).click();
+  await page.getByRole("button", { name: "My Notes", exact: true }).click();
+  const stats = () => page.evaluate(() => ({ ...window.mathNotesThumbnails! }));
+  await expect.poll(async () => (await stats()).renders).toBe(1);
+
+  // The cached PNG is 240 px wide and holds the strokes' dark pixels.
+  const ink = await page.evaluate(async () => {
+    const cache = await (await navigator.storage.getDirectory()).getDirectoryHandle(".thumbnail-cache");
+    for await (const [, entry] of cache.entries()) {
+      for await (const [, file] of (entry as FileSystemDirectoryHandle).entries()) {
+        const bitmap = await createImageBitmap(await (file as FileSystemFileHandle).getFile());
+        const context = new OffscreenCanvas(bitmap.width, bitmap.height).getContext("2d")!;
+        context.drawImage(bitmap, 0, 0);
+        const data = context.getImageData(0, 0, bitmap.width, bitmap.height).data;
+        let dark = 0;
+        for (let i = 0; i < data.length; i += 4) if (Math.max(data[i], data[i + 1], data[i + 2]) < 200) dark++;
+        return { width: bitmap.width, dark };
+      }
+    }
+    return null;
+  });
+  expect(ink?.width).toBe(240);
+  expect(ink?.dark).toBeGreaterThan(100);
+
+  // A rescan reads the cache.
+  const before = await stats();
+  await focusWindow(page);
+  await expect.poll(async () => (await stats()).hits).toBeGreaterThan(before.hits);
+  expect((await stats()).renders).toBe(1);
+
+  // Another program changes page 1: the next rescan renders it again.
+  await page.evaluate(async () => {
+    const pages = await (await (await navigator.storage.getDirectory()).getDirectoryHandle("Knots")).getDirectoryHandle("pages");
+    const handle = await pages.getFileHandle("0001.svg");
+    const text = await (await handle.getFile()).text();
+    const writable = await handle.createWritable();
+    await writable.write(`${text}\n`);
+    await writable.close();
+  });
+  await focusWindow(page);
+  await expect.poll(async () => (await stats()).renders).toBe(2);
+});

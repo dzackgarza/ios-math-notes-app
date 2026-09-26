@@ -1154,3 +1154,60 @@ button {
   border: 2px solid var(--accent);
   cursor: pointer;
 }
+
+/* Rename and move */
+
+.menu-separator {
+  height: 1px;
+  margin: 0.3rem 0.2rem;
+  border: none;
+  background: var(--border);
+}
+
+.card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+  min-height: 1.8rem;
+}
+
+.field-error {
+  color: var(--danger);
+  font-size: 0.85rem;
+}
+
+.dialog-lede {
+  margin: 0 0 0.6rem;
+  color: var(--muted);
+}
+
+.move-targets {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  max-height: 16rem;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.move-target {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.5rem 0.6rem;
+  border: none;
+  border-radius: var(--radius-small);
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.move-target:hover {
+  background: var(--accent-soft);
+}

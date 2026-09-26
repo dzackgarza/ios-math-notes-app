@@ -51,3 +51,15 @@ export async function writeMetadata(root: FileSystemDirectoryHandle, metadata: L
   const bytes = new TextEncoder().encode(`${JSON.stringify(stored, null, 2)}\n`);
   await writeFiles(root, [{ kind: "write", path: FILE, bytes }]);
 }
+
+// The metadata after the notebook or folder at `from` moved to `to`: the
+// entries of the notes under it follow them to their new paths.
+export function moveNotes(metadata: LibraryMetadata, from: readonly string[], to: readonly string[]): LibraryMetadata {
+  const prefix = from.join("/");
+  const notes: Record<string, NoteMetadata> = {};
+  for (const [key, note] of Object.entries(metadata.notes)) {
+    const inside = key === prefix || key.startsWith(`${prefix}/`);
+    notes[inside ? to.join("/") + key.slice(prefix.length) : key] = note;
+  }
+  return { ...metadata, notes };
+}

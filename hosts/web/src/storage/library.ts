@@ -81,7 +81,10 @@ export async function scanLibrary(root: FileSystemDirectoryHandle): Promise<Fold
   return folders.sort((a, b) => (a.path.length === 0 ? -1 : b.path.length === 0 ? 1 : a.name.localeCompare(b.name)));
 }
 
-// The notes moved to Notes/.trash/ (docs/FORMAT.md, Layout).
+export const TRASH = ".trash";
+
+// The notes moved to Notes/.trash/ (docs/FORMAT.md, Layout), those inside a
+// trashed folder included, most recently modified first.
 export async function scanTrash(root: FileSystemDirectoryHandle): Promise<Note[]> {
   let trash: FileSystemDirectoryHandle;
   try {
@@ -91,35 +94,106 @@ export async function scanTrash(root: FileSystemDirectoryHandle): Promise<Note[]
     throw e;
   }
   const notes: Note[] = [];
-  for await (const [name, handle] of trash.entries()) {
-    if (handle.kind !== "directory") continue;
-    const json = await fileIfPresent(handle, "notebook.json");
-    if (json) notes.push(await readNote(handle, [TRASH, name], json));
-  }
+  const visit = async (dir: FileSystemDirectoryHandle, path: string[]): Promise<void> => {
+    for await (const [name, handle] of dir.entries()) {
+      if (handle.kind !== "directory") continue;
+      const json = await fileIfPresent(handle, "notebook.json");
+      if (json) notes.push(await readNote(handle, [...path, name], json));
+      else await visit(handle, [...path, name]);
+    }
+  };
+  await visit(trash, [TRASH]);
   return notes.sort((a, b) => b.modified - a.modified);
 }
 
-export const TRASH = ".trash";
+// Why `name` cannot name a new entry of a directory holding `siblings`, or
+// null when it can. Follows Write's NewDocDialog name check
+// (syncscribble/documentlist.cpp:836-854, styluslabs/Write 401b65d): empty,
+// "/" or an existing name is refused. A leading "." is refused too: the scan
+// skips dot entries, as Write's list does (documentlist.cpp:418).
+export function nameError(name: string, siblings: readonly string[]): string | null {
+  const trimmed = name.trim();
+  if (!trimmed) return "Enter a name.";
+  if (trimmed.includes("/") || trimmed.includes("\\")) return "A name cannot contain / or \\.";
+  if (trimmed.startsWith(".")) return "A name cannot start with a dot.";
+  if (siblings.includes(trimmed)) return `“${trimmed}” already exists here.`;
+  return null;
+}
+
+// The names in the directory at `path`.
+export async function entryNames(root: FileSystemDirectoryHandle, path: readonly string[]): Promise<string[]> {
+  const names: string[] = [];
+  for await (const name of (await directoryAt(root, path)).keys()) names.push(name);
+  return names;
+}
 
 export async function createFolder(root: FileSystemDirectoryHandle, parent: readonly string[], name: string): Promise<string[]> {
-  await (await directoryAt(root, parent)).getDirectoryHandle(name, { create: true });
-  return [...parent, name];
+  const error = nameError(name, await entryNames(root, parent));
+  if (error) throw new Error(error);
+  await (await directoryAt(root, parent)).getDirectoryHandle(name.trim(), { create: true });
+  return [...parent, name.trim()];
 }
 
-// Chromium's FileSystemHandle.move (File System Access, "move()"), which
-// moves a directory with its contents. Not yet in the type definitions.
-interface MovableHandle {
-  move(parent: FileSystemDirectoryHandle, name: string): Promise<void>;
+// Copies directory `source` with its contents to a new directory `name` in
+// `parent`. File System Access has no directory move outside the
+// origin-private file system (FileSystemHandle.move moves files only), so a
+// move is this copy, then the removal of the source.
+async function copyDirectory(source: FileSystemDirectoryHandle, parent: FileSystemDirectoryHandle, name: string): Promise<void> {
+  const target = await parent.getDirectoryHandle(name, { create: true });
+  for await (const [entry, handle] of source.entries()) {
+    if (handle.kind === "directory") {
+      await copyDirectory(handle, target, entry);
+      continue;
+    }
+    const writable = await (await target.getFileHandle(entry, { create: true })).createWritable();
+    await writable.write(await handle.getFile());
+    await writable.close();
+  }
 }
 
-// Moves a note into Notes/.trash/, keeping its name; a name already in the
-// trash gets " 2", " 3", ... appended.
-export async function moveToTrash(root: FileSystemDirectoryHandle, note: Note): Promise<void> {
-  const trash = await root.getDirectoryHandle(TRASH, { create: true });
-  const taken = new Set<string>();
-  for await (const name of trash.keys()) taken.add(name);
-  let target = note.name;
-  for (let i = 2; taken.has(target); i++) target = `${note.name} ${i}`;
-  const handle = (await directoryAt(root, note.path)) as FileSystemDirectoryHandle & MovableHandle;
-  await handle.move(trash, target);
+// Moves the notebook or folder at `from` into folder `toParent` as `name`: a
+// rename when the parent is the same. Returns the new path. Follows Write's
+// DocumentList::renameItem and pasteItem (documentlist.cpp:567-592,
+// 648-681): the target must not exist, and a move into the same folder
+// under the same name does nothing.
+export async function moveEntry(
+  root: FileSystemDirectoryHandle,
+  from: readonly string[],
+  toParent: readonly string[],
+  name: string,
+): Promise<string[]> {
+  const to = [...toParent, name.trim()];
+  if (pathKey(to) === pathKey(from)) return to;
+  if (toParent.length >= from.length && from.every((part, i) => toParent[i] === part)) {
+    throw new Error("A folder cannot move into itself.");
+  }
+  const error = nameError(name, await entryNames(root, toParent));
+  if (error) throw new Error(error);
+  const source = await directoryAt(root, from);
+  await copyDirectory(source, await directoryAt(root, toParent), name.trim());
+  await (await directoryAt(root, from.slice(0, -1))).removeEntry(from[from.length - 1], { recursive: true });
+  return to;
+}
+
+// Moves the notebook or folder at `path` into Notes/.trash/, where any file
+// manager can restore it, keeping its name; a name already in the trash gets
+// " 2", " 3", ... appended.
+export async function moveToTrash(root: FileSystemDirectoryHandle, path: readonly string[]): Promise<void> {
+  await root.getDirectoryHandle(TRASH, { create: true });
+  const taken = new Set(await entryNames(root, [TRASH]));
+  const name = path[path.length - 1];
+  let target = name;
+  for (let i = 2; taken.has(target); i++) target = `${name} ${i}`;
+  await moveEntry(root, path, [TRASH], target);
+}
+
+export type Sort = "modified" | "name";
+
+// The library's orders, as Write's list sorts (documentlist.cpp:438-449): by
+// name, case-insensitively, or most recently modified first, with the name
+// breaking ties and ordering entries without a modification time.
+export function compareBy(sort: Sort): (a: { name: string; modified: number }, b: { name: string; modified: number }) => number {
+  const byName = (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
+  if (sort === "name") return byName;
+  return (a, b) => (a.modified > 0 && b.modified > 0 && a.modified !== b.modified ? b.modified - a.modified : byName(a, b));
 }
