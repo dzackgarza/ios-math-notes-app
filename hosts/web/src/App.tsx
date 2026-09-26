@@ -1,4 +1,5 @@
-import { Button } from "@kobalte/core/button";
+import { IonApp, IonButton, IonCard, IonCardContent, IonContent, IonIcon, IonText } from "@ionic-solidjs/core";
+import { folderOpenOutline } from "ionicons/icons";
 import { createEffect, createResource, createSignal, Match, onCleanup, onMount, Show, Switch } from "solid-js";
 
 import { Editor, type Tab } from "./editor/Editor.tsx";
@@ -6,11 +7,12 @@ import { createNotebook, openNotebook, type OpenNotebook } from "./editor/notebo
 import type { Engine } from "./engine/engine.ts";
 import { loadEngine } from "./engine/load.ts";
 import { ensureTemplates, hasPermission, listTemplates, pickRoot, requestPermission, savedRoot } from "./storage/folder.ts";
-import { createFolder, moveEntry, moveToTrash, type Note, pathKey, scanLibrary, scanTrash } from "./storage/library.ts";
-import { type LibraryMetadata, moveNotes, readMetadata, writeMetadata } from "./storage/metadata.ts";
+import { createFolder, moveEntry, moveToTrash, MY_NOTES, type Note, pathKey, scanLibrary, scanTrash } from "./storage/library.ts";
+import { emptyNote, type LibraryMetadata, moveNotes, readMetadata, writeMetadata } from "./storage/metadata.ts";
 import { noteThumbnail, thumbnailStats } from "./storage/thumbnails.ts";
 import { NewNote, NewNotebook } from "./ui/Create.tsx";
-import { AppMark, Library, type Section } from "./ui/Library.tsx";
+import { presentModal, toast } from "./ui/ionic.ts";
+import { addTagPrompt, AppMark, Library, LibraryHeader, type Section, Shell } from "./ui/Library.tsx";
 
 // `?root=opfs` uses the origin-private file system as the notes folder: the
 // automated tests cannot drive the native folder picker.
@@ -25,8 +27,6 @@ async function initialRoot(): Promise<{ root?: FileSystemDirectoryHandle; needsG
   return (await hasPermission(root)) ? { root, needsGesture: false } : { root, needsGesture: true };
 }
 
-type Screen = { kind: "library" } | { kind: "new-notebook" } | { kind: "new-note"; folder: string[] } | { kind: "editor" };
-
 // Everything the library screens show, read from the notes root.
 async function readLibrary(args: { root: FileSystemDirectoryHandle; engine: Engine }) {
   await ensureTemplates(args.root, args.engine);
@@ -39,12 +39,13 @@ async function readLibrary(args: { root: FileSystemDirectoryHandle; engine: Engi
   return { folders, trash, metadata, templates };
 }
 
+// The form sheets' size on a tablet screen (docs/specs/ui/tablet-new-*.png).
+const SHEET = { cssClass: "form-sheet" };
+
 export function App() {
   const [engine] = createResource<Engine>(loadEngine);
   const [start] = createResource(initialRoot);
   const [root, setRoot] = createSignal<FileSystemDirectoryHandle>();
-  const [error, setError] = createSignal("");
-  const [screen, setScreen] = createSignal<Screen>({ kind: "library" });
   const [section, setSection] = createSignal<Section>("library");
   const [selected, setSelected] = createSignal<string[]>([]);
   const [open, setOpen] = createSignal<OpenNotebook>();
@@ -59,10 +60,9 @@ export function App() {
     readLibrary,
   );
 
-  const run = (action: () => Promise<void>) => {
-    setError("");
-    action().catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
-  };
+  const fail = (e: unknown) => void toast(e instanceof Error ? e.message : String(e), "danger");
+  createEffect(() => engine.error && fail(`The engine did not load: ${String(engine.error)}`));
+  const run = (action: () => Promise<void>) => action().catch(fail);
   const choose = () =>
     run(async () => {
       setRoot(await pickRoot());
@@ -78,7 +78,6 @@ export function App() {
       setTabs([...tabs(), { path: notebook.path, name: notebook.name }]);
     }
     setOpen(notebook);
-    setScreen({ kind: "editor" });
   };
   const openPath = (path: string[]) =>
     run(async () => {
@@ -87,7 +86,6 @@ export function App() {
     });
   const toLibrary = () => {
     setOpen(undefined);
-    setScreen({ kind: "library" });
     refetch();
   };
   const closeTab = (path: string[]) => {
@@ -111,7 +109,7 @@ export function App() {
   // gets focus, and after each of the app's own writes.
   onMount(() => {
     const rescan = () => {
-      if (screen().kind === "library" && library.state === "ready") refetch();
+      if (!open() && library.state === "ready") refetch();
     };
     window.addEventListener("focus", rescan);
     onCleanup(() => window.removeEventListener("focus", rescan));
@@ -159,110 +157,148 @@ export function App() {
     return r && e ? noteThumbnail(e, r, note) : Promise.resolve(null);
   };
 
-  const folderName = (path: string[]) =>
-    library()?.folders.find((f) => pathKey(f.path) === pathKey(path.slice(0, -1)))?.name ?? "";
+  const folderOf = (path: string[]) => library()?.folders.find((f) => pathKey(f.path) === pathKey(path.slice(0, -1)));
+  const noteTags = (path: string[]) => library()?.metadata.notes[pathKey(path)]?.tags ?? [];
+  const setNoteTags = (path: string[], tags: string[]) =>
+    updateMetadata((m) => ({ ...m, notes: { ...m.notes, [pathKey(path)]: { ...(m.notes[pathKey(path)] ?? emptyNote()), tags } } }));
+
+  const newNotebook = () => {
+    const r = current(), data = library();
+    if (!r || !data) return;
+    void presentModal(
+      (dismiss) => (
+        <NewNotebook
+          root={r}
+          folders={library()?.folders ?? data.folders}
+          templates={data.templates}
+          parent={selected()}
+          dismiss={dismiss}
+          onCreate={(parent, title) =>
+            run(async () => {
+              const path = await createFolder(r, parent, title);
+              await refetch();
+              setSection("library");
+              setSelected(path);
+            })
+          }
+        />
+      ),
+      SHEET,
+    );
+  };
+  const newNote = (folder: string[]) => {
+    const r = current(), data = library();
+    if (!r || !data) return;
+    void presentModal(
+      (dismiss) => (
+        <NewNote
+          root={r}
+          folders={library()?.folders ?? data.folders}
+          templates={data.templates}
+          folder={folder}
+          metadata={library()?.metadata ?? data.metadata}
+          onMetadata={updateMetadata}
+          dismiss={dismiss}
+          onSettings={() => setSection("settings")}
+          onCreate={(parent, title, template, tags) =>
+            run(async () => {
+              const e = engine();
+              if (!e) return;
+              setSelected(parent);
+              const notebook = await createNotebook(e, r, parent, title, template);
+              const metadata = library()?.metadata;
+              if (tags.length > 0 && metadata) {
+                const key = pathKey(notebook.path);
+                await writeMetadata(r, { ...metadata, notes: { ...metadata.notes, [key]: { ...emptyNote(), tags } } });
+              }
+              showNotebook(notebook);
+              await refetch();
+            })
+          }
+        />
+      ),
+      SHEET,
+    );
+  };
 
   return (
-    <>
-      <Show when={engine.error}>
-        <p class="error banner">The engine did not load: {String(engine.error)}</p>
-      </Show>
-      <Show when={error()}>
-        <p class="error banner">{error()}</p>
-      </Show>
+    <IonApp>
       <Show
         when={current() && library()}
         fallback={
-          <main class="welcome">
-            <AppMark />
-            <h1>Math Notes</h1>
-            <Show when={!start.loading && !current()}>
-              <div class="row">
-                <Show when={start()?.needsGesture}>
-                  <Button class="button" onClick={reconnect}>
-                    Reconnect folder
-                  </Button>
-                </Show>
-                <Button class="button primary" onClick={choose}>
-                  Choose notes folder
-                </Button>
-              </div>
-            </Show>
-          </main>
+          // The library's layout, empty, behind the folder choice.
+          <>
+            <Shell sidebar={{ folders: [], metadata: { tags: [], notes: {} }, section: "library", onSection: () => {}, onMetadata: () => {} }}>
+              <IonContent class="main">
+                <LibraryHeader title="Library" lede="A collection of mathematical notebooks." />
+              </IonContent>
+            </Shell>
+            <div class="welcome">
+              <IonCard class="welcome-card">
+                <IonCardContent>
+                  <AppMark />
+                  <h1>Math Notes</h1>
+                  <IonText color="medium">
+                    <p>Your notes live in a folder on this device. Choose it to open the library.</p>
+                  </IonText>
+                  <Show when={!start.loading && !current()}>
+                    <div class="welcome-actions">
+                      <Show when={start()?.needsGesture}>
+                        <IonButton fill="outline" onClick={reconnect}>
+                          Reconnect folder
+                        </IonButton>
+                      </Show>
+                      <IonButton onClick={choose}>
+                        <IonIcon slot="start" icon={folderOpenOutline} />
+                        Choose notes folder
+                      </IonButton>
+                    </div>
+                  </Show>
+                </IonCardContent>
+              </IonCard>
+            </div>
+          </>
         }
       >
         {(_) => {
           const data = () => library.latest!;
           const r = () => current()!;
-          const sidebar = () => ({
-            folders: data().folders,
-            metadata: data().metadata,
-            section: section(),
-            onSection: (s: Section) => {
-              setSection(s);
-              setScreen({ kind: "library" });
-            },
-            onMetadata: updateMetadata,
-          });
           return (
             <Switch>
-              <Match when={screen().kind === "editor" && open()} keyed>
+              <Match when={open()} keyed>
                 {(notebook) => (
                   <Editor
                     notebook={notebook}
-                    folderName={folderName(notebook.path)}
+                    folderName={folderOf(notebook.path)?.name ?? MY_NOTES}
+                    folderNotes={folderOf(notebook.path)?.notes.map((n) => ({ path: n.path, name: n.name })) ?? []}
                     tabs={tabs()}
+                    tags={noteTags(notebook.path)}
+                    allTags={data().metadata.tags}
+                    onToggleTag={(tag) => {
+                      const tags = noteTags(notebook.path);
+                      setNoteTags(notebook.path, tags.includes(tag) ? tags.filter((t) => t !== tag) : [...tags, tag]);
+                    }}
+                    onNewTag={() => addTagPrompt(data().metadata, updateMetadata, (tag) => setNoteTags(notebook.path, [...noteTags(notebook.path), tag]))}
                     onLibrary={toLibrary}
                     onSelectTab={openPath}
                     onCloseTab={closeTab}
                   />
                 )}
               </Match>
-              <Match when={screen().kind === "new-notebook"}>
-                <NewNotebook
-                  {...sidebar()}
-                  parent={selected()}
-                  onCancel={() => setScreen({ kind: "library" })}
-                  onCreate={(parent, title) =>
-                    run(async () => {
-                      const path = await createFolder(r(), parent, title);
-                      await refetch();
-                      setSection("library");
-                      setSelected(path);
-                      setScreen({ kind: "library" });
-                    })
-                  }
-                />
-              </Match>
-              <Match when={screen().kind === "new-note" && (screen() as { folder: string[] }).folder}>
-                {(folder) => (
-                  <NewNote
-                    root={r()}
-                    folders={data().folders}
-                    templates={data().templates}
-                    folder={folder()}
-                    onCancel={() => setScreen({ kind: "library" })}
-                    onCreate={(parent, title, template) =>
-                      run(async () => {
-                        const e = engine();
-                        if (!e) return;
-                        setSelected(parent);
-                        showNotebook(await createNotebook(e, r(), parent, title, template));
-                      })
-                    }
-                  />
-                )}
-              </Match>
               <Match when={true}>
                 <Library
-                  {...sidebar()}
+                  folders={data().folders}
+                  metadata={data().metadata}
+                  section={section()}
+                  onSection={setSection}
+                  onMetadata={updateMetadata}
                   root={r()}
                   trash={data().trash}
                   selected={selected()}
                   onSelect={setSelected}
                   onOpen={(note) => openPath(note.path)}
-                  onNewNotebook={() => setScreen({ kind: "new-notebook" })}
-                  onNewNote={(folder) => setScreen({ kind: "new-note", folder })}
+                  onNewNotebook={newNotebook}
+                  onNewNote={newNote}
                   onTrash={trash}
                   onRename={rename}
                   onMove={move}
@@ -274,6 +310,6 @@ export function App() {
           );
         }}
       </Show>
-    </>
+    </IonApp>
   );
 }

@@ -1,32 +1,32 @@
 // The library screen of docs/specs/tablet-ui.md: sidebar, folder cards with
-// sort and grid/list toggle, and the detail pane of the selected folder. The
-// sidebar's Search, Recent, Favorites and tag views are views of one table of
-// notes (spec, "Relation to the current model", item 5).
-import { Button } from "@kobalte/core/button";
-import { Dialog } from "@kobalte/core/dialog";
-import { DropdownMenu } from "@kobalte/core/dropdown-menu";
-import { TextField } from "@kobalte/core/text-field";
-import { ToggleGroup } from "@kobalte/core/toggle-group";
+// filter, sort and grid/list toggle, and the detail pane of the open folder.
+// The sidebar's Search, Recent, Favorites and tag views are views of one
+// table of notes (spec, "Relation to the current model", item 5).
+import { IonButton, IonCard, IonCardContent, IonCheckbox, IonChip, IonContent, IonIcon, IonItem, IonLabel, IonList, IonListHeader, IonMenu, IonNote, IonSearchbar, IonSegment, IonSegmentButton, IonSplitPane, IonText, IonThumbnail } from "@ionic-solidjs/core";
 import {
-  BookOpen,
-  ChevronDown,
-  ChevronRight,
-  Clock,
-  Ellipsis,
-  Folder as FolderIcon,
-  FolderOpen,
-  LayoutGrid,
-  List,
-  Plus,
-  Search,
-  Settings,
-  Star,
-  Trash2,
-} from "lucide-solid";
+  add,
+  bookOutline,
+  checkmark,
+  chevronBack,
+  chevronDown,
+  chevronForward,
+  ellipsisHorizontal,
+  folderOutline,
+  gridOutline,
+  listOutline,
+  peopleOutline,
+  searchOutline,
+  settingsOutline,
+  star,
+  starOutline,
+  timeOutline,
+  trashOutline,
+} from "ionicons/icons";
 import { createMemo, createSignal, For, type JSX, Match, mergeProps, Show, Switch } from "solid-js";
 
 import { compareBy, type Folder, MY_NOTES, nameError, type Note, pathKey, type Sort } from "../storage/library.ts";
 import { emptyNote, type LibraryMetadata, type NoteMetadata, TAG_COLORS } from "../storage/metadata.ts";
+import { chooseAction, notImplemented, presentPopover, promptText } from "./ionic.ts";
 import { NoteCover, type Thumbnails } from "./paper.tsx";
 
 export type Section = "library" | "search" | "recent" | "favorites" | "trash" | "settings" | `tag:${string}`;
@@ -78,189 +78,267 @@ export function AppMark() {
   );
 }
 
+// One entry of a popover menu; choosing it closes the menu.
+export function MenuItem(props: { label: string; icon?: string; checked?: boolean; danger?: boolean; dismiss: () => void; onSelect: () => void }) {
+  return (
+    <IonItem
+      button
+      detail={false}
+      color={props.danger ? "danger" : undefined}
+      onClick={() => {
+        props.dismiss();
+        props.onSelect();
+      }}
+    >
+      <Show when={props.icon}>{(icon) => <IonIcon slot="start" icon={icon()} />}</Show>
+      <IonLabel>{props.label}</IonLabel>
+      <Show when={props.checked}>
+        <IonIcon slot="end" color="primary" icon={checkmark} />
+      </Show>
+    </IonItem>
+  );
+}
+
+// A button that opens a menu of choices, the current one checked.
+export function ChoiceButton<T extends string>(props: {
+  label: string;
+  icon?: string;
+  choices: { value: T; label: string }[];
+  value: T;
+  onChange: (value: T) => void;
+  class?: string;
+}) {
+  return (
+    <IonButton
+      class={props.class ?? "choice-button"}
+      fill="outline"
+      color="medium"
+      aria-label={props.label}
+      onClick={(e) =>
+        void presentPopover(e, (dismiss) => (
+          <IonList lines="full">
+            <For each={props.choices}>
+              {(c) => <MenuItem label={c.label} checked={c.value === props.value} dismiss={dismiss} onSelect={() => props.onChange(c.value)} />}
+            </For>
+          </IonList>
+        ))
+      }
+    >
+      <Show when={props.icon}>{(icon) => <IonIcon slot="start" icon={icon()} />}</Show>
+      {props.choices.find((c) => c.value === props.value)?.label}
+      <IonIcon slot="end" icon={chevronDown} />
+    </IonButton>
+  );
+}
+
 export type SidebarProps = Pick<LibraryProps, "folders" | "metadata" | "section" | "onSection" | "onMetadata">;
+
+export function addTagPrompt(metadata: LibraryMetadata, onMetadata: LibraryProps["onMetadata"], then?: (name: string) => void) {
+  void promptText({
+    header: "New Tag",
+    label: "Name",
+    action: "Add Tag",
+    accept: (text) => {
+      const name = text.trim();
+      if (!name) return "A tag needs a name.";
+      if (metadata.tags.some((t) => t.name === name)) return `There is already a tag “${name}”.`;
+      onMetadata((m) => ({ ...m, tags: [...m.tags, { name, color: TAG_COLORS[m.tags.length % TAG_COLORS.length] }] }));
+      then?.(name);
+      return null;
+    },
+  });
+}
 
 export function Sidebar(props: SidebarProps) {
   const notes = () => props.folders.flatMap((f) => f.notes);
   const tagCount = (tag: string) => notes().filter((n) => props.metadata.notes[pathKey(n.path)]?.tags.includes(tag)).length;
-  const item = (section: Section, icon: JSX.Element, label: string, count?: () => number) => (
-    <Button class="nav-item" aria-current={props.section === section ? "page" : undefined} onClick={() => props.onSection(section)}>
-      {icon}
-      <span>{label}</span>
-      <Show when={count !== undefined}>
-        <span class="nav-count">{count!()}</span>
-      </Show>
-    </Button>
+  const item = (section: Section, icon: () => JSX.Element, label: string, count?: () => number) => (
+    <IonItem
+      button
+      detail={false}
+      class="nav-item"
+      classList={{ selected: props.section === section }}
+      aria-current={props.section === section ? "page" : undefined}
+      onClick={() => props.onSection(section)}
+    >
+      {icon()}
+      <IonLabel>{label}</IonLabel>
+      <Show when={count}>{(c) => <IonNote slot="end">{c()()}</IonNote>}</Show>
+    </IonItem>
   );
-  const [adding, setAdding] = createSignal(false);
-  const [tagName, setTagName] = createSignal("");
-  const addTag = () => {
-    const name = tagName().trim();
-    if (!name || props.metadata.tags.some((t) => t.name === name)) return;
-    props.onMetadata((m) => ({ ...m, tags: [...m.tags, { name, color: TAG_COLORS[m.tags.length % TAG_COLORS.length] }] }));
-    setTagName("");
-    setAdding(false);
-  };
+  const glyph = (icon: string) => () => <IonIcon slot="start" icon={icon} />;
   return (
-    <nav class="sidebar" aria-label="Library">
-      <div class="brand">
-        <AppMark />
-        <div class="brand-name">Math Notes</div>
-      </div>
-      {item("library", <BookOpen size={18} />, "Library")}
-      {item("search", <Search size={18} />, "Search")}
-      {item("recent", <Clock size={18} />, "Recent")}
-      {item("favorites", <Star size={18} />, "Favorites")}
-      {item("trash", <Trash2 size={18} />, "Trash")}
-      <div class="sidebar-heading">
-        <span>Tags</span>
-        <Button class="icon-button" aria-label="Add tag" onClick={() => setAdding(true)}>
-          <Plus size={16} />
-        </Button>
-      </div>
-      <For each={props.metadata.tags}>
-        {(tag) =>
-          item(
-            `tag:${tag.name}`,
-            <span class="tag-dot" style={{ background: tag.color }} />,
-            tag.name,
-            () => tagCount(tag.name),
-          )
-        }
-      </For>
-      <div class="sidebar-spacer" />
-      {item("settings", <Settings size={18} />, "Settings")}
-      <Dialog open={adding()} onOpenChange={setAdding}>
-        <Dialog.Portal>
-          <Dialog.Overlay class="dialog-overlay" />
-          <Dialog.Content class="dialog">
-            <Dialog.Title class="dialog-title">New Tag</Dialog.Title>
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                addTag();
-              }}
-            >
-              <TextField value={tagName()} onChange={setTagName} class="field">
-                <TextField.Label class="field-label">Name</TextField.Label>
-                <TextField.Input class="input" />
-              </TextField>
-              <div class="dialog-actions">
-                <Dialog.CloseButton class="button">Cancel</Dialog.CloseButton>
-                <Button class="button primary" type="submit">
-                  Add Tag
-                </Button>
-              </div>
-            </form>
-          </Dialog.Content>
-        </Dialog.Portal>
-      </Dialog>
-    </nav>
+    <IonContent class="sidebar">
+      <nav class="sidebar-column" aria-label="Library">
+        <div class="brand">
+          <AppMark />
+          <div class="brand-name">Math Notes</div>
+          <IonNote class="brand-tagline">Ideas for a more mathematical world.</IonNote>
+        </div>
+        <IonList lines="none" class="nav-list">
+          {item("library", glyph(bookOutline), "Library")}
+          {item("search", glyph(searchOutline), "Search")}
+          {item("recent", glyph(timeOutline), "Recent")}
+          <IonItem button detail={false} class="nav-item" onClick={() => notImplemented(59)}>
+            <IonIcon slot="start" icon={peopleOutline} />
+            <IonLabel>Shared</IonLabel>
+          </IonItem>
+          {item("favorites", glyph(starOutline), "Favorites")}
+          {item("trash", glyph(trashOutline), "Trash")}
+        </IonList>
+        <IonList lines="none" class="nav-list tags">
+          <IonListHeader>
+            <IonLabel>Tags</IonLabel>
+            <IonButton aria-label="Add tag" onClick={() => addTagPrompt(props.metadata, props.onMetadata)}>
+              <IonIcon slot="icon-only" icon={add} />
+            </IonButton>
+          </IonListHeader>
+          <For each={props.metadata.tags}>
+            {(tag) =>
+              item(`tag:${tag.name}`, () => <span slot="start" class="tag-dot" style={{ background: tag.color }} />, tag.name, () => tagCount(tag.name))
+            }
+          </For>
+        </IonList>
+        <div class="sidebar-spacer" />
+        <IonList lines="none" class="nav-list">
+          {item("settings", glyph(settingsOutline), "Settings")}
+        </IonList>
+      </nav>
+    </IonContent>
   );
 }
 
-function TagChips(props: { metadata: LibraryMetadata; tags: string[] }) {
+export function TagChips(props: { metadata: LibraryMetadata; tags: string[] }) {
   const color = (name: string) => props.metadata.tags.find((t) => t.name === name)?.color ?? "#8A8F98";
   return (
     <div class="chips">
       <For each={props.tags}>
         {(tag) => (
-          <span class="chip" style={{ "--chip": color(tag) }}>
-            {tag}
-          </span>
+          <IonChip class="tag-chip" style={{ "--chip": color(tag) }}>
+            <IonLabel>{tag}</IonLabel>
+          </IonChip>
         )}
       </For>
     </div>
   );
 }
 
-// Rename or move a notebook or folder: the dialogs of EntryDialog.
-interface EntryAction {
-  kind: "rename" | "move";
-  path: string[];
-  folder: boolean;
-}
-
-// The library's props, with the sort order and the entry dialogs.
+// The library's props, with the sort order.
 interface View extends LibraryProps {
   sort: Sort;
   onSort: (sort: Sort) => void;
-  onAction: (action: EntryAction) => void;
+}
+
+// The names in folder `parent` (path segments; [] is the root) that the scan
+// found: its notes and its subfolders.
+function namesIn(folders: readonly Folder[], parent: readonly string[]): string[] {
+  const key = pathKey(parent);
+  const notes = folders.find((f) => pathKey(f.path) === key)?.notes.map((n) => n.name) ?? [];
+  const subfolders = folders.filter((f) => f.path.length === parent.length + 1 && pathKey(f.path.slice(0, -1)) === key);
+  return [...notes, ...subfolders.map((f) => f.path[f.path.length - 1])];
+}
+
+// Rename (a name checked as Write's NewDocDialog checks it) and move (the
+// folders the entry can go to) of a notebook or folder.
+function rename(view: View, path: string[], folder: boolean) {
+  const name = path[path.length - 1];
+  void promptText({
+    header: `Rename ${folder ? "Notebook" : "Note"}`,
+    label: "Name",
+    value: name,
+    action: "Rename",
+    accept: (text) => {
+      const next = text.trim();
+      if (next === name) return null;
+      const error = nameError(next, namesIn(view.folders, path.slice(0, -1)));
+      if (error) return error;
+      view.onRename(path, next);
+      return null;
+    },
+  });
+}
+
+function move(view: View, path: string[], folder: boolean) {
+  const parent = path.slice(0, -1);
+  // Not the current folder, and for a folder not itself or a folder inside it.
+  const targets = view.folders
+    .map((f) => f.path)
+    .filter((p) => pathKey(p) !== pathKey(parent))
+    .filter((p) => !(folder && p.length >= path.length && path.every((part, i) => p[i] === part)))
+    .sort((a, b) => (a.length === 0 ? -1 : b.length === 0 ? 1 : pathKey(a).localeCompare(pathKey(b))));
+  void chooseAction(
+    `Move “${path[path.length - 1]}” to`,
+    targets.map((target) => ({ text: target.length === 0 ? MY_NOTES : target.join(" / "), handler: () => view.onMove(path, target) })),
+  );
 }
 
 // Rename…, Move to… and Move to Trash, in a note's or a folder's ⋯ menu.
-function EntryItems(props: { path: string[]; folder: boolean; view: View }) {
-  const act = (kind: EntryAction["kind"]) => props.view.onAction({ kind, path: props.path, folder: props.folder });
+function EntryItems(props: { path: string[]; folder: boolean; view: View; dismiss: () => void }) {
   return (
     <>
-      <DropdownMenu.Item class="menu-item" onSelect={() => act("rename")}>
-        Rename…
-      </DropdownMenu.Item>
-      <DropdownMenu.Item class="menu-item" onSelect={() => act("move")}>
-        Move to…
-      </DropdownMenu.Item>
-      <DropdownMenu.Item class="menu-item danger" onSelect={() => props.view.onTrash(props.path)}>
-        Move to Trash
-      </DropdownMenu.Item>
+      <MenuItem label="Rename…" dismiss={props.dismiss} onSelect={() => rename(props.view, props.path, props.folder)} />
+      <MenuItem label="Move to…" dismiss={props.dismiss} onSelect={() => move(props.view, props.path, props.folder)} />
+      <MenuItem label="Move to Trash" danger dismiss={props.dismiss} onSelect={() => props.view.onTrash(props.path)} />
     </>
   );
 }
 
-function MenuTrigger(props: { name: string }) {
+function MenuButton(props: { name: string; class?: string; menu: (dismiss: () => void) => JSX.Element }) {
   return (
-    <DropdownMenu.Trigger class="icon-button" aria-label={`${props.name} actions`} onClick={(e: MouseEvent) => e.stopPropagation()}>
-      <Ellipsis size={18} />
-    </DropdownMenu.Trigger>
+    <IonButton
+      class={props.class}
+      fill="clear"
+      color="medium"
+      aria-label={`${props.name} actions`}
+      onClick={(e) => {
+        e.stopPropagation();
+        void presentPopover(e, props.menu);
+      }}
+    >
+      <IonIcon slot="icon-only" icon={ellipsisHorizontal} />
+    </IonButton>
   );
 }
 
 // The ⋯ menu of a note: favorite, tags, rename, move, move to the trash.
-function NoteMenu(props: { note: Note; view: View }) {
+function NoteMenu(props: { note: Note; view: View; class?: string }) {
   const key = () => pathKey(props.note.path);
   const meta = (): NoteMetadata => props.view.metadata.notes[key()] ?? emptyNote();
   const change = (update: (note: NoteMetadata) => NoteMetadata) =>
     props.view.onMetadata((m) => ({ ...m, notes: { ...m.notes, [key()]: update(m.notes[key()] ?? emptyNote()) } }));
   return (
-    <DropdownMenu>
-      <MenuTrigger name={props.note.name} />
-      <DropdownMenu.Portal>
-        <DropdownMenu.Content class="menu">
-          <DropdownMenu.CheckboxItem
-            class="menu-item"
-            checked={meta().favorite}
-            onChange={(favorite) => change((n) => ({ ...n, favorite }))}
-          >
-            Favorite
-          </DropdownMenu.CheckboxItem>
-          <Show when={props.view.metadata.tags.length > 0}>
-            <DropdownMenu.Sub>
-              <DropdownMenu.SubTrigger class="menu-item">Tags</DropdownMenu.SubTrigger>
-              <DropdownMenu.Portal>
-                <DropdownMenu.SubContent class="menu">
-                  <For each={props.view.metadata.tags}>
-                    {(tag) => (
-                      <DropdownMenu.CheckboxItem
-                        class="menu-item"
-                        checked={meta().tags.includes(tag.name)}
-                        onChange={(on) =>
-                          change((n) => ({ ...n, tags: on ? [...n.tags, tag.name] : n.tags.filter((t) => t !== tag.name) }))
-                        }
-                      >
-                        <span class="tag-dot" style={{ background: tag.color }} /> {tag.name}
-                      </DropdownMenu.CheckboxItem>
-                    )}
-                  </For>
-                </DropdownMenu.SubContent>
-              </DropdownMenu.Portal>
-            </DropdownMenu.Sub>
-          </Show>
+    <MenuButton
+      name={props.note.name}
+      class={props.class}
+      menu={(dismiss) => (
+        <IonList lines="full">
+          <IonItem>
+            <IonCheckbox justify="space-between" checked={meta().favorite} on:ionChange={(e) => change((n) => ({ ...n, favorite: !!e.detail.checked }))}>
+              Favorite
+            </IonCheckbox>
+          </IonItem>
+          <For each={props.view.metadata.tags}>
+            {(tag) => (
+              <IonItem>
+                <span slot="start" class="tag-dot" style={{ background: tag.color }} />
+                <IonCheckbox
+                  justify="space-between"
+                  checked={meta().tags.includes(tag.name)}
+                  on:ionChange={(e) =>
+                    change((n) => ({ ...n, tags: e.detail.checked ? [...n.tags, tag.name] : n.tags.filter((t) => t !== tag.name) }))
+                  }
+                >
+                  {tag.name}
+                </IonCheckbox>
+              </IonItem>
+            )}
+          </For>
           <Show when={props.note.path[0] !== ".trash"}>
-            <DropdownMenu.Separator class="menu-separator" />
-            <EntryItems path={props.note.path} folder={false} view={props.view} />
+            <EntryItems path={props.note.path} folder={false} view={props.view} dismiss={dismiss} />
           </Show>
-        </DropdownMenu.Content>
-      </DropdownMenu.Portal>
-    </DropdownMenu>
+        </IonList>
+      )}
+    />
   );
 }
 
@@ -268,20 +346,22 @@ function NoteRow(props: { note: Note; subtitle: string; view: View }) {
   const meta = () => props.view.metadata.notes[pathKey(props.note.path)];
   return (
     <li class="note-row">
-      <Button class="note-open" onClick={() => props.view.onOpen(props.note)}>
-        <NoteCover root={props.view.root} note={props.note} thumbnail={props.view.thumbnail} class="note-thumb" />
-        <span class="note-text">
-          <span class="note-title">
+      <IonItem button detail={false} lines="none" class="note-open" onClick={() => props.view.onOpen(props.note)}>
+        <IonThumbnail slot="start" class="note-thumb">
+          <NoteCover root={props.view.root} note={props.note} thumbnail={props.view.thumbnail} />
+        </IonThumbnail>
+        <IonLabel>
+          <h3 class="note-title">
             {props.note.name}
             <Show when={meta()?.favorite}>
-              <Star size={13} class="favorite-mark" aria-label="Favorite" />
+              <IonIcon class="favorite-mark" color="warning" icon={star} aria-label="Favorite" />
             </Show>
-          </span>
-          <span class="note-summary">{meta()?.description || props.subtitle}</span>
-          <span class="note-time">{ago(props.note.modified)}</span>
-        </span>
-      </Button>
-      <NoteMenu note={props.note} view={props.view} />
+          </h3>
+          <p>{meta()?.description || props.subtitle}</p>
+          <p class="note-time">{ago(props.note.modified)}</p>
+        </IonLabel>
+      </IonItem>
+      <NoteMenu note={props.note} view={props.view} class="row-menu" />
     </li>
   );
 }
@@ -312,15 +392,17 @@ function Breadcrumb(props: View) {
         {(path, i) => (
           <>
             <Show when={i() > 0}>
-              <ChevronRight size={16} class="breadcrumb-separator" />
+              <IonIcon class="breadcrumb-separator" icon={chevronForward} />
             </Show>
-            <Button
-              class="breadcrumb-step"
+            <IonButton
+              size="small"
+              fill="clear"
+              color={i() === steps().length - 1 ? "dark" : "primary"}
               aria-current={i() === steps().length - 1 ? "page" : undefined}
               onClick={() => props.onSelect(path)}
             >
               {lastName(path)}
-            </Button>
+            </IonButton>
           </>
         )}
       </For>
@@ -328,108 +410,119 @@ function Breadcrumb(props: View) {
   );
 }
 
+// Which notes the grid shows: all, the favorites, or one tag's.
+type Filter = "all" | "favorites" | `tag:${string}`;
+
 // The open folder as GoodNotes and Noteful show one: its subfolders, then its
 // notes, in one grid. A folder opens on a tap; a note opens in the editor.
 function FolderView(props: View) {
   const [query, setQuery] = createSignal("");
+  const [filter, setFilter] = createSignal<Filter>("all");
   const [layout, setLayout] = createSignal<"grid" | "list">("grid");
   const matches = (name: string) => name.toLowerCase().includes(query().trim().toLowerCase());
-  const folders = createMemo(() => subfolders(props.folders, props.selected).filter((f) => matches(lastName(f.path))).sort(compareBy(props.sort)));
+  const noteMeta = (n: Note) => props.metadata.notes[pathKey(n.path)];
+  const passes = (n: Note) => {
+    const f = filter();
+    if (f === "all") return true;
+    if (f === "favorites") return !!noteMeta(n)?.favorite;
+    return !!noteMeta(n)?.tags.includes(f.slice(4));
+  };
+  const folders = createMemo(() =>
+    filter() === "all" ? subfolders(props.folders, props.selected).filter((f) => matches(lastName(f.path))).sort(compareBy(props.sort)) : [],
+  );
   const notes = createMemo(() => {
     const here = props.folders.find((f) => pathKey(f.path) === pathKey(props.selected))?.notes ?? [];
-    return here.filter((n) => matches(n.name)).sort(compareBy(props.sort));
+    return here.filter((n) => matches(n.name) && passes(n)).sort(compareBy(props.sort));
   });
-  const folderTags = (folder: Folder) => [
-    ...new Set(folder.notes.flatMap((n) => props.metadata.notes[pathKey(n.path)]?.tags ?? [])),
-  ];
+  const folderTags = (folder: Folder) => [...new Set(folder.notes.flatMap((n) => noteMeta(n)?.tags ?? []))];
   const folderMeta = (folder: Folder) => {
     const inner = subfolders(props.folders, folder.path).length;
     return inner > 0 ? `${noteCount(folder.notes.length)} · ${inner} ${inner === 1 ? "folder" : "folders"}` : noteCount(folder.notes.length);
   };
+  const filters = () => [
+    { value: "all" as Filter, label: "All Notebooks" },
+    { value: "favorites" as Filter, label: "Favorites" },
+    ...props.metadata.tags.map((t) => ({ value: `tag:${t.name}` as Filter, label: t.name })),
+  ];
   return (
     <>
       <Breadcrumb {...props} />
       <div class="filters">
-        <TextField value={query()} onChange={setQuery} class="search">
-          <Search size={16} />
-          <TextField.Input class="search-input" placeholder="Search this folder…" aria-label="Search this folder" />
-        </TextField>
-        <DropdownMenu>
-          <DropdownMenu.Trigger class="select-button" aria-label="Sort">
-            {props.sort === "name" ? "Name" : "Last Modified"} <ChevronDown size={14} />
-          </DropdownMenu.Trigger>
-          <DropdownMenu.Portal>
-            <DropdownMenu.Content class="menu">
-              <DropdownMenu.RadioGroup value={props.sort} onChange={(v) => props.onSort(v as Sort)}>
-                <DropdownMenu.RadioItem class="menu-item" value="modified">
-                  Last Modified
-                </DropdownMenu.RadioItem>
-                <DropdownMenu.RadioItem class="menu-item" value="name">
-                  Name
-                </DropdownMenu.RadioItem>
-              </DropdownMenu.RadioGroup>
-            </DropdownMenu.Content>
-          </DropdownMenu.Portal>
-        </DropdownMenu>
-        <ToggleGroup class="segmented" value={layout()} onChange={(v) => v && setLayout(v as "grid" | "list")} aria-label="Layout">
-          <ToggleGroup.Item class="segment" value="grid" aria-label="Grid">
-            <LayoutGrid size={16} />
-          </ToggleGroup.Item>
-          <ToggleGroup.Item class="segment" value="list" aria-label="List">
-            <List size={16} />
-          </ToggleGroup.Item>
-        </ToggleGroup>
+        <IonSearchbar
+          class="main-search"
+          placeholder="Search notebooks…"
+          aria-label="Search notebooks"
+          value={query()}
+          on:ionInput={(e) => setQuery(String(e.detail.value ?? ""))}
+        />
+        <ChoiceButton label="Filter" choices={filters()} value={filter()} onChange={setFilter} />
+        <ChoiceButton
+          label="Sort"
+          choices={[
+            { value: "modified", label: "Last Modified" },
+            { value: "name", label: "Name" },
+          ]}
+          value={props.sort}
+          onChange={props.onSort}
+        />
+        <IonSegment class="layout-toggle" value={layout()} on:ionChange={(e) => setLayout(e.detail.value === "list" ? "list" : "grid")}>
+          <IonSegmentButton value="grid" aria-label="Grid">
+            <IonIcon icon={gridOutline} />
+          </IonSegmentButton>
+          <IonSegmentButton value="list" aria-label="List">
+            <IonIcon icon={listOutline} />
+          </IonSegmentButton>
+        </IonSegment>
       </div>
       <ul class={layout() === "grid" ? "cards" : "cards list"} aria-label="Notebooks">
         <For each={folders()}>
           {(folder) => (
-            <li class="card folder-card">
-              <Button class="card-open" aria-label={lastName(folder.path)} onClick={() => props.onSelect(folder.path)}>
+            <li class="card-cell">
+              <IonCard button class="card" aria-label={lastName(folder.path)} onClick={() => props.onSelect(folder.path)}>
                 <FolderCover folder={folder} view={props} class="card-cover" />
-                <span class="card-text">
-                  <span class="card-title">
-                    <FolderIcon size={15} class="folder-mark" /> {lastName(folder.path)}
-                  </span>
-                  <span class="card-meta">{folderMeta(folder)}</span>
+                <IonCardContent class="card-text">
+                  <h2 class="card-title">
+                    <IonIcon class="folder-mark" color="primary" icon={folderOutline} /> {lastName(folder.path)}
+                  </h2>
+                  <p>{folderMeta(folder)}</p>
                   <Show when={folder.modified > 0}>
-                    <span class="card-meta">Modified {ago(folder.modified)}</span>
+                    <p>Modified {ago(folder.modified)}</p>
                   </Show>
-                </span>
-              </Button>
-              <div class="card-footer">
-                <TagChips metadata={props.metadata} tags={folderTags(folder)} />
-                <DropdownMenu>
-                  <MenuTrigger name={lastName(folder.path)} />
-                  <DropdownMenu.Portal>
-                    <DropdownMenu.Content class="menu">
-                      <EntryItems path={folder.path} folder view={props} />
-                    </DropdownMenu.Content>
-                  </DropdownMenu.Portal>
-                </DropdownMenu>
-              </div>
+                  <TagChips metadata={props.metadata} tags={folderTags(folder)} />
+                </IonCardContent>
+              </IonCard>
+              <MenuButton
+                name={lastName(folder.path)}
+                class="card-menu"
+                menu={(dismiss) => (
+                  <IonList lines="full">
+                    <EntryItems path={folder.path} folder view={props} dismiss={dismiss} />
+                  </IonList>
+                )}
+              />
             </li>
           )}
         </For>
         <For each={notes()}>
           {(note) => (
-            <li class="card">
-              <Button class="card-open" aria-label={note.name} onClick={() => props.onOpen(note)}>
+            <li class="card-cell">
+              <IonCard button class="card" aria-label={note.name} onClick={() => props.onOpen(note)}>
                 <NoteCover root={props.root} note={note} thumbnail={props.thumbnail} class="card-cover" />
-                <span class="card-text">
-                  <span class="card-title">{note.name}</span>
-                  <span class="card-meta">Modified {ago(note.modified)}</span>
-                </span>
-              </Button>
-              <div class="card-footer">
-                <TagChips metadata={props.metadata} tags={props.metadata.notes[pathKey(note.path)]?.tags ?? []} />
-                <NoteMenu note={note} view={props} />
-              </div>
+                <IonCardContent class="card-text">
+                  <h2 class="card-title">{note.name}</h2>
+                  <p>Modified {ago(note.modified)}</p>
+                  <TagChips metadata={props.metadata} tags={noteMeta(note)?.tags ?? []} />
+                </IonCardContent>
+              </IonCard>
+              <NoteMenu note={note} view={props} class="card-menu" />
             </li>
           )}
         </For>
       </ul>
       <Show when={folders().length === 0 && notes().length === 0}>
-        <p class="empty">{query().trim() ? "Nothing matches." : "This folder is empty."}</p>
+        <IonText color="medium">
+          <p class="empty">{query().trim() || filter() !== "all" ? "Nothing matches." : "This folder is empty."}</p>
+        </IonText>
       </Show>
     </>
   );
@@ -438,29 +531,82 @@ function FolderView(props: View) {
 function DetailPane(props: View) {
   const folder = () => props.folders.find((f) => pathKey(f.path) === pathKey(props.selected));
   const [query, setQuery] = createSignal("");
+  const [tab, setTab] = createSignal<"notes" | "info">("notes");
+  const parent = () => props.selected.slice(0, -1);
   return (
     <Show when={folder()}>
       {(f) => (
         <aside class="detail" aria-label={`${f().name} notes`}>
+          <div class="detail-bar">
+            <Show when={props.selected.length > 0} fallback={<span />}>
+              <IonButton fill="clear" size="small" onClick={() => props.onSelect(parent())}>
+                <IonIcon slot="start" icon={chevronBack} />
+                {parent().length === 0 ? "Library" : lastName(parent())}
+              </IonButton>
+              <MenuButton
+                name={lastName(f().path)}
+                menu={(dismiss) => (
+                  <IonList lines="full">
+                    <EntryItems path={f().path} folder view={props} dismiss={dismiss} />
+                  </IonList>
+                )}
+              />
+            </Show>
+          </div>
           <FolderCover folder={f()} view={props} class="detail-cover" />
           <h2 class="detail-title">{lastName(f().path)}</h2>
-          <div class="detail-meta">
+          <IonNote class="detail-meta">
             {noteCount(f().notes.length)}
             <Show when={f().modified > 0}> · Modified {ago(f().modified)}</Show>
+          </IonNote>
+          <div class="chips">
+            <TagChips metadata={props.metadata} tags={[...new Set(f().notes.flatMap((n) => props.metadata.notes[pathKey(n.path)]?.tags ?? []))]} />
+            <IonButton class="chip-add" size="small" fill="outline" color="medium" aria-label="Add notebook tag" onClick={() => notImplemented(58)}>
+              <IonIcon slot="icon-only" icon={add} />
+            </IonButton>
           </div>
-          <h3 class="detail-tab">Notes</h3>
-          <TextField value={query()} onChange={setQuery} class="search">
-            <Search size={16} />
-            <TextField.Input class="search-input" placeholder="Search notes…" aria-label="Search notes" />
-          </TextField>
-          <ul class="note-list" aria-label="Notes">
-            <For each={f().notes.filter((n) => n.name.toLowerCase().includes(query().trim().toLowerCase())).sort(compareBy(props.sort))}>
-              {(note) => <NoteRow note={note} subtitle={f().name} view={props} />}
-            </For>
-          </ul>
-          <Button class="button new-in" onClick={() => props.onNewNote(f().path)}>
-            <Plus size={16} /> New Note in {lastName(f().path)}
-          </Button>
+          <IonSegment value={tab()} on:ionChange={(e) => setTab(e.detail.value === "info" ? "info" : "notes")}>
+            <IonSegmentButton value="notes">
+              <IonLabel>Notes</IonLabel>
+            </IonSegmentButton>
+            <IonSegmentButton value="info">
+              <IonLabel>Info</IonLabel>
+            </IonSegmentButton>
+          </IonSegment>
+          <Show
+            when={tab() === "notes"}
+            fallback={
+              <IonList lines="full" class="info-list">
+                <IonItem>
+                  <IonLabel>Location</IonLabel>
+                  <IonNote slot="end">{[MY_NOTES, ...f().path].join(" / ")}</IonNote>
+                </IonItem>
+                <IonItem>
+                  <IonLabel>Notes</IonLabel>
+                  <IonNote slot="end">{f().notes.length}</IonNote>
+                </IonItem>
+                <IonItem>
+                  <IonLabel>Folders</IonLabel>
+                  <IonNote slot="end">{subfolders(props.folders, f().path).length}</IonNote>
+                </IonItem>
+                <IonItem>
+                  <IonLabel>Modified</IonLabel>
+                  <IonNote slot="end">{f().modified > 0 ? ago(f().modified) : "—"}</IonNote>
+                </IonItem>
+              </IonList>
+            }
+          >
+            <IonSearchbar placeholder="Search notes…" aria-label="Search notes" value={query()} on:ionInput={(e) => setQuery(String(e.detail.value ?? ""))} />
+            <ul class="note-list" aria-label="Notes">
+              <For each={f().notes.filter((n) => n.name.toLowerCase().includes(query().trim().toLowerCase())).sort(compareBy(props.sort))}>
+                {(note) => <NoteRow note={note} subtitle={f().name} view={props} />}
+              </For>
+            </ul>
+          </Show>
+          <IonButton class="new-in tinted" expand="block" onClick={() => props.onNewNote(f().path)}>
+            <IonIcon slot="start" icon={add} />
+            New Note in {lastName(f().path)}
+          </IonButton>
         </aside>
       )}
     </Show>
@@ -476,12 +622,12 @@ function NoteTable(props: { view: View; title: string; notes: Note[]; search?: b
   return (
     <>
       <Show when={props.search}>
-        <div class="filters">
-          <TextField value={query()} onChange={setQuery} class="search wide">
-            <Search size={16} />
-            <TextField.Input class="search-input" placeholder="Search notes by title…" aria-label="Search notes by title" autofocus />
-          </TextField>
-        </div>
+        <IonSearchbar
+          placeholder="Search notes by title…"
+          aria-label="Search notes by title"
+          value={query()}
+          on:ionInput={(e) => setQuery(String(e.detail.value ?? ""))}
+        />
       </Show>
       <ul class="note-list table" aria-label={props.title}>
         <For each={shown()} fallback={<li class="empty">No notes.</li>}>
@@ -492,101 +638,44 @@ function NoteTable(props: { view: View; title: string; notes: Note[]; search?: b
   );
 }
 
-// The names in folder `parent` (path segments; [] is the root) that the scan
-// found: its notes and its subfolders.
-function namesIn(folders: readonly Folder[], parent: readonly string[]): string[] {
-  const key = pathKey(parent);
-  const notes = folders.find((f) => pathKey(f.path) === key)?.notes.map((n) => n.name) ?? [];
-  const subfolders = folders.filter((f) => f.path.length === parent.length + 1 && pathKey(f.path.slice(0, -1)) === key);
-  return [...notes, ...subfolders.map((f) => f.path[f.path.length - 1])];
+// The sidebar beside the main pane, as a split pane (docs/specs/tablet-ui.md,
+// Library: the sidebar is always visible).
+export function Shell(props: { sidebar: SidebarProps; children: JSX.Element }) {
+  return (
+    <IonSplitPane contentId="library-main" when={true}>
+      <IonMenu contentId="library-main" type="overlay" class="sidebar-menu">
+        <Sidebar {...props.sidebar} />
+      </IonMenu>
+      <div class="ion-page library-main" id="library-main">
+        {props.children}
+      </div>
+    </IonSplitPane>
+  );
 }
 
-// The rename dialog (a name field, checked as Write's NewDocDialog checks it)
-// and the move dialog (the folders it can go to).
-function EntryDialog(props: { action: EntryAction; view: View; onClose: () => void }) {
-  const name = () => props.action.path[props.action.path.length - 1];
-  const parent = () => props.action.path.slice(0, -1);
-  const [text, setText] = createSignal(name());
-  const error = () => (text().trim() === name() ? null : nameError(text(), namesIn(props.view.folders, parent())));
-  // The folders a move can reach: not the current one, and for a folder not
-  // itself or a folder inside it.
-  const targets = () =>
-    props.view.folders
-      .map((f) => f.path)
-      .filter((path) => pathKey(path) !== pathKey(parent()))
-      .filter((path) => !(props.action.folder && path.length >= props.action.path.length && props.action.path.every((p, i) => path[i] === p)))
-      .sort((a, b) => (a.length === 0 ? -1 : b.length === 0 ? 1 : pathKey(a).localeCompare(pathKey(b))));
-  const title = () => `${props.action.kind === "rename" ? "Rename" : "Move"} ${props.action.folder ? "Notebook" : "Note"}`;
+export function LibraryHeader(props: { title: string; lede?: string; actions?: JSX.Element }) {
   return (
-    <Dialog open onOpenChange={(open) => !open && props.onClose()}>
-      <Dialog.Portal>
-        <Dialog.Overlay class="dialog-overlay" />
-        <Dialog.Content class="dialog">
-          <Dialog.Title class="dialog-title">{title()}</Dialog.Title>
-          <Show
-            when={props.action.kind === "rename"}
-            fallback={
-              <>
-                <p class="dialog-lede">Move “{name()}” to:</p>
-                <ul class="move-targets" aria-label="Folders">
-                  <For each={targets()} fallback={<li class="empty">No other folder.</li>}>
-                    {(path) => (
-                      <li>
-                        <Button
-                          class="move-target"
-                          onClick={() => {
-                            props.view.onMove(props.action.path, path);
-                            props.onClose();
-                          }}
-                        >
-                          <FolderOpen size={16} /> {path.length === 0 ? MY_NOTES : path.join(" / ")}
-                        </Button>
-                      </li>
-                    )}
-                  </For>
-                </ul>
-                <div class="dialog-actions">
-                  <Dialog.CloseButton class="button">Cancel</Dialog.CloseButton>
-                </div>
-              </>
-            }
-          >
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (error()) return;
-                if (text().trim() !== name()) props.view.onRename(props.action.path, text().trim());
-                props.onClose();
-              }}
-            >
-              <TextField value={text()} onChange={setText} validationState={error() ? "invalid" : "valid"} class="field">
-                <TextField.Label class="field-label">Name</TextField.Label>
-                <TextField.Input class="input" autofocus />
-                <TextField.ErrorMessage class="field-error">{error()}</TextField.ErrorMessage>
-              </TextField>
-              <div class="dialog-actions">
-                <Dialog.CloseButton class="button">Cancel</Dialog.CloseButton>
-                <Button class="button primary" type="submit" disabled={error() !== null}>
-                  Rename
-                </Button>
-              </div>
-            </form>
-          </Show>
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog>
+    <header class="main-header">
+      <div>
+        <h1>{props.title}</h1>
+        <Show when={props.lede}>
+          <IonText color="medium">
+            <p class="lede">{props.lede}</p>
+          </IonText>
+        </Show>
+      </div>
+      <div class="actions">{props.actions}</div>
+    </header>
   );
 }
 
 export function Library(props: LibraryProps) {
   const [sort, setSort] = createSignal<Sort>("modified");
-  const [action, setAction] = createSignal<EntryAction>();
   const view: View = mergeProps(props, {
     get sort() {
       return sort();
     },
     onSort: setSort,
-    onAction: setAction,
   });
   const notes = () => props.folders.flatMap((f) => f.notes);
   const meta = (n: Note) => props.metadata.notes[pathKey(n.path)];
@@ -603,61 +692,64 @@ export function Library(props: LibraryProps) {
     return titles[props.section] ?? tag();
   };
   return (
-    <div class="library">
-      <Sidebar {...props} />
-      <main class="main">
-        <header class="main-header">
-          <div>
-            <h1>{title()}</h1>
-            <Show when={props.section === "library"}>
-              <p class="lede">A collection of mathematical notebooks.</p>
-            </Show>
-          </div>
-          <div class="actions">
-            <Button class="button" onClick={() => props.onNewNotebook()}>
-              <Plus size={16} /> New Notebook
-            </Button>
-            <Button class="button primary" onClick={() => props.onNewNote(props.selected)}>
-              <Plus size={16} /> New Note
-            </Button>
-          </div>
-        </header>
-        <Switch>
-          <Match when={props.section === "library"}>
-            <FolderView {...view} />
-          </Match>
-          <Match when={props.section === "search"}>
-            <NoteTable view={view} title="Search results" notes={notes()} search />
-          </Match>
-          <Match when={props.section === "recent"}>
-            <NoteTable view={view} title="Recent notes" notes={[...notes()].sort(compareBy("modified"))} />
-          </Match>
-          <Match when={props.section === "favorites"}>
-            <NoteTable view={view} title="Favorite notes" notes={notes().filter((n) => meta(n)?.favorite)} />
-          </Match>
-          <Match when={props.section === "trash"}>
-            <NoteTable view={view} title="Trashed notes" notes={props.trash} />
-          </Match>
-          <Match when={props.section === "settings"}>
-            <section class="settings">
-              <h2>Notes folder</h2>
-              <p class="lede">{props.root.name}</p>
-              <Button class="button" onClick={() => props.onChooseFolder()}>
-                <FolderOpen size={16} /> Choose notes folder
-              </Button>
-            </section>
-          </Match>
-          <Match when={tag()}>
-            <NoteTable view={view} title={`Notes tagged ${tag()}`} notes={notes().filter((n) => meta(n)?.tags.includes(tag()))} />
-          </Match>
-        </Switch>
-      </main>
-      <Show when={props.section === "library"}>
-        <DetailPane {...view} />
-      </Show>
-      <Show when={action()} keyed>
-        {(a) => <EntryDialog action={a} view={view} onClose={() => setAction(undefined)} />}
-      </Show>
-    </div>
+    <Shell sidebar={props}>
+      <div class={props.section === "library" ? "library-columns" : "library-columns single"}>
+        <IonContent class="main">
+          <LibraryHeader
+            title={title()}
+            lede={props.section === "library" ? "A collection of mathematical notebooks." : undefined}
+            actions={
+              <>
+                <IonButton fill="outline" onClick={() => props.onNewNotebook()}>
+                  <IonIcon slot="start" icon={add} />
+                  New Notebook
+                </IonButton>
+                <IonButton onClick={() => props.onNewNote(props.selected)}>
+                  <IonIcon slot="start" icon={add} />
+                  New Note
+                </IonButton>
+              </>
+            }
+          />
+          <Switch>
+            <Match when={props.section === "library"}>
+              <FolderView {...view} />
+            </Match>
+            <Match when={props.section === "search"}>
+              <NoteTable view={view} title="Search results" notes={notes()} search />
+            </Match>
+            <Match when={props.section === "recent"}>
+              <NoteTable view={view} title="Recent notes" notes={[...notes()].sort(compareBy("modified"))} />
+            </Match>
+            <Match when={props.section === "favorites"}>
+              <NoteTable view={view} title="Favorite notes" notes={notes().filter((n) => meta(n)?.favorite)} />
+            </Match>
+            <Match when={props.section === "trash"}>
+              <NoteTable view={view} title="Trashed notes" notes={props.trash} />
+            </Match>
+            <Match when={props.section === "settings"}>
+              <IonList inset lines="full" class="settings">
+                <IonItem>
+                  <IonLabel>Notes folder</IonLabel>
+                  <IonNote slot="end">{props.root.name || MY_NOTES}</IonNote>
+                </IonItem>
+                <IonItem button detail onClick={() => props.onChooseFolder()}>
+                  <IonIcon slot="start" color="primary" icon={folderOutline} />
+                  <IonLabel color="primary">Choose notes folder</IonLabel>
+                </IonItem>
+              </IonList>
+            </Match>
+            <Match when={tag()}>
+              <NoteTable view={view} title={`Notes tagged ${tag()}`} notes={notes().filter((n) => meta(n)?.tags.includes(tag()))} />
+            </Match>
+          </Switch>
+        </IonContent>
+        <Show when={props.section === "library"}>
+          <IonContent class="detail-pane">
+            <DetailPane {...view} />
+          </IonContent>
+        </Show>
+      </div>
+    </Shell>
   );
 }
