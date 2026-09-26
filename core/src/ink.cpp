@@ -54,6 +54,18 @@ std::string_view Bytes(const uint8_t *bytes, size_t size) {
 
 InkStatus BadPageIndex() { return Fail(INK_ERROR_ARGUMENT, "page index out of range"); }
 
+InkStatus ParsePageSize(InkPageSize size, double width, double height, ink_engine::PageSize *page_size) {
+  switch (size) {
+    case INK_PAGE_A4: *page_size = std::string("A4"); return INK_OK;
+    case INK_PAGE_LETTER: *page_size = std::string("Letter"); return INK_OK;
+    case INK_PAGE_CUSTOM:
+      if (!(width > 0 && height > 0)) return Fail(INK_ERROR_ARGUMENT, "non-positive page size");
+      *page_size = std::array<double, 2>{width, height};
+      return INK_OK;
+    default: return Fail(INK_ERROR_ARGUMENT, "unknown page size");
+  }
+}
+
 // One undo or redo step: `*page` is the page the step changed, or -1.
 InkStatus Step(InkDocument *document, bool (ink_engine::DocumentHistory::*move)(), int32_t *moved,
                int32_t *page) {
@@ -123,19 +135,20 @@ InkStatus ink_document_create(uint64_t seed, InkDocument **out) {
 }
 
 InkStatus ink_document_create_from_template(uint64_t seed, const char *name, const uint8_t *svg,
-                                            size_t size, InkDocument **out) {
+                                            size_t size, InkPageSize page_size, double width,
+                                            double height, InkDocument **out) {
   return Call([&] {
     if (!name) return NullArgument("name");
     if (!svg && size) return NullArgument("svg");
     if (!out) return NullArgument("out");
+    ink_engine::PageSize parsed_size;
+    InkStatus size_status = ParsePageSize(page_size, width, height, &parsed_size);
+    if (size_status != INK_OK) return size_status;
     ink_engine::Page template_page = ink_engine::ReadPage(Bytes(svg, size), "pages/0001.svg", {});
     if (template_page.error) return Fail(INK_ERROR_PARSE, std::string(name) + ": " + *template_page.error);
     ink_engine::IdGenerator ids(seed);
-    ink_engine::Document document = ink_engine::NewNotebook(ids);
+    ink_engine::Document document = ink_engine::NewNotebook(ids, std::move(parsed_size), template_page);
     document.notebook.template_name = name;
-    ink_engine::Page page = *document.pages[0];
-    page.background = ink_engine::NewPage(document, template_page).background;
-    document.pages = document.pages.set(0, immer::box<ink_engine::Page>(std::move(page)));
     *out = new InkDocument{ink_engine::DocumentHistory(std::move(document), seed + 1)};
     (*out)->template_page = std::move(template_page);
     return INK_OK;
@@ -271,15 +284,8 @@ InkStatus ink_document_set_page_size(InkDocument *document, InkPageSize size, do
   return Call([&] {
     if (!document) return NullArgument("document");
     ink_engine::PageSize page_size;
-    switch (size) {
-      case INK_PAGE_A4: page_size = std::string("A4"); break;
-      case INK_PAGE_LETTER: page_size = std::string("Letter"); break;
-      case INK_PAGE_CUSTOM:
-        if (!(width > 0 && height > 0)) return Fail(INK_ERROR_ARGUMENT, "non-positive page size");
-        page_size = std::array<double, 2>{width, height};
-        break;
-      default: return Fail(INK_ERROR_ARGUMENT, "unknown page size");
-    }
+    InkStatus size_status = ParsePageSize(size, width, height, &page_size);
+    if (size_status != INK_OK) return size_status;
     ink_engine::DocumentHistory &history = document->history;
     if (history.current().notebook.page_size == page_size) return INK_OK;
     history.Push(ink_engine::SetPageSize(history.current(), std::move(page_size)));
@@ -560,6 +566,49 @@ InkStatus ink_canvas_duplicate_selection(InkCanvas *canvas) {
   return Call([&] {
     if (!canvas) return NullArgument("canvas");
     canvas->editor.DuplicateSelection();
+    return INK_OK;
+  });
+}
+
+InkStatus ink_canvas_insert_text(InkCanvas *canvas, const uint8_t *utf8, size_t size,
+                                 double x, double y) {
+  return Call([&] {
+    if (!canvas) return NullArgument("canvas");
+    if (!utf8 && size) return NullArgument("utf8");
+    if (!canvas->editor.InsertText(Bytes(utf8, size), x, y)) {
+      return Fail(INK_ERROR_ARGUMENT, "text is empty or the point is outside an editable page");
+    }
+    return INK_OK;
+  });
+}
+
+InkStatus ink_canvas_select_text_at(InkCanvas *canvas, double x, double y, int32_t *found) {
+  return Call([&] {
+    if (!canvas) return NullArgument("canvas");
+    if (!found) return NullArgument("found");
+    *found = canvas->editor.SelectTextAt(x, y);
+    return INK_OK;
+  });
+}
+
+InkStatus ink_canvas_selected_text(InkCanvas *canvas, const uint8_t **utf8, size_t *size) {
+  return Call([&] {
+    if (!canvas) return NullArgument("canvas");
+    if (!utf8 || !size) return NullArgument("utf8 or size");
+    canvas->selected_text = canvas->editor.SelectedText().value_or("");
+    *utf8 = reinterpret_cast<const uint8_t *>(canvas->selected_text.data());
+    *size = canvas->selected_text.size();
+    return INK_OK;
+  });
+}
+
+InkStatus ink_canvas_set_selected_text(InkCanvas *canvas, const uint8_t *utf8, size_t size) {
+  return Call([&] {
+    if (!canvas) return NullArgument("canvas");
+    if (!utf8 && size) return NullArgument("utf8");
+    if (!canvas->editor.SetSelectedText(Bytes(utf8, size))) {
+      return Fail(INK_ERROR_ARGUMENT, "no text box is selected or text is empty");
+    }
     return INK_OK;
   });
 }

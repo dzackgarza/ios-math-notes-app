@@ -122,6 +122,11 @@ class Editor {
   // Copies the selection kDuplicateOffset right and down, new ids, as the
   // new selection: one history step.
   void DuplicateSelection();
+  // Text uses the same page elements, history and selection transforms as ink.
+  bool InsertText(std::string_view utf8, double x, double y);
+  bool SelectTextAt(double x, double y);
+  std::optional<std::string> SelectedText();
+  bool SetSelectedText(std::string_view utf8);
   // What the canvas draws over the pages for the selection tools; none when
   // there is no selection and no lasso or rectangle is being drawn.
   std::optional<SelectionOverlay> Overlay();

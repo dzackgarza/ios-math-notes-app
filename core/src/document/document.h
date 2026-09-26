@@ -100,6 +100,16 @@ struct Image {
   bool operator==(const Image &) const = default;
 };
 
+struct Text {
+  std::string id;
+  Transform transform;
+  Rgb fill{26, 26, 26};
+  double x = 0, y = 0;  // baseline of the first line, in pt
+  double size = 18;    // font size in pt
+  std::vector<std::string> lines;
+  bool operator==(const Text &) const = default;
+};
+
 struct Element;
 using Elements = immer::flex_vector<immer::box<Element>>;
 
@@ -116,7 +126,7 @@ struct Link {
 };
 
 struct Element {
-  std::variant<Stroke, Shape, Image, Bookmark, Link> value;
+  std::variant<Stroke, Shape, Image, Text, Bookmark, Link> value;
   bool operator==(const Element &) const = default;
 };
 

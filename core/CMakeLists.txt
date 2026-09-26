@@ -25,6 +25,15 @@ find_package(boost_icl CONFIG REQUIRED)
 find_package(boost_geometry CONFIG REQUIRED)
 include(third_party/ink.cmake)
 
+# Skia's WASM build has no platform font manager. Embed the same typeface in
+# both engine targets so text geometry and rendering use one font.
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/assets/fonts/NotoSans-Regular.ttf" TEXT_FONT_HEX HEX)
+string(REGEX REPLACE "([0-9a-f][0-9a-f])" "0x\\1," TEXT_FONT_BYTES "${TEXT_FONT_HEX}")
+file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/text_font.inc"
+  "constexpr unsigned char kTextFontData[] = {${TEXT_FONT_BYTES}};\n")
+unset(TEXT_FONT_HEX)
+unset(TEXT_FONT_BYTES)
+
 add_library(ink STATIC
   src/ink.cpp
   src/geometry/hit_shapes.cpp
@@ -42,8 +51,9 @@ add_library(ink STATIC
   src/editor/history.cpp
   src/layout/layout.cpp
   src/render/renderer.cpp
+  src/render/text_font.cpp
   src/selection/selection.cpp)
-target_include_directories(ink PUBLIC include src)
+target_include_directories(ink PUBLIC include src PRIVATE "${CMAKE_CURRENT_BINARY_DIR}")
 target_compile_definitions(ink PRIVATE INK_VERSION="${PROJECT_VERSION}")
 target_link_libraries(ink PUBLIC Skia::skia inkcore pugixml::pugixml FastFloat::fast_float immer
   nlohmann_json::nlohmann_json Boost::icl Boost::geometry)
@@ -81,6 +91,7 @@ if(EMSCRIPTEN)
     _ink_canvas_set_tool _ink_canvas_set_eraser _ink_canvas_set_utc_offset _ink_canvas_free _ink_canvas_page_at
     _ink_canvas_set_selector _ink_canvas_selection _ink_canvas_select_all _ink_canvas_clear_selection
     _ink_canvas_delete_selection _ink_canvas_copy_selection _ink_canvas_paste _ink_canvas_duplicate_selection
+    _ink_canvas_insert_text _ink_canvas_select_text_at _ink_canvas_selected_text _ink_canvas_set_selected_text
     _ink_input _ink_input_update _ink_render _ink_undo _ink_redo _ink_document_page_rect _ink_document_page_png _ink_struct_layout
     _malloc _free)
   list(JOIN INK_EXPORTS "," INK_EXPORTS_FLAG)

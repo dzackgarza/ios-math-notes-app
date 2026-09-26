@@ -7,13 +7,18 @@
 
 #include "include/codec/SkCodec.h"
 #include "include/codec/SkPngDecoder.h"
+#include "include/codec/SkJpegDecoder.h"
 #include "include/core/SkCanvas.h"
 #include "include/core/SkColorSpace.h"
+#include "include/core/SkFont.h"
+#include "include/core/SkFontTypes.h"
 #include "include/core/SkPaint.h"
 #include "include/core/SkPathBuilder.h"
 #include "include/effects/SkDashPathEffect.h"
 #include "include/gpu/ganesh/GrDirectContext.h"
 #include "include/gpu/ganesh/SkSurfaceGanesh.h"
+#include "selection/selection.h"
+#include "render/text_font.h"
 #include "strokes/outline.h"
 
 namespace ink_engine {
@@ -82,7 +87,9 @@ sk_sp<SkImage> Renderer::Asset(const std::string &page_file, const std::string &
   DecodedAsset &decoded = images_[path];
   if (decoded.bytes != bytes->second) {
     decoded.bytes = bytes->second;
-    auto codec = SkPngDecoder::Decode(bytes->second, nullptr, nullptr);
+    auto codec = path.ends_with(".jpg") || path.ends_with(".jpeg")
+                     ? SkJpegDecoder::Decode(bytes->second, nullptr, nullptr)
+                     : SkPngDecoder::Decode(bytes->second, nullptr, nullptr);
     decoded.image = codec ? std::get<0>(codec->getImage()) : nullptr;
   }
   return decoded.image;
@@ -108,6 +115,10 @@ const Renderer::CachedElement &Renderer::Cached(const immer::box<Element> &box) 
           entry.bounds = ToSkMatrix(e.transform)
                              .mapRect(SkRect::MakeXYWH(float(e.x), float(e.y), float(e.width),
                                                        float(e.height)));
+        } else if constexpr (std::is_same_v<T, Text>) {
+          Rect bounds = ink_engine::ElementBounds(*box);
+          entry.bounds = SkRect::MakeLTRB(float(bounds.left), float(bounds.top),
+                                         float(bounds.right), float(bounds.bottom));
         } else {
           for (const auto &child : e.children) entry.bounds.join(Cached(child).bounds);
         }
@@ -284,6 +295,18 @@ void Renderer::DrawElements(SkCanvas *canvas, const Page &page, const Elements &
             ++stats_.elements_drawn;
           } else if constexpr (std::is_same_v<T, Image>) {
             DrawImage(canvas, page, e);
+            ++stats_.elements_drawn;
+          } else if constexpr (std::is_same_v<T, Text>) {
+            canvas->save();
+            canvas->concat(ToSkMatrix(e.transform));
+            SkFont font(TextTypeface(), float(e.size));
+            SkPaint paint = FillPaint(e.fill);
+            for (size_t i = 0; i < e.lines.size(); ++i) {
+              const std::string &line = e.lines[i];
+              canvas->drawSimpleText(line.data(), line.size(), SkTextEncoding::kUTF8,
+                                     float(e.x), float(e.y + i * e.size * 1.2), font, paint);
+            }
+            canvas->restore();
             ++stats_.elements_drawn;
           } else {
             DrawElements(canvas, page, e.children, cull);

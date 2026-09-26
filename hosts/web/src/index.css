@@ -227,6 +227,24 @@ h1 {
   margin: 8px 8px 0;
 }
 
+.folder-cover {
+  padding: 6px;
+  border-radius: 10px;
+  background: var(--cover);
+  overflow: hidden;
+}
+
+.folder-cover.spine {
+  padding-inline-start: 18px;
+  box-shadow: inset 12px 0 0 rgb(0 0 0 / 16%);
+}
+
+.folder-cover .paper-tile {
+  width: 100%;
+  height: 100%;
+  border-radius: 5px;
+}
+
 .cards.list .card-cell ion-card::part(native) {
   display: flex;
   align-items: center;
@@ -331,6 +349,11 @@ ion-chip {
 
 .detail-meta {
   font-size: 15px;
+}
+
+.detail-description {
+  margin: 0;
+  color: var(--ion-color-medium);
 }
 
 .detail ion-searchbar {
@@ -627,6 +650,10 @@ ion-textarea.field {
   border-radius: 6px 14px 14px 6px;
   background: var(--cover);
   box-shadow: inset 10px 0 0 rgb(0 0 0 / 8%), 0 10px 24px rgb(16 24 40 / 16%);
+}
+
+.cover.spine {
+  box-shadow: inset 22px 0 0 rgb(0 0 0 / 16%), 0 10px 24px rgb(16 24 40 / 16%);
 }
 
 .cover-title {

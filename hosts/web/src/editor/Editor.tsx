@@ -1,4 +1,4 @@
-import { IonButton, IonButtons, IonCheckbox, IonChip, IonHeader, IonIcon, IonInput, IonItem, IonLabel, IonList, IonListHeader, IonNote, IonRange, IonToolbar } from "@ionic-solidjs/core";
+import { IonButton, IonButtons, IonCheckbox, IonChip, IonContent, IonHeader, IonIcon, IonInput, IonItem, IonLabel, IonList, IonListHeader, IonNote, IonRange, IonSearchbar, IonTextarea, IonToolbar } from "@ionic-solidjs/core";
 import {
   add,
   arrowRedo,
@@ -34,7 +34,7 @@ import { capabilities, penSamples } from "../input/pointer.ts";
 import { listTemplates } from "../storage/folder.ts";
 import type { Tag } from "../storage/metadata.ts";
 import { readPens, writePens } from "../storage/pens.ts";
-import { notImplemented, presentPopover } from "../ui/ionic.ts";
+import { notImplemented, presentModal, presentPopover, toast } from "../ui/ionic.ts";
 import { AppMark, MenuItem, noteCount } from "../ui/Library.tsx";
 import { paperLabel } from "../ui/paper.tsx";
 import { applyTemplate, type OpenNotebook } from "./notebook.ts";
@@ -66,7 +66,7 @@ const penIcon = (brush: number, color: string) =>
 
 // A pen preset's id, or one of the other tools.
 type ToolId = string;
-const ERASER = "eraser", SELECT = "select";
+const ERASER = "eraser", SELECT = "select", TEXT = "text";
 
 // The eraser's two kinds (#23); the pen's eraser end uses the selected one.
 const ERASERS = { stroke: { label: "Whole stroke", kind: Eraser.stroke }, free: { label: "Partial", kind: Eraser.free } } as const;
@@ -216,11 +216,74 @@ export interface Tab {
   name: string;
 }
 
+export interface LibraryTab extends Tab {
+  folderName: string;
+}
+
+function NotePicker(props: { notes: LibraryTab[]; dismiss: () => Promise<void>; onOpen: (path: string[]) => void }) {
+  const [query, setQuery] = createSignal("");
+  const shown = () => props.notes.filter((note) => `${note.name} ${note.folderName}`.toLocaleLowerCase().includes(query().trim().toLocaleLowerCase()));
+  const select = (path: string[]) => void props.dismiss().then(() => props.onOpen(path));
+  return (
+    <>
+      <IonHeader>
+        <IonToolbar>
+          <IonButtons slot="start">
+            <IonButton onClick={() => void props.dismiss()}>Cancel</IonButton>
+          </IonButtons>
+        </IonToolbar>
+      </IonHeader>
+      <IonContent class="sheet">
+        <h1>Open Note</h1>
+        <IonSearchbar
+          placeholder="Search notes…"
+          aria-label="Search library notes"
+          value={query()}
+          on:ionInput={(e) => setQuery(String(e.detail.value ?? ""))}
+        />
+        <IonList lines="full" aria-label="Library notes">
+          <For each={shown()} fallback={<IonItem><IonLabel>No notes found.</IonLabel></IonItem>}>
+            {(note) => (
+              <IonItem button detail={false} onClick={() => select(note.path)}>
+                <IonLabel>
+                  <h2>{note.name}</h2>
+                  <p>{note.folderName}</p>
+                </IonLabel>
+              </IonItem>
+            )}
+          </For>
+        </IonList>
+      </IonContent>
+    </>
+  );
+}
+
+function TextSheet(props: { initial: string; dismiss: () => Promise<void>; onSave: (value: string) => void }) {
+  const [value, setValue] = createSignal(props.initial);
+  const save = () => void props.dismiss().then(() => props.onSave(value()));
+  return (
+    <>
+      <IonHeader>
+        <IonToolbar>
+          <IonButtons slot="start"><IonButton onClick={() => void props.dismiss()}>Cancel</IonButton></IonButtons>
+          <IonButtons slot="end"><IonButton disabled={!value().trim()} onClick={save}>Save Text</IonButton></IonButtons>
+        </IonToolbar>
+      </IonHeader>
+      <IonContent class="sheet">
+        <h1>Text</h1>
+        <IonTextarea aria-label="Page text" value={value()} rows={6} autofocus on:ionInput={(e) => setValue(String(e.detail.value ?? ""))} />
+      </IonContent>
+    </>
+  );
+}
+
 export function Editor(props: {
   notebook: OpenNotebook;
   folderName: string;
+  folderDescription: string;
   // The notes of the open note's folder, for the title menu.
   folderNotes: Tab[];
+  libraryNotes: LibraryTab[];
   tabs: Tab[];
   // The note's tags, and the library's tags to add.
   tags: string[];
@@ -234,6 +297,7 @@ export function Editor(props: {
 }) {
   let area!: HTMLDivElement;
   let element!: HTMLCanvasElement;
+  let imageInput!: HTMLInputElement;
   let canvas: Canvas | undefined;
   let frame = 0;
   const ids = { next: 0 };
@@ -252,7 +316,7 @@ export function Editor(props: {
   const [selection, setSelection] = createSignal<SelectionInfo | null>(null);
   const selectTool = (id: ToolId) => {
     setTool(id);
-    if (id !== ERASER && id !== SELECT) setPenId(id);
+    if (id !== ERASER && id !== SELECT && id !== TEXT) setPenId(id);
   };
 
   // A pen edit applies at once (Write PenToolbar::updateColor, updateWidth,
@@ -285,7 +349,7 @@ export function Editor(props: {
     const list = await readPens(root, doc.engine);
     setPens(list);
     if (!list.some((p) => p.id === penId())) setPenId(list[0]?.id ?? "");
-    if (tool() === "" || (tool() !== ERASER && tool() !== SELECT && !list.some((p) => p.id === tool()))) setTool(penId());
+    if (tool() === "" || (tool() !== ERASER && tool() !== SELECT && tool() !== TEXT && !list.some((p) => p.id === tool()))) setTool(penId());
   };
   const [view, setView] = createSignal<View>({ scale: 1, x: 0, y: 0 });
   const [pages, setPages] = createSignal(doc.pageCount());
@@ -371,6 +435,20 @@ export function Editor(props: {
       if (e.type === "pointerdown") element.setPointerCapture(e.pointerId);
       return;
     }
+    if (tool() === TEXT) {
+      if (e.type === "pointerdown") {
+        e.preventDefault();
+        const x = e.clientX - at.x, y = e.clientY - at.y;
+        const existing = canvas.selectTextAt(x, y);
+        refreshSelection();
+        void presentModal(
+          (dismiss) => <TextSheet initial={existing ? canvas!.selectedText() : ""} dismiss={dismiss}
+            onSave={(value) => edit(() => existing ? canvas?.setSelectedText(value) : canvas?.insertText(value, x, y))} />,
+          { cssClass: "form-sheet" },
+        );
+      }
+      return;
+    }
     if (e.type === "pointerdown") {
       element.setPointerCapture(e.pointerId);
       setSelection(null); // the actions return where the gesture leaves the selection
@@ -424,8 +502,35 @@ export function Editor(props: {
     if (!target || !svg) return;
     edit(() => target.paste(svg, element.clientWidth / 2, element.clientHeight / 2));
   };
+  const insertImage = async (file: File) => {
+    if (file.type !== "image/png" && file.type !== "image/jpeg") {
+      await toast("Choose a PNG or JPEG image", "danger");
+      return;
+    }
+    try {
+      const bitmap = await createImageBitmap(file);
+      const page = doc.pageRect(currentPage());
+      const scale = Math.min(1, (page.width * 0.8) / bitmap.width, (page.height * 0.8) / bitmap.height);
+      const width = Math.round(bitmap.width * scale * 100) / 100;
+      const height = Math.round(bitmap.height * scale * 100) / 100;
+      bitmap.close();
+      const url = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onerror = () => reject(reader.error);
+        reader.onload = () => typeof reader.result === "string" ? resolve(reader.result) : reject(new Error("Could not read image"));
+        reader.readAsDataURL(file);
+      });
+      // SVG 2's image element carries the data URL only through the existing
+      // clipboard path. The engine stores its bytes in assets/ on paste.
+      paste(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1"><g id="import"><image href="${url}" x="${-width - 1}" y="${-height - 1}" width="${width}" height="${height}"/></g></svg>`);
+    } catch {
+      await toast("Could not insert image", "danger");
+    }
+  };
   // Ctrl+V: the paste event carries the clipboard text without a permission prompt.
   const onPaste = (e: ClipboardEvent) => {
+    if (e.composedPath().some((target) => target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement ||
+      (target instanceof HTMLElement && target.tagName === "ION-TEXTAREA"))) return;
     const text = e.clipboardData?.getData("text/plain");
     if (!text) return;
     e.preventDefault();
@@ -456,7 +561,8 @@ export function Editor(props: {
   };
 
   const onKey = (e: KeyboardEvent) => {
-    if (e.target instanceof HTMLInputElement) return;
+    if (e.composedPath().some((target) => target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement ||
+      (target instanceof HTMLElement && target.tagName === "ION-TEXTAREA"))) return;
     const key = e.key.toLowerCase();
     if ((key === "delete" || key === "backspace") && selection()) {
       e.preventDefault();
@@ -587,6 +693,12 @@ export function Editor(props: {
       </IonList>
     ));
 
+  const openNotePicker = () =>
+    void presentModal(
+      (dismiss) => <NotePicker notes={props.libraryNotes} dismiss={dismiss} onOpen={(path) => !isOpen(path) && void leave(() => props.onSelectTab(path))} />,
+      { cssClass: "form-sheet" },
+    );
+
   return (
     <div class="editor ion-page">
       <IonHeader class="editor-header">
@@ -599,7 +711,9 @@ export function Editor(props: {
             <IonButton class="editor-title" color="dark" aria-label="Notes in this notebook" onClick={titleMenu}>
               <span class="editor-title-text">
                 <span class="editor-folder">{props.folderName}</span>
-                <IonNote class="editor-subtitle">{noteCount(props.folderNotes.length)}</IonNote>
+                <IonNote class="editor-subtitle">
+                  {props.folderDescription ? `${props.folderDescription} · ` : ""}{noteCount(props.folderNotes.length)}
+                </IonNote>
               </span>
               <IonIcon slot="end" icon={chevronDown} />
             </IonButton>
@@ -631,7 +745,7 @@ export function Editor(props: {
                 </div>
               )}
             </For>
-            <IonButton fill="clear" size="small" aria-label="Open another note" onClick={() => notImplemented(62)}>
+            <IonButton fill="clear" size="small" aria-label="Open another note" onClick={openNotePicker}>
               <IonIcon slot="icon-only" icon={add} />
             </IonButton>
           </div>
@@ -663,9 +777,14 @@ export function Editor(props: {
             <ToolItem label="Eraser" detail={ERASERS[eraser()].label} selected={tool() === ERASER} icon={<EraserIcon size={22} />} onSelect={() => selectTool(ERASER)} />
             <ToolItem label="Lasso" detail={SELECTORS[selector()].label} selected={tool() === SELECT} icon={<Lasso size={22} />} onSelect={() => selectTool(SELECT)} />
             <ToolItem label="Shapes" selected={false} icon={<Shapes size={22} />} onSelect={() => notImplemented(10)} />
-            <ToolItem label="Image" selected={false} icon={<ImageIcon size={22} />} onSelect={() => notImplemented(60)} />
-            <ToolItem label="Text" selected={false} icon={<TextIcon size={22} />} onSelect={() => notImplemented(61)} />
+            <ToolItem label="Image" selected={false} icon={<ImageIcon size={22} />} onSelect={() => imageInput.click()} />
+            <ToolItem label="Text" selected={tool() === TEXT} icon={<TextIcon size={22} />} onSelect={() => selectTool(TEXT)} />
           </IonList>
+          <input ref={imageInput} type="file" accept="image/png,image/jpeg" hidden onChange={(event) => {
+            const file = event.currentTarget.files?.[0];
+            event.currentTarget.value = "";
+            if (file) void insertImage(file);
+          }} />
           <Show when={tool() === ERASER}>
             <IonList lines="none" class="tools kinds" aria-label="Eraser">
               <For each={Object.keys(ERASERS) as EraserId[]}>

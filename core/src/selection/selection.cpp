@@ -15,10 +15,13 @@
 #include "format/page_svg.h"
 #include "geometry/affine.h"
 #include "include/core/SkMatrix.h"
+#include "include/core/SkFont.h"
+#include "include/core/SkFontTypes.h"
 #include "ink/geometry/affine_transform.h"
 #include "ink/geometry/mesh.h"
 #include "ink/geometry/mesh_format.h"
 #include "strokes/outline.h"
+#include "render/text_font.h"
 
 namespace ink_engine {
 namespace {
@@ -36,6 +39,17 @@ ink::AffineTransform ToInk(const Transform &m) {
   return ink::AffineTransform(float(m.a), float(m.c), float(m.e), float(m.b), float(m.d), float(m.f));
 }
 
+Rect TextBox(const Text &text) {
+  SkFont font(TextTypeface(), float(text.size));
+  double width = 0;
+  for (const std::string &line : text.lines) {
+    width = std::max(width, double(font.measureText(line.data(), line.size(),
+                                                  SkTextEncoding::kUTF8)));
+  }
+  double height = text.size * (1 + 1.2 * (text.lines.size() - 1));
+  return {text.x, text.y - text.size, text.x + width, text.y - text.size + height};
+}
+
 // The element's hit-test meshes in its local coordinates.
 std::vector<ink::PartitionedMesh> HitMeshes(const Element &element) {
   std::vector<ink::PartitionedMesh> meshes;
@@ -43,9 +57,16 @@ std::vector<ink::PartitionedMesh> HitMeshes(const Element &element) {
     meshes.push_back(InkStroke(*stroke).GetShape());
   } else if (const auto *shape = std::get_if<Shape>(&element.value)) {
     for (const Stroke &s : ShapeStrokes(*shape, "")) meshes.push_back(InkStroke(s).GetShape());
-  } else if (const auto *image = std::get_if<Image>(&element.value)) {
-    float l = float(image->x), t = float(image->y);
-    float r = float(image->x + image->width), b = float(image->y + image->height);
+  } else if (std::holds_alternative<Image>(element.value) ||
+             std::holds_alternative<Text>(element.value)) {
+    Rect bounds;
+    if (const auto *image = std::get_if<Image>(&element.value)) {
+      bounds = {image->x, image->y, image->x + image->width, image->y + image->height};
+    } else {
+      bounds = TextBox(std::get<Text>(element.value));
+    }
+    float l = float(bounds.left), t = float(bounds.top);
+    float r = float(bounds.right), b = float(bounds.bottom);
     absl::StatusOr<ink::Mesh> mesh =
         ink::Mesh::Create(ink::MeshFormat(), {{l, r, r, l}, {t, t, b, b}}, {0, 1, 2, 0, 2, 3});
     if (mesh.ok()) {
@@ -62,6 +83,7 @@ const Transform &LocalTransform(const Element &element) {
   if (const auto *s = std::get_if<Stroke>(&element.value)) return s->transform;
   if (const auto *s = std::get_if<Shape>(&element.value)) return s->transform;
   if (const auto *i = std::get_if<Image>(&element.value)) return i->transform;
+  if (const auto *t = std::get_if<Text>(&element.value)) return t->transform;
   return kIdentity;
 }
 
@@ -143,6 +165,12 @@ Rect ElementBounds(const Element &element) {
                     Point{image->x + image->width, image->y + image->height}}) {
       Add(bounds, Apply(m, p));
     }
+  } else if (const auto *text = std::get_if<Text>(&element.value)) {
+    Rect box = TextBox(*text);
+    for (Point p : {Point{box.left, box.top}, Point{box.right, box.top},
+                    Point{box.left, box.bottom}, Point{box.right, box.bottom}}) {
+      Add(bounds, Apply(m, p));
+    }
   }
   return bounds;
 }
@@ -212,7 +240,8 @@ Element Transformed(const Element &element, const Transform &m) {
   std::visit(
       [&](auto &e) {
         using T = std::decay_t<decltype(e)>;
-        if constexpr (std::is_same_v<T, Stroke> || std::is_same_v<T, Shape> || std::is_same_v<T, Image>) {
+        if constexpr (std::is_same_v<T, Stroke> || std::is_same_v<T, Shape> ||
+                      std::is_same_v<T, Image> || std::is_same_v<T, Text>) {
           e.transform = Compose(m, e.transform);
         }
       },

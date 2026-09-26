@@ -356,12 +356,12 @@ export class Engine {
 
   // A new notebook on template `name`, whose pages/0001.svg is `page1`:
   // page 1 has the template's background, with no undo step.
-  createDocumentFromTemplate(seed: bigint, name: string, page1: Uint8Array): InkDocument {
+  createDocumentFromTemplate(seed: bigint, name: string, page1: Uint8Array, pageSize: number): InkDocument {
     const pointer = this.withCString(name, (text) => {
       const bytes = this.copyIn(page1);
       try {
         return this.withScratch(4, (out) => {
-          this.check(this.module._ink_document_create_from_template(seed, text, bytes, page1.length, out));
+          this.check(this.module._ink_document_create_from_template(seed, text, bytes, page1.length, pageSize, 0, 0, out));
           return this.view().getUint32(out, true);
         });
       } finally {
@@ -639,6 +639,46 @@ export class Canvas {
     const bytes = e.copyIn(text);
     try {
       e.check(e.module._ink_canvas_paste(this.pointer, bytes, text.length, x, y));
+    } finally {
+      e.free(bytes);
+    }
+  }
+
+  insertText(value: string, x: number, y: number): void {
+    const e = this.engine;
+    const text = encoder.encode(value);
+    const bytes = e.copyIn(text);
+    try {
+      e.check(e.module._ink_canvas_insert_text(this.pointer, bytes, text.length, x, y));
+    } finally {
+      e.free(bytes);
+    }
+  }
+
+  selectTextAt(x: number, y: number): boolean {
+    const e = this.engine;
+    return e.withScratch(4, (out) => {
+      e.check(e.module._ink_canvas_select_text_at(this.pointer, x, y, out));
+      return e.view().getInt32(out, true) !== 0;
+    });
+  }
+
+  selectedText(): string {
+    const e = this.engine;
+    return e.withScratch(8, (out) => {
+      e.check(e.module._ink_canvas_selected_text(this.pointer, out, out + 4));
+      const view = e.view();
+      const at = view.getUint32(out, true);
+      return decoder.decode(e.heap().subarray(at, at + view.getUint32(out + 4, true)));
+    });
+  }
+
+  setSelectedText(value: string): void {
+    const e = this.engine;
+    const text = encoder.encode(value);
+    const bytes = e.copyIn(text);
+    try {
+      e.check(e.module._ink_canvas_set_selected_text(this.pointer, bytes, text.length));
     } finally {
       e.free(bytes);
     }

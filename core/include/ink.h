@@ -49,11 +49,14 @@ typedef struct InkFile {
 /* A new notebook with one blank A4 page and one layer. `seed` seeds the id
    generator. */
 InkStatus ink_document_create(uint64_t seed, InkDocument **out);
+typedef enum InkPageSize { INK_PAGE_A4 = 0, INK_PAGE_LETTER = 1, INK_PAGE_CUSTOM = 2 } InkPageSize;
 /* A new notebook as ink_document_create, with template `name` set as by
    ink_document_set_template and page 1 on that template's background. The
-   document starts with no undo step. */
+   selected page size sets both the first page and future pages. The document
+   starts with no undo step. */
 InkStatus ink_document_create_from_template(uint64_t seed, const char *name, const uint8_t *svg,
-                                            size_t size, InkDocument **out);
+                                            size_t size, InkPageSize page_size, double width,
+                                            double height, InkDocument **out);
 /* Replaces the document with the notebook of notebook.json. Its listed pages
    are error pages ("missing file") until ink_document_load_page loads them. */
 InkStatus ink_document_load_notebook(InkDocument *document, const uint8_t *json, size_t size);
@@ -87,7 +90,6 @@ InkStatus ink_document_delete_page(InkDocument *document, size_t index);
 /* Moves page `from` to position `to`. Page files keep their names. */
 InkStatus ink_document_move_page(InkDocument *document, size_t from, size_t to);
 
-typedef enum InkPageSize { INK_PAGE_A4 = 0, INK_PAGE_LETTER = 1, INK_PAGE_CUSTOM = 2 } InkPageSize;
 /* The size of new pages: A4, Letter, or `width` × `height` pt. */
 InkStatus ink_document_set_page_size(InkDocument *document, InkPageSize size, double width,
                                      double height);
@@ -259,6 +261,18 @@ InkStatus ink_canvas_paste(InkCanvas *canvas, const uint8_t *svg, size_t size, d
 /* Copies the selection 10 pt right and down, with new ids, and selects the
    copy: one history step. */
 InkStatus ink_canvas_duplicate_selection(InkCanvas *canvas);
+/* Adds UTF-8 text at a view point and selects it. Each line is SVG text in
+   the page file. The position is the text box's top-left corner. */
+InkStatus ink_canvas_insert_text(InkCanvas *canvas, const uint8_t *utf8, size_t size,
+                                 double x, double y);
+/* Selects the topmost text box at a view point; `found` is 0 when none. */
+InkStatus ink_canvas_select_text_at(InkCanvas *canvas, double x, double y, int32_t *found);
+/* The selected text box as UTF-8, with newline-separated lines. The buffer
+   stays valid until the next call on the canvas. `size` is 0 when no text box
+   is selected. */
+InkStatus ink_canvas_selected_text(InkCanvas *canvas, const uint8_t **utf8, size_t *size);
+/* Replaces the selected text box's content in one history step. */
+InkStatus ink_canvas_set_selected_text(InkCanvas *canvas, const uint8_t *utf8, size_t size);
 /* UTC ms since the Unix epoch minus the host's sample clock, for mn:time. */
 InkStatus ink_canvas_set_utc_offset(InkCanvas *canvas, double utc_minus_host_ms);
 InkStatus ink_canvas_free(InkCanvas *canvas);

@@ -111,7 +111,7 @@ conflict. Assets are separate files, not base64 inside SVG.
 </svg>
 ```
 
-- Only core SVG elements: `path`, `g`, `image`, `a`, `rect`, `line`,
+- Only core SVG elements: `path`, `g`, `image`, `text`, `tspan`, `a`, `rect`, `line`,
   `polygon`, `ellipse`, `circle`, `metadata`, transforms. No
   `foreignObject`, no `<style>`, no `<use>` across files.
 - Units: the `viewBox` is in PostScript points (1/72 inch), the unit of PDF
@@ -122,6 +122,10 @@ conflict. Assets are separate files, not base64 inside SVG.
 - A stroke is a filled `path` whose `d` is the brush outline: every outline
   of the stroke as one `M…Z` subpath, `fill-rule` nonzero (the default). Any
   SVG renderer draws the variable-width ink correctly.
+- A typed text box is an SVG `text` element with `x`, `y`, `font-size`,
+  `font-family="sans-serif"`, and `fill`. Each line is a `tspan`; later
+  lines use `dy` equal to 1.2 times the font size. Its `transform` stores
+  a move or resize. The first `y` is the text baseline.
 - The stroke's input samples are an [InkML](https://www.w3.org/TR/InkML/)
   `trace` in the path's `metadata`. The page's root `metadata` declares one
   `inkml:traceFormat` per channel set that its strokes use. Channels, in
@@ -248,14 +252,41 @@ a notebook directory (send, archive, download).
         "tags": ["Research"],
         "description": "Outline of the proof and key references."
       }
+    },
+    "folders": {
+      "Algebraic Geometry": {
+        "description": "Notes on moduli and geometry.",
+        "paper": "grid-medium",
+        "coverColor": "#A9C1F5",
+        "coverStyle": "spine",
+        "tags": ["Research"]
+      }
+    },
+    "startingTemplates": [{
+      "name": "Seminar notes",
+      "folder": ["Algebraic Geometry"],
+      "paper": "grid-medium",
+      "pageSize": "letter",
+      "tags": ["Research"]
+    }],
+    "draft": {
+      "folder": ["Algebraic Geometry"],
+      "title": "Derived categories",
+      "template": "grid-medium",
+      "tags": ["Research"],
+      "pageSize": "letter"
     }
   }
   ```
 
-  `tags` is the tag list in sidebar order. `notes` is keyed by a notebook
-  directory's path from the root, `/`-separated; a key whose notebook is no
-  longer at that path is ignored. The file is absent until the first tag,
-  favorite or description is set.
+  `tags` is the tag list in sidebar order. `notes` is keyed by a note
+  directory's path from the root, `/`-separated. `folders` is keyed by a
+  notebook folder's path from the root and sets its new-note paper, cover,
+  description and tags. `startingTemplates` holds named New Note settings.
+  Folder paths in these entries follow folder renames and moves. Keys whose
+  directory is no longer at that path are ignored. `draft` holds the New Note fields until the note is created. The
+  file is absent until the first notebook, tag, favorite, description or draft
+  is set.
 - `Notes/.clippings/`: a notebook directory; each page is one clipping,
   sized to its content.
 

@@ -177,7 +177,7 @@ TEST_CASE("A notebook created from a template has page 1 on its background") {
 
   InkDocument *document = nullptr;
   const auto *svg = reinterpret_cast<const uint8_t *>(page1.data());
-  REQUIRE(ink_document_create_from_template(5, "dotted", svg, page1.size(), &document) == INK_OK);
+  REQUIRE(ink_document_create_from_template(5, "dotted", svg, page1.size(), INK_PAGE_A4, 0, 0, &document) == INK_OK);
   const Document &doc = document->history.current();
   CHECK(doc.notebook.template_name == "dotted");
   REQUIRE(doc.pages.size() == 1);
