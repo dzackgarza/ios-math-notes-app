@@ -163,7 +163,7 @@ are in each work-unit issue; this table is the index.
 | Bookmarks and links | Write `scribblearea.cpp` (`MODE_BOOKMARK`, hyperref groups), `page.cpp` `Page::getHyperRef`, `bookmarkview.cpp` | AGPL-3.0 |
 | Clippings | Write `clippingview.cpp` | AGPL-3.0 |
 | Library list: sort orders, name checks, rename, move, delete | Write `syncscribble/documentlist.cpp` `DocumentList::setCurrDir` (sort), `NewDocDialog` (name checks), `renameItem`, `pasteItem`, `deleteItem` | AGPL-3.0 |
-| Shape recognition | Xournal `src/xo-shapes.c` (inertia fitting, `try_rectangle`, `try_arrow`, `try_closed_polygon`, recent-stroke queue); ellipse by Halíř–Flusser direct least squares (OpenCV `fitEllipseDirect`); hold trigger from mathnotes-app/mobile-ink `cpp/ShapeRecognition.cpp` | GPL-2.0+, Apache-2.0 |
+| TikZ drawing editor | [FreeTikZ](https://github.com/chrisheunen/freetikz) for pen-first capture; the [drawing-mode specification](specs/tikz-drawing-mode.md) defines the scene, source, and page integration | MIT |
 | PDF export, link annotations | Skia `docs/examples/PDF.cpp`, `include/core/SkAnnotation.h` | BSD-3 |
 | WebGL surface | Skia `modules/canvaskit/canvaskit_bindings.cpp` (`MakeGrContext`, `MakeOnScreenGLSurface`) | BSD-3 |
 | Metal surface | Skia `tools/window/ios/MetalWindowContext_ios.mm`, `SkSurfaces::WrapCAMetalLayer` | BSD-3 |
@@ -173,9 +173,8 @@ are in each work-unit issue; this table is the index.
 | iPad folder access | Apple article "Providing access to directories" | — |
 | Sync conflict names | Nextcloud desktop `src/common/utility.cpp` `makeConflictFileName`; Syncthing `lib/model/folder_sendrecv.go` `conflictName`; Apple TN2336 | — |
 
-Pinned commits: Write `401b65d`, google/ink `1b220eee`, Xournal
-(GitHub mirror ricardoamaro/xournal-code) `982874f`, Xournal++ `b8b3a59`,
-mobile-ink `12af61a`. The repository license is AGPL-3.0-or-later, which
+Pinned commits: Write `401b65d`, google/ink `1b220eee`, Xournal++ `b8b3a59`.
+The repository license is AGPL-3.0-or-later, which
 admits every source above.
 
 ## Target layout

@@ -136,8 +136,8 @@ conflict. Assets are separate files, not base64 inside SVG.
   Wacom's universal-ink-library, microsoft/InkMLjs, and the CROHME
   handwritten-math tools, so external scripts can read the samples of any
   page.
-- Stroke attributes, in this order: `id`, `class` (only for shape elements),
-  `transform`, `fill`, `fill-opacity`, `mn:brush`, `mn:brush-version`,
+- Stroke attributes, in this order: `id`, `transform`, `fill`, `fill-opacity`,
+  `mn:brush`, `mn:brush-version`,
   `mn:size`, `mn:time`, `d`. `mn:brush` names a google/ink stock brush
   family and `mn:brush-version` its version enum, so a stored stroke
   regenerates the same way after a library upgrade. `mn:time` is the UTC
@@ -148,7 +148,7 @@ conflict. Assets are separate files, not base64 inside SVG.
 - The engine regenerates a stroke's outline only when the stroke is created
   or its samples or brush change. A loaded outline is written back as it was
   read.
-- IDs: `p-` pages, `l-` layers, `s-` strokes and shape elements, `b-`
+- IDs: `p-` pages, `l-` layers, `s-` strokes, `b-`
   bookmarks. Each is the prefix plus 6 (pages, layers) or 12 (strokes,
   bookmarks) characters of lowercase base32 from a seedable generator.
   Reordering or renaming never changes an id. A pasted element whose id
@@ -191,12 +191,6 @@ conflict. Assets are separate files, not base64 inside SVG.
   `../../MMP/flips/pages/0001.svg#b-…` for another notebook. The link then
   works in a browser that opens the page file, and keeps working when the
   whole tree moves.
-
-### Shape elements
-
-A recognized shape (FEATURES.md) is a `line`, `polygon`, `rect`, `ellipse`,
-or `path` (arrow) with `class="mn-shape"`, `fill="none"`, and the pen's
-color and size as `stroke` and `stroke-width`.
 
 Plain `.svg` only; `.svgz` is not written. ZIP is only a transport form of
 a notebook directory (send, archive, download).

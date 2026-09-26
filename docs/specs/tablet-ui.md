@@ -59,7 +59,7 @@ are the reference for look and interaction.
 - **Top bar**: app mark; notebook title with a menu and a subtitle; a tab
   per open note with close buttons, and **+**; share and **⋯** at the right.
 - **Tool rail** on the left: Pen, Thick Pen and Highlighter, each with its
-  size; Eraser; Lasso; Shapes; then a color palette of 15
+  size; Eraser; Lasso; Drawing mode; then a color palette of 15
   swatches and **+**.
 - **Page** fills the rest: dot paper, a handwritten title, tag chips with
   **+**, and ink with highlighter boxes, color and drawings.
@@ -95,7 +95,7 @@ chips, thin gray borders, system sans-serif type. Paper is warm off-white.
 | --- | --- |
 | Paper Style, Starting Template (backgrounds) | Built-in templates: blank, lined-*, grid-*, dotted (#21) |
 | Pen, Highlighter, color palette | Pen presets (#25), google/ink brushes |
-| Eraser, Lasso, Shapes | #23, #24, shape recognition (#10) |
+| Eraser, Lasso, Drawing mode | #23, #24, [TikZ drawing mode](tikz-drawing-mode.md) |
 | Undo and redo, zoom, page indicator | #22, #21 |
 | Tabs of open notes | A tab per open note, as in GoodNotes and Noteful |
 | Trash | `Notes/.trash/` |
