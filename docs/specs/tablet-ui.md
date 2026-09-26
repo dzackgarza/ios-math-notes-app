@@ -81,6 +81,10 @@ are the reference for look and interaction.
 
 ## Visual style
 
+Both hosts use iOS controls: SwiftUI on the iPad, Ionic in iOS mode on the web
+(ARCHITECTURE.md). The web chrome takes its look from Ionic, not from
+hand-written CSS; the colors below are Ionic theme variables.
+
 Light theme, white and very light gray panels, one blue accent (#2F6FEB,
 approximately) for primary buttons, selection and links. Rounded cards and
 chips, thin gray borders, system sans-serif type. Paper is warm off-white.
