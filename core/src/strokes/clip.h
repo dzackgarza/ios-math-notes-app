@@ -17,6 +17,11 @@ struct Rect {
 // Host id of a sample made by interpolation: no host update refers to it.
 inline constexpr uint32_t kInterpolatedSampleId = UINT32_MAX;
 
+// The parameter interval [t1, t2] of the segment a-b inside `rect` (edges
+// included); false when the segment misses it.
+bool ClipParameters(double ax, double ay, double bx, double by, const Rect &rect, double &t1,
+                    double &t2);
+
 // The sample at parameter t in [0, 1] from a to b: position, time, pressure
 // and pen angles interpolated linearly (angles along the shorter arc); the
 // other fields are a's.

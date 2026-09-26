@@ -28,6 +28,8 @@
 - **Element ids changed between identical runs.** Ids keyed by `Element*` broke when freed elements' addresses were reused (reopen, undo history). The id now lives in `Element::uuid`.
 - **The upstream tests start at view `(-10, -10)`, not `(0, 0)`.** Recorded traces begin with a `view` line that restores it.
 - **The Write build is C++14 with `-fno-rtti`:** no `std::to_chars`, no `dynamic_cast`.
+- **A Write mode other than 12 lasts one gesture** (`doubleTapSticky` off, `ScribbleMode::setMode`). A trace with one `mode 14` before three erase gestures erased on the first only; the others drew strokes, and the replay still reported 0 failures. Set the mode before each gesture.
+- **`just write-fixtures` compiled Write for wasm** (`ulib/fileutil.h` not found under `EmDebug/`): the justfile exports `EMSDK`, and Write's Makefile picks `Makefile.wasm` when it is set. The recipe unsets it for the Write build.
 
 ## Engine
 
@@ -45,4 +47,5 @@
 - **Chromium draws SVG `rect` and `ellipse` with `drawRect` and `drawOval`,** whose thin-stroke rasterization in Skia's CPU backend differs from `drawPath` of the same shape (full miter corners on a 1 px rect). The renderer draws those shapes with the same calls.
 - **`--emit-tsd` needs `tsc`, and emsdk installs none** ("tsc executable not found in node_modules or in $PATH"). The build takes it from `hosts/web/node_modules/.bin`. **TypeScript 7 does not work there:** Emscripten 4.0.7 calls `tsc --outFile`, which TypeScript 7 removed; `hosts/web` pins TypeScript 5.9.
 - **Desktop WebKit reports `altitudeAngle` 0 whatever the tilt** (older builds: undefined). The pointer adapter derives them from `tiltX`/`tiltY` with the Pointer Events Level 3 conversion.
+- **Chrome DevTools Protocol input has no pen eraser:** `Input.dispatchMouseEvent` maps `buttons` bits 1 to 16 only, so bit 32 never reaches the page. E2E tests dispatch the eraser end's `PointerEvent`s (button 5, buttons 32) on the canvas instead.
 - **Playwright's Linux WebKit ignores tilt and angle fields of a constructed `PointerEvent`:** `tiltX` is 90, `tiltY` 0 and `altitudeAngle` undefined whatever the init. Adapter tests derive expected angles from the tilts the event reports.

@@ -20,6 +20,7 @@ export const Tool = { pen: 0, eraser: 1, touch: 2, mouse: 3 } as const;
 export const Phase = { hover: 0, begin: 1, move: 2, end: 3, cancel: 4 } as const;
 export const Has = { pressure: 1, altitude: 2, azimuth: 4, roll: 8, hoverHeight: 16 } as const;
 export const Brush = { pressurePen: 0, marker: 1, highlighter: 2 } as const;
+export const Eraser = { stroke: 0, free: 1 } as const;
 
 // Struct layouts, wasm32: byteLength, then each field's offset (ink.h).
 export const PEN_SAMPLE = {
@@ -463,6 +464,12 @@ export class Canvas {
       view.setFloat32(at + TOOL_SETTINGS.size, tool.size, true);
       e.check(e.module._ink_canvas_set_tool(this.pointer, at));
     });
+  }
+
+  // The eraser of the pen's eraser end; with `active`, the eraser tool is on and
+  // pen and mouse input erase.
+  setEraser(kind: number, active: boolean): void {
+    this.engine.check(this.engine.module._ink_canvas_set_eraser(this.pointer, kind, active ? 1 : 0));
   }
 
   setUtcOffset(utcMinusHostMs: number): void {

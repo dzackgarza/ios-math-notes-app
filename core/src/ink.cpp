@@ -374,6 +374,17 @@ InkStatus ink_canvas_set_tool(InkCanvas *canvas, const InkToolSettings *tool) {
   });
 }
 
+InkStatus ink_canvas_set_eraser(InkCanvas *canvas, InkEraser kind, int32_t active) {
+  return Call([&] {
+    if (!canvas) return NullArgument("canvas");
+    if (kind != INK_ERASER_STROKE && kind != INK_ERASER_FREE) {
+      return Fail(INK_ERROR_ARGUMENT, "unknown eraser");
+    }
+    canvas->editor.SetEraser(kind, active != 0);
+    return INK_OK;
+  });
+}
+
 InkStatus ink_canvas_set_utc_offset(InkCanvas *canvas, double utc_minus_host_ms) {
   return Call([&] {
     if (!canvas) return NullArgument("canvas");
@@ -442,7 +453,7 @@ InkStatus ink_render(InkCanvas *canvas, int32_t *drew) {
     bool live_changed = !editor.TakeUpdatedRegion().IsEmpty() || drawing != canvas->was_drawing;
     canvas->was_drawing = drawing;
     ink_engine::View view{editor.view(), canvas->pixel_ratio, canvas->width, canvas->height};
-    if (!canvas->renderer->Update(editor.document(), view, live_changed)) return INK_OK;
+    if (!canvas->renderer->Update(editor.Shown(), view, live_changed)) return INK_OK;
     SkSurface *screen = canvas->surface->BeginFrame(canvas->width, canvas->height);
     if (!screen) return Fail(INK_ERROR_GPU, "the host surface gave no frame");
     std::optional<ink_engine::LiveInk> live;

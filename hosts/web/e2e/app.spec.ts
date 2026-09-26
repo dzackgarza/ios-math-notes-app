@@ -224,3 +224,66 @@ test("pulling past the last page adds a page only past the threshold, and the vi
   await expect(indicator).toHaveText(/\/ 2$/);
   await expect(pull).toHaveCSS("height", "0px");
 });
+
+// The ids of the strokes in a saved page file, in document order.
+async function savedStrokeIds(page: Page, path: string): Promise<string[]> {
+  const svg = Buffer.from(await readOpfsFile(page, path), "base64").toString();
+  return [...svg.matchAll(/<path id="(s-[a-z2-7]+)"/g)].map((m) => m[1]);
+}
+
+test("the eraser tool deletes a touched stroke whole, Partial cuts one in two, and each is one undo step", async ({ page }, testInfo) => {
+  await startEmpty(page);
+  await newNote(page, "Erase");
+  const box = (await page.locator("#ink-canvas").boundingBox())!;
+  const line = (y: number) => Array.from({ length: 20 }, (_, i) => ({ x: box.x + 150 + i * 8, y: box.y + y }));
+  const across = (y: number) => Array.from({ length: 9 }, (_, i) => ({ x: box.x + 226, y: box.y + y - 40 + i * 10 }));
+  await drawWithPen(page, line(100));
+  await drawWithPen(page, line(200));
+  await expect.poll(() => savedStrokeIds(page, "Erase/pages/0001.svg"), { timeout: 5000 }).toHaveLength(2);
+  const [first, second] = await savedStrokeIds(page, "Erase/pages/0001.svg");
+
+  await page.getByRole("button", { name: "Eraser", exact: true }).click();
+  await drawWithPen(page, across(100));
+  await expect.poll(() => savedStrokeIds(page, "Erase/pages/0001.svg"), { timeout: 5000 }).toEqual([second]);
+
+  await page.getByRole("button", { name: "Partial" }).click();
+  await drawWithPen(page, across(200));
+  await expect.poll(() => savedStrokeIds(page, "Erase/pages/0001.svg"), { timeout: 5000 }).toHaveLength(2);
+  const pieces = await savedStrokeIds(page, "Erase/pages/0001.svg");
+  expect(pieces).not.toContain(second);
+  await page.screenshot({ path: testInfo.outputPath("partial-erase.png") });
+  const ink = async (x: number) => Math.max(...(await pixel(page, box.x + x, box.y + 200)).slice(0, 3)) < 120;
+  expect(await ink(170)).toBe(true);
+  expect(await ink(226)).toBe(false); // the cut
+  expect(await ink(290)).toBe(true);
+
+  await page.keyboard.press("Control+z");
+  await expect.poll(() => savedStrokeIds(page, "Erase/pages/0001.svg"), { timeout: 5000 }).toEqual([second]);
+  await page.keyboard.press("Control+z");
+  await expect.poll(() => savedStrokeIds(page, "Erase/pages/0001.svg"), { timeout: 5000 }).toEqual([first, second]);
+});
+
+test("the pen's eraser end erases while the pen is selected", async ({ page }) => {
+  await startEmpty(page);
+  await newNote(page, "Eraser End");
+  const canvas = page.locator("#ink-canvas");
+  const box = (await canvas.boundingBox())!;
+  await drawWithPen(page, Array.from({ length: 20 }, (_, i) => ({ x: box.x + 150 + i * 8, y: box.y + 100 })));
+  await expect.poll(() => savedStrokeIds(page, "Eraser End/pages/0001.svg"), { timeout: 5000 }).toHaveLength(1);
+
+  // CDP input has no eraser button: the eraser end's events (button 5, buttons
+  // bit 32) are dispatched on the canvas, as the pen digitizer delivers them.
+  await canvas.evaluate((element, b) => {
+    const at = (type: string, y: number, buttons: number) =>
+      element.dispatchEvent(
+        new PointerEvent(type, {
+          bubbles: true, pointerId: 1, pointerType: "pen", isPrimary: true, button: type === "pointermove" ? -1 : 5,
+          buttons, pressure: 0.5, clientX: b.x + 226, clientY: b.y + y,
+        }),
+      );
+    at("pointerdown", 60, 32);
+    for (let y = 70; y <= 140; y += 10) at("pointermove", y, 32);
+    at("pointerup", 140, 0);
+  }, box);
+  await expect.poll(() => savedStrokeIds(page, "Eraser End/pages/0001.svg"), { timeout: 5000 }).toEqual([]);
+});

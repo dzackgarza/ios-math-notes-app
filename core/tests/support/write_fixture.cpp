@@ -1,0 +1,157 @@
+#include "support/write_fixture.h"
+
+#include <fstream>
+#include <sstream>
+#include <stdexcept>
+
+#include <nlohmann/json.hpp>
+#include <pugixml.hpp>
+
+#include "editor/canvas.h"
+#include "editor/erase.h"
+#include "include/core/SkPath.h"
+#include "include/utils/SkParsePath.h"
+
+namespace ink_test {
+namespace {
+
+void Require(bool ok, const std::string &what) {
+  if (!ok) throw std::runtime_error(what);
+}
+
+std::set<std::string> StrokeIds(const ink_engine::Document &document) {
+  std::set<std::string> ids;
+  for (const auto &box : document.pages[0]->layers[0].elements) {
+    if (const auto *s = std::get_if<ink_engine::Stroke>(&box->value)) ids.insert(s->id);
+  }
+  return ids;
+}
+
+}  // namespace
+
+std::vector<WriteEvent> ReadWriteTrace(const std::string &path) {
+  std::ifstream in(path);
+  Require(in.is_open(), "cannot open " + path);
+  std::vector<WriteEvent> events;
+  std::string line;
+  while (std::getline(in, line)) {
+    std::istringstream words(line);
+    std::string command;
+    if (!(words >> command) || command[0] == '#') continue;
+    if (command == "ie") {
+      WriteEvent e;
+      int src, mm;
+      Require(bool(words >> e.x >> e.y >> e.pressure >> src >> e.ev >> mm >> e.time), line);
+      events.push_back(e);
+    } else if (command == "mode") {
+      WriteEvent e{.kind = WriteEvent::kMode};
+      Require(bool(words >> e.mode), line);
+      events.push_back(e);
+    } else if (command == "view") {
+      int page;
+      double x, y;
+      Require(bool(words >> page >> x >> y) && page == 0 && x == 0 && y == 0, line);
+    } else {
+      Require(command == "screen" || command == "props", "unsupported trace command: " + line);
+    }
+  }
+  return events;
+}
+
+WriteExpected ReadWriteExpected(const std::string &path) {
+  std::ifstream in(path);
+  Require(in.is_open(), "cannot open " + path);
+  nlohmann::json json = nlohmann::json::parse(in);
+  WriteExpected expected;
+  for (const auto &e : json["pages"][0]["elements"]) {
+    WriteElement element{.id = e["id"]};
+    if (e.contains("penPoints")) {
+      for (const auto &subpath : e["penPoints"]) {
+        auto &points = element.pen_points.emplace_back();
+        for (const auto &p : subpath) points.push_back({kWritePt * double(p[0]), kWritePt * double(p[1])});
+      }
+    }
+    expected.elements.push_back(std::move(element));
+  }
+  for (int id : json["deleted"]) expected.deleted.insert(id);
+  return expected;
+}
+
+std::vector<std::vector<ink_engine::Point>> ReadWriteDocument(const std::string &path) {
+  pugi::xml_document xml;
+  Require(bool(xml.load_file(path.c_str())), "cannot parse " + path);
+  pugi::xml_node page = xml.select_node("//g[starts-with(@id, 'page_')]").node();
+  Require(bool(page), "no page in " + path);
+  std::vector<std::vector<ink_engine::Point>> lines;
+  for (pugi::xml_node node : page.children("path")) {
+    if (std::string(node.attribute("class").value()) == "ruleline") continue;
+    std::optional<SkPath> d = SkParsePath::FromSVGString(node.attribute("d").value());
+    Require(d.has_value(), "bad path data in " + path);
+    auto iter = d->iter();
+    while (auto rec = iter.next()) {
+      if (rec->fVerb == SkPathVerb::kMove) lines.emplace_back();
+      Require(rec->fVerb == SkPathVerb::kMove || rec->fVerb == SkPathVerb::kLine,
+              "a Write stroke has only lines: " + path);
+      const SkPoint &p = rec->fPoints.back();
+      lines.back().push_back({kWritePt * p.x(), kWritePt * p.y()});
+    }
+  }
+  return lines;
+}
+
+ink_engine::Document WithStrokes(ink_engine::Document document,
+                                 const std::vector<std::vector<ink_engine::Point>> &lines) {
+  ink_engine::Page page = *document.pages[0];
+  for (size_t i = 0; i < lines.size(); ++i) {
+    ink_engine::Stroke stroke{.id = "s-input" + std::to_string(i), .brush = "marker",
+                              .size = kWritePt, .time = "2026-01-01T00:00:00.000Z",
+                              .channels = ink_engine::kChannelX | ink_engine::kChannelY |
+                                          ink_engine::kChannelT};
+    for (size_t k = 0; k < lines[i].size(); ++k) {
+      stroke.samples.push_back({.x = lines[i][k].x, .y = lines[i][k].y, .t = 10.0 * k});
+    }
+    ink_engine::RebuildOutline(stroke);
+    page.layers[0].elements =
+        std::move(page.layers[0].elements).push_back(immer::box<ink_engine::Element>(ink_engine::Element{stroke}));
+  }
+  document.pages = document.pages.set(0, immer::box<ink_engine::Page>(std::move(page)));
+  return document;
+}
+
+std::vector<std::string> ReplayWriteTrace(InkCanvas *canvas, const std::vector<WriteEvent> &trace) {
+  ink_canvas_set_view(canvas, 1 / kWritePt, 0, 0, 1 / kWritePt, 0, 0);
+  InkToolSettings marker{INK_BRUSH_MARKER, 0x000000, float(kWritePt)};
+  ink_canvas_set_tool(canvas, &marker);
+  ink_canvas_set_eraser(canvas, INK_ERASER_STROKE, 0);
+  std::vector<std::string> drawn;
+  bool erasing = false;
+  InkPenSample last{};
+  for (const WriteEvent &e : trace) {
+    if (e.kind == WriteEvent::kMode) {
+      erasing = e.mode == 14 || e.mode == 16;
+      ink_canvas_set_eraser(canvas, e.mode == 16 ? INK_ERASER_FREE : INK_ERASER_STROKE, erasing);
+      continue;
+    }
+    std::set<std::string> before = StrokeIds(canvas->editor.document());
+    // The coordinates of a release are ignored: it ends at the last position.
+    InkPenSample s = e.ev == -1 ? last : InkPenSample{.x = e.x, .y = e.y};
+    s.time = e.time;
+    s.pressure = float(e.pressure);
+    s.tool = INK_TOOL_PEN;
+    s.phase = uint8_t(e.ev == 1 ? INK_PHASE_BEGIN : e.ev == -1 ? INK_PHASE_END : INK_PHASE_MOVE);
+    ink_input(canvas, &s, 1);
+    last = s;
+    if (e.ev != -1) continue;
+    if (erasing) {
+      erasing = false;
+      ink_canvas_set_eraser(canvas, INK_ERASER_STROKE, 0);
+      continue;
+    }
+    for (const std::string &id : StrokeIds(canvas->editor.document())) {
+      if (!before.contains(id)) drawn.push_back(id);
+    }
+  }
+  return drawn;
+}
+
+}  // namespace ink_test

@@ -26,6 +26,9 @@ One directory per case:
 | `ruled-erase-greedy`, `ruled-erase-nongreedy` | Ruled erase over part of a line with `greedyRuledErase` 1 and 0. The stroke that only overlaps the erased range is deleted only in the greedy case. |
 | `insspace-virtual-ruling` | Ruled insert space on an unruled page. |
 | `insspace-negative-erase` | Ruled insert space dragged to the left: the strokes in the swept range are deleted, and the rest of the line moves left. |
+| `stroke-erase` | Stroke erase (mode 14) over five strokes drawn on a blank page: two gestures delete three strokes, one passes beside a stroke. |
+| `free-erase` | Free erase (mode 16) over five strokes: one cut, two cuts in one gesture, a trimmed end, an untouched stroke, and a stroke erased whole. |
+| `free-erase-document` | Free erase over the three strokes of `input.html`: a wave cut once, a line cut once, an L that loses its vertical arm. |
 
 The upstream cases also cover free erase (`test11`, `test12`), stroke erase
 (`test8`, `test15`), lasso select (`test6`), ruled select (`test6`, `test8`),
@@ -89,7 +92,8 @@ decimal. Colors are ARGB as unsigned 32-bit integers.
   `groupStrokes` is deterministic. The upstream cases use `t` = 0 for every
   event, as the upstream tests do.
 
-Mode numbers (`scribblemode.h`): 11 pan, 12 stroke, 14 stroke erase, 15 ruled
+A mode other than 12 lasts for one gesture (`doubleTapSticky` is off), so a
+trace sets it before each gesture. Mode numbers (`scribblemode.h`): 11 pan, 12 stroke, 14 stroke erase, 15 ruled
 erase, 16 free erase, 18 rectangle select, 19 ruled select, 20 lasso select,
 25 vertical insert space, 27 ruled insert space, 28 bookmark, 36 page select.
 Command numbers: `ID_UNDO` = 100, `ID_REDO` = 101, `ID_SELALL` = 102,
