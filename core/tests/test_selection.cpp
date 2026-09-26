@@ -13,6 +13,7 @@
 #include <pugixml.hpp>
 
 #include "editor/canvas.h"
+#include "format/page_svg.h"
 #include "geometry/affine.h"
 #include "selection/selection.h"
 #include "support/session.h"
@@ -145,6 +146,19 @@ TEST_CASE("Resizing, selecting all, scaling through a negative factor and rotati
   }
   // Each handle drag is one history step; selecting adds none.
   CHECK(canvas.document->history.size() == 1 + drawn.size() + 3);
+
+  // The page file keeps the transforms: read back, each stroke lands within
+  // 0.01 pt of where the editor put it, anywhere on the page.
+  Page saved = ReadPage(DirtyFiles(canvas.document).at("pages/0001.svg"), "pages/0001.svg", {});
+  for (size_t i = 0; i < elements.size(); ++i) {
+    INFO("stroke " << i);
+    const Stroke &ours = std::get<Stroke>(elements[i]->value);
+    const Stroke &read = std::get<Stroke>(saved.layers[0].elements[i]->value);
+    for (Point corner : {Point{0, 0}, Point{595.28, 0}, Point{0, 841.89}, Point{595.28, 841.89}}) {
+      Point a = Apply(ours.transform, corner), b = Apply(read.transform, corner);
+      CHECK(std::hypot(a.x - b.x, a.y - b.y) < 0.01);
+    }
+  }
 }
 
 TEST_CASE("The lasso selects a stroke more than 90% inside it") {

@@ -106,6 +106,7 @@ Work order and milestones: the GitHub issue tree rooted at
 | Number formatting | `std::to_chars` (fixed precision) | libc++ (iOS 16.3+, Emscripten) | [#3](https://github.com/dzackgarza/math-notes-app/issues/3) |
 | Document values, undo history | immer 0.9.1 | vcpkg | [#3](https://github.com/dzackgarza/math-notes-app/issues/3) |
 | Free-erase interval union | boost-icl (Boost.Icl `interval_set`) 1.92 | vcpkg | [#23](https://github.com/dzackgarza/math-notes-app/issues/23) |
+| Lasso simplification (Ramer-Douglas-Peucker) | boost-geometry (Boost.Geometry `simplify`) 1.92 | vcpkg | [#24](https://github.com/dzackgarza/math-notes-app/issues/24) |
 | Engine tests | Catch2 3.16.0 | vcpkg; tests run in the WASM build under Node | [#2](https://github.com/dzackgarza/math-notes-app/issues/2) |
 | InkML compatibility check of written pages | Wacom [universal-ink-library](https://github.com/Wacom-Developer/universal-ink-library) 2.1.1 (`InkMLParser`) | PyPI, run with `uvx` in CI; test-only | [#3](https://github.com/dzackgarza/math-notes-app/issues/3) |
 

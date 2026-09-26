@@ -1,10 +1,28 @@
 import { Button } from "@kobalte/core/button";
 import { DropdownMenu } from "@kobalte/core/dropdown-menu";
 import { ToggleGroup } from "@kobalte/core/toggle-group";
-import { ChevronDown, ChevronLeft, ChevronRight, Ellipsis, Eraser as EraserIcon, Grip, Highlighter, PenLine, Plus, Redo2, Undo2, X } from "lucide-solid";
-import { For, Show, createEffect, createResource, createSignal, onCleanup, onMount } from "solid-js";
+import {
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Copy,
+  CopyPlus,
+  Ellipsis,
+  Eraser as EraserIcon,
+  Grip,
+  Highlighter,
+  Lasso,
+  PenLine,
+  Plus,
+  Redo2,
+  Scissors,
+  Trash2,
+  Undo2,
+  X,
+} from "lucide-solid";
+import { For, Match, Show, Switch, createEffect, createResource, createSignal, onCleanup, onMount } from "solid-js";
 
-import { Brush, Eraser, PageSize, type Canvas } from "../engine/engine.ts";
+import { Brush, Eraser, PageSize, Selector, type Canvas, type SelectionInfo } from "../engine/engine.ts";
 import { ViewController, type View } from "../input/gestures.ts";
 import { browserEngine, capabilities, penSamples } from "../input/pointer.ts";
 import { listTemplates } from "../storage/folder.ts";
@@ -22,11 +40,15 @@ const PENS = {
   highlighter: { label: "Highlighter", brush: Brush.highlighter, size: 8, rgb: 0xf5d547 },
 } as const;
 type PenId = keyof typeof PENS;
-type ToolId = PenId | "eraser";
+type ToolId = PenId | "eraser" | "select";
 
 // The eraser's two kinds (#23); the pen's eraser end uses the selected one.
 const ERASERS = { stroke: { label: "Whole stroke", kind: Eraser.stroke }, free: { label: "Partial", kind: Eraser.free } } as const;
 type EraserId = keyof typeof ERASERS;
+
+// The selection tool's two kinds (#24).
+const SELECTORS = { lasso: { label: "Freeform", kind: Selector.lasso }, rect: { label: "Rectangle", kind: Selector.rect } } as const;
+type SelectorId = keyof typeof SELECTORS;
 
 // The 15 swatches of the mockup's palette, three per row.
 export const PALETTE = [
@@ -65,9 +87,11 @@ export function Editor(props: {
   // The pen the palette colors: the selected pen, or the last one before the eraser.
   const [pen, setPen] = createSignal<PenId>("pen");
   const [eraser, setEraser] = createSignal<EraserId>("stroke");
+  const [selector, setSelector] = createSignal<SelectorId>("lasso");
+  const [selection, setSelection] = createSignal<SelectionInfo | null>(null);
   const selectTool = (id: ToolId) => {
     setTool(id);
-    if (id !== "eraser") setPen(id);
+    if (id !== "eraser" && id !== "select") setPen(id);
   };
   const [colors, setColors] = createSignal<Record<PenId, number>>({ pen: PENS.pen.rgb, highlighter: PENS.highlighter.rgb });
   const [view, setView] = createSignal<View>({ scale: 1, x: 0, y: 0 });
@@ -104,6 +128,7 @@ export function Editor(props: {
       canvas?.setView(clamped.scale, 0, 0, clamped.scale, clamped.x, clamped.y);
       setView(clamped);
       setPages(doc.pageCount());
+      refreshSelection();
     },
     () => releasePull(),
   );
@@ -153,10 +178,18 @@ export function Editor(props: {
       if (e.type === "pointerdown") element.setPointerCapture(e.pointerId);
       return;
     }
-    if (e.type === "pointerdown") element.setPointerCapture(e.pointerId);
+    if (e.type === "pointerdown") {
+      element.setPointerCapture(e.pointerId);
+      setSelection(null); // the actions return where the gesture leaves the selection
+    }
     canvas.input(penSamples(e, at, capabilities(engineName, e.pointerType), ids));
-    if (e.type === "pointerup" || e.type === "pointercancel") saver.schedule();
+    if (e.type === "pointerup" || e.type === "pointercancel") {
+      refreshSelection();
+      saver.schedule();
+    }
   };
+
+  const refreshSelection = () => setSelection(canvas?.selection() ?? null);
 
   // A wheel or trackpad scroll has no release event: the pull is released
   // when no wheel event has come for WHEEL_RELEASE_MS.
@@ -184,6 +217,28 @@ export function Editor(props: {
     saver.schedule();
   };
 
+  // The system clipboard holds the selection as SVG text (#24).
+  const copy = (cut: boolean) => {
+    if (!canvas) return;
+    const svg = canvas.copySelection(cut);
+    if (!svg) return;
+    void navigator.clipboard.writeText(svg);
+    if (cut) edit(() => {});
+  };
+  // Pastes at the middle of the view.
+  const paste = (svg: string) => {
+    const target = canvas;
+    if (!target || !svg) return;
+    edit(() => target.paste(svg, element.clientWidth / 2, element.clientHeight / 2));
+  };
+  // Ctrl+V: the paste event carries the clipboard text without a permission prompt.
+  const onPaste = (e: ClipboardEvent) => {
+    const text = e.clipboardData?.getData("text/plain");
+    if (!text) return;
+    e.preventDefault();
+    paste(text);
+  };
+
   // Scrolls page `index` into view when it is not already visible.
   const showPage = (index: number) => {
     if (index < 0) return;
@@ -208,14 +263,41 @@ export function Editor(props: {
   };
 
   const onKey = (e: KeyboardEvent) => {
-    if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== "z") return;
+    if (e.target instanceof HTMLInputElement) return;
+    const key = e.key.toLowerCase();
+    if ((key === "delete" || key === "backspace") && selection()) {
+      e.preventDefault();
+      edit(() => canvas?.deleteSelection());
+      return;
+    }
+    if (key === "escape") {
+      canvas?.clearSelection();
+      refreshSelection();
+      return;
+    }
+    if (!(e.ctrlKey || e.metaKey)) return;
+    const commands: Record<string, () => void> = {
+      z: () => history(e.shiftKey ? "redo" : "undo"),
+      a: () => {
+        canvas?.selectAll(currentPage());
+        refreshSelection();
+      },
+      c: () => copy(false),
+      x: () => copy(true),
+      d: () => edit(() => canvas?.duplicateSelection()),
+    };
+    if (!commands[key]) return;
     e.preventDefault();
-    history(e.shiftKey ? "redo" : "undo");
+    commands[key]();
   };
 
   onMount(() => {
     window.addEventListener("keydown", onKey);
-    onCleanup(() => window.removeEventListener("keydown", onKey));
+    window.addEventListener("paste", onPaste);
+    onCleanup(() => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("paste", onPaste);
+    });
     canvas = doc.createCanvas("#ink-canvas");
     canvas.setUtcOffset(performance.timeOrigin);
     createEffect(() => {
@@ -223,6 +305,7 @@ export function Editor(props: {
       canvas?.setTool({ brush, rgb: colors()[pen()], size });
     });
     createEffect(() => canvas?.setEraser(ERASERS[eraser()].kind, tool() === "eraser"));
+    createEffect(() => canvas?.setSelector(SELECTORS[selector()].kind, tool() === "select"));
     const observer = new ResizeObserver(resize);
     observer.observe(area);
     resize();
@@ -286,6 +369,9 @@ export function Editor(props: {
           </DropdownMenu.Trigger>
           <DropdownMenu.Portal>
             <DropdownMenu.Content class="menu">
+              <DropdownMenu.Item class="menu-item" onSelect={() => void navigator.clipboard.readText().then(paste)}>
+                Paste
+              </DropdownMenu.Item>
               <DropdownMenu.Item class="menu-item" onSelect={() => edit(() => doc.insertPage(currentPage()))}>
                 Insert page before
               </DropdownMenu.Item>
@@ -350,9 +436,15 @@ export function Editor(props: {
                 <span class="tool-size">{ERASERS[eraser()].label}</span>
               </span>
             </ToggleGroup.Item>
+            <ToggleGroup.Item class="tool" value="select" aria-label="Lasso">
+              <Lasso size={20} />
+              <span class="tool-text">
+                <span>Lasso</span>
+                <span class="tool-size">{SELECTORS[selector()].label}</span>
+              </span>
+            </ToggleGroup.Item>
           </ToggleGroup>
-          <Show
-            when={tool() === "eraser"}
+          <Switch
             fallback={
               <ToggleGroup
                 class="palette"
@@ -368,21 +460,39 @@ export function Editor(props: {
               </ToggleGroup>
             }
           >
-            <ToggleGroup
-              class="tools eraser-kinds"
-              value={eraser()}
-              onChange={(v) => v && setEraser(v as EraserId)}
-              aria-label="Eraser"
-            >
-              <For each={Object.keys(ERASERS) as EraserId[]}>
-                {(id) => (
-                  <ToggleGroup.Item class="tool" value={id}>
-                    {ERASERS[id].label}
-                  </ToggleGroup.Item>
-                )}
-              </For>
-            </ToggleGroup>
-          </Show>
+            <Match when={tool() === "eraser"}>
+              <ToggleGroup
+                class="tools eraser-kinds"
+                value={eraser()}
+                onChange={(v) => v && setEraser(v as EraserId)}
+                aria-label="Eraser"
+              >
+                <For each={Object.keys(ERASERS) as EraserId[]}>
+                  {(id) => (
+                    <ToggleGroup.Item class="tool" value={id}>
+                      {ERASERS[id].label}
+                    </ToggleGroup.Item>
+                  )}
+                </For>
+              </ToggleGroup>
+            </Match>
+            <Match when={tool() === "select"}>
+              <ToggleGroup
+                class="tools"
+                value={selector()}
+                onChange={(v) => v && setSelector(v as SelectorId)}
+                aria-label="Selection"
+              >
+                <For each={Object.keys(SELECTORS) as SelectorId[]}>
+                  {(id) => (
+                    <ToggleGroup.Item class="tool" value={id}>
+                      {SELECTORS[id].label}
+                    </ToggleGroup.Item>
+                  )}
+                </For>
+              </ToggleGroup>
+            </Match>
+          </Switch>
         </aside>
         <div class="canvas-area" ref={area}>
           <canvas
@@ -395,6 +505,39 @@ export function Editor(props: {
             onWheel={onWheel}
             onContextMenu={(e) => e.preventDefault()}
           />
+          <Show when={selection()}>
+            {(sel) => (
+              <div
+                class="selection-bar bar-group"
+                role="toolbar"
+                aria-label="Selection actions"
+                style={{ left: `${sel().x + sel().width / 2}px`, top: `${sel().y + sel().height + 12}px` }}
+              >
+                <Button class="icon-button" aria-label="Copy" title="Copy (Ctrl+C)" onClick={() => copy(false)}>
+                  <Copy size={18} />
+                </Button>
+                <Button class="icon-button" aria-label="Cut" title="Cut (Ctrl+X)" onClick={() => copy(true)}>
+                  <Scissors size={18} />
+                </Button>
+                <Button
+                  class="icon-button"
+                  aria-label="Duplicate"
+                  title="Duplicate (Ctrl+D)"
+                  onClick={() => edit(() => canvas?.duplicateSelection())}
+                >
+                  <CopyPlus size={18} />
+                </Button>
+                <Button
+                  class="icon-button"
+                  aria-label="Delete"
+                  title="Delete (Del)"
+                  onClick={() => edit(() => canvas?.deleteSelection())}
+                >
+                  <Trash2 size={18} />
+                </Button>
+              </div>
+            )}
+          </Show>
           <div
             class="pull-indicator"
             data-active={pull() > 0 ? "" : undefined}
