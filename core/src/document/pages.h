@@ -32,7 +32,7 @@ Document InsertPage(Document document, size_t index, IdGenerator &ids,
                     const std::optional<Page> &template_page);
 
 // A page for the notebook's page size and template, before it gets an id
-// and a file: the ghost page after the last page is this page.
+// and a file.
 Page NewPage(const Document &document, const std::optional<Page> &template_page);
 
 // Removes listed page `index`; the host deletes its file on save.

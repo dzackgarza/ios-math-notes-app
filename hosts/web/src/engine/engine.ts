@@ -250,6 +250,23 @@ export class Engine {
     });
     return new InkDocument(this, pointer);
   }
+
+  // A new notebook on template `name`, whose pages/0001.svg is `page1`:
+  // page 1 has the template's background, with no undo step.
+  createDocumentFromTemplate(seed: bigint, name: string, page1: Uint8Array): InkDocument {
+    const pointer = this.withCString(name, (text) => {
+      const bytes = this.copyIn(page1);
+      try {
+        return this.withScratch(4, (out) => {
+          this.check(this.module._ink_document_create_from_template(seed, text, bytes, page1.length, out));
+          return this.view().getUint32(out, true);
+        });
+      } finally {
+        this.free(bytes);
+      }
+    });
+    return new InkDocument(this, pointer);
+  }
 }
 
 export class InkDocument {
@@ -358,7 +375,7 @@ export class InkDocument {
     });
   }
 
-  // The laid-out pages' extent in content coordinates (pt), the ghost page included.
+  // The laid-out pages' extent in content coordinates (pt).
   contentSize(): { width: number; height: number } {
     const e = this.engine;
     return e.withScratch(16, (out) => {
@@ -463,8 +480,7 @@ export class Canvas {
     this.engine.check(this.engine.module._ink_input_update(this.pointer, at, samples.length));
   }
 
-  // The page under view point (x, y): its index, the page count for the
-  // ghost page, or -1.
+  // The page under view point (x, y): its index, or -1.
   pageAt(x: number, y: number): number {
     const e = this.engine;
     return e.withScratch(4, (out) => {

@@ -167,14 +167,12 @@ SkMatrix Renderer::ContentMatrix() const {
          ToSkMatrix(view_.content_to_view);
 }
 
-bool Renderer::Update(const Document &document, const View &view, bool live_changed,
-                      const Page *ghost) {
-  std::optional<Page> next_ghost = ghost ? std::optional<Page>(*ghost) : std::nullopt;
+bool Renderer::Update(const Document &document, const View &view, bool live_changed) {
   std::vector<PagePlacement> layout = LayoutPages(document);
   bool document_changed = !document_ || !(document_->pages == document.pages) ||
                           !(document_->notebook == document.notebook);
   bool full = !content_ || invalidated_ || !(view == view_) || layout != layout_ ||
-              ghost_ != next_ghost || !(document_->notebook == document.notebook);
+              !(document_->notebook == document.notebook);
   invalidated_ = false;
   SkRegion dirty;
   if (!full && document_changed) dirty = DirtyRegion(document);
@@ -193,7 +191,6 @@ bool Renderer::Update(const Document &document, const View &view, bool live_chan
                         : SkSurfaces::Raster(info);
   }
   document_ = document;
-  ghost_ = std::move(next_ghost);
   layout_ = std::move(layout);
   view_ = view;
 
@@ -265,17 +262,6 @@ void Renderer::Redraw(const SkRegion &region) {
       canvas->setMatrix(content * SkMatrix::Translate(page_rect.x(), page_rect.y()));
       DrawPage(canvas, *document_->pages[placement.page],
                clip_content.makeOffset(-page_rect.x(), -page_rect.y()));
-    }
-    if (ghost_) {
-      PagePlacement at = GhostPlacement(layout_, ghost_->width, ghost_->height);
-      SkRect rect = SkRect::MakeXYWH(float(at.x), float(at.y), float(at.width), float(at.height));
-      if (SkRect::Intersects(rect, clip_content)) {
-        canvas->setMatrix(content * SkMatrix::Translate(rect.x(), rect.y()));
-        SkRect bounds = SkRect::MakeWH(rect.width(), rect.height());
-        canvas->saveLayerAlphaf(&bounds, 0.25f);
-        DrawPage(canvas, *ghost_, clip_content.makeOffset(-rect.x(), -rect.y()));
-        canvas->restore();
-      }
     }
   }
   canvas->restore();

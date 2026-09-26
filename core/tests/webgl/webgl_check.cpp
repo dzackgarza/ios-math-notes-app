@@ -173,7 +173,7 @@ EMSCRIPTEN_KEEPALIVE double zoom_frame_ms(int width, int height) {
   if (!scene) return -1;
   InkCanvas *canvas = scene->canvas;
   ink_canvas_set_surface_size(canvas, width, height, 1);
-  double center_x = 595.28 / 2, center_y = 841.89 + 9.6 + 841.89 / 2;  // page 2
+  double center_x = 595.28 / 2, center_y = 841.89 + 841.89 / 2;  // page 2
   // The zoom, as log2 of the scale per frame: 1× -> 0.5× -> 2× -> 1×, 20 frames each.
   constexpr int kLeg = 20;
   constexpr double kKeys[] = {0, -1, 1, 0};

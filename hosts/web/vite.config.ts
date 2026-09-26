@@ -15,7 +15,7 @@ export default defineConfig({
         short_name: "Math Notes",
         start_url: "/math-notes/",
         display: "standalone",
-        background_color: "#444444",
+        background_color: "#F6F7F9",
         icons: [{ src: "favicon.svg", sizes: "any", type: "image/svg+xml" }],
       },
       workbox: {

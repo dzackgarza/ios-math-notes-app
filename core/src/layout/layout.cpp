@@ -15,7 +15,7 @@ std::vector<PagePlacement> LayoutPages(const Document &document) {
     const Page &page = *document.pages[i];
     if (page.unlisted) continue;
     layout.push_back({i, (content_width - page.width) / 2, y, page.width, page.height});
-    y += page.height + kPageGap;
+    y += page.height;
   }
   return layout;
 }
@@ -23,20 +23,9 @@ std::vector<PagePlacement> LayoutPages(const Document &document) {
 const PagePlacement *PageAt(const std::vector<PagePlacement> &layout, double y) {
   if (layout.empty()) return nullptr;
   for (const PagePlacement &p : layout) {
-    if (y < p.y + p.height + kPageGap / 2) return &p;
+    if (y < p.y + p.height) return &p;
   }
   return &layout.back();
-}
-
-}  // namespace ink_engine
-
-namespace ink_engine {
-
-PagePlacement GhostPlacement(const std::vector<PagePlacement> &layout, double width, double height) {
-  double content_width = layout.empty() ? width : 0, y = 0;
-  for (const PagePlacement &p : layout) content_width = std::max(content_width, p.width);
-  if (!layout.empty()) y = layout.back().y + layout.back().height + kPageGap;
-  return {layout.empty() ? 0 : layout.back().page + 1, (content_width - width) / 2, y, width, height};
 }
 
 }  // namespace ink_engine

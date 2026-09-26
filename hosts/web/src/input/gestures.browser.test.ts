@@ -12,7 +12,7 @@ function touch(type: string, pointerId: number, x: number, y: number): PointerEv
 
 function controller(): { control: ViewController; views: View[] } {
   const views: View[] = [];
-  const control = new ViewController({ scale: 1, x: 0, y: 0 }, (v) => views.push(v));
+  const control = new ViewController({ scale: 1, x: 0, y: 0 }, (v) => views.push(v), () => {});
   return { control, views };
 }
 

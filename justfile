@@ -8,6 +8,15 @@ build := "core/build/wasm"
 export EMSDK := emsdk
 export PATH := emsdk / "upstream/emscripten" + ":" + env("PATH")
 
+# Installs emsdk 4.0.7, vcpkg and the Playwright browsers where the recipes
+# below look for them (the engine workflow's setup steps).
+setup:
+    [ -d {{emsdk}} ] || git clone -q https://github.com/emscripten-core/emsdk {{emsdk}}
+    {{emsdk}}/emsdk install 4.0.7 && {{emsdk}}/emsdk activate 4.0.7
+    [ -d {{vcpkg}} ] || git clone -q https://github.com/microsoft/vcpkg {{vcpkg}}
+    {{vcpkg}}/bootstrap-vcpkg.sh -disableMetrics
+    cd core/tests/webgl && bun install --frozen-lockfile && bunx playwright install chromium chromium-headless-shell firefox
+
 engine-wasm:
     cmake -S core -B {{build}} -G Ninja -DCMAKE_BUILD_TYPE=Release \
       -DCMAKE_TOOLCHAIN_FILE={{vcpkg}}/scripts/buildsystems/vcpkg.cmake \
@@ -116,3 +125,8 @@ write-fixtures:
     done
     # replay every case; upstream-test<N> cases are also compared with Write's test<N>_ref.html
     (cd "$W/syncscribble" && WRITE_REPLAY_DIR="$F" WRITE_REPLAY_TMP="$tmp/replay" run --replaytest)
+
+# Rewrites docs/specs/ui/screenshots: the library, New Notebook, New Note and editor
+# screens of the deployment at 1366 × 1024, for review against the mockups.
+screenshots: web-deploy
+    cd hosts/web && bun e2e/screenshots.ts

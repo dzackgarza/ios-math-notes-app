@@ -24,10 +24,13 @@ export class ViewController {
   view: View;
   private readonly touches = new Map<number, Point>();
   private readonly onChange: (view: View) => void;
+  private readonly onRelease: () => void;
 
-  constructor(view: View, onChange: (view: View) => void) {
+  // `onRelease` runs when the last finger of a touch gesture lifts.
+  constructor(view: View, onChange: (view: View) => void, onRelease: () => void) {
     this.view = view;
     this.onChange = onChange;
+    this.onRelease = onRelease;
   }
 
   // Returns whether the event was a touch the controller took.
@@ -51,7 +54,7 @@ export class ViewController {
         break;
       }
       default:
-        this.touches.delete(e.pointerId);
+        if (this.touches.delete(e.pointerId) && this.touches.size === 0) this.onRelease();
     }
     return true;
   }

@@ -1,18 +1,52 @@
 import { Button } from "@kobalte/core/button";
 import { DropdownMenu } from "@kobalte/core/dropdown-menu";
-import { For, createResource, onCleanup, onMount } from "solid-js";
+import { ToggleGroup } from "@kobalte/core/toggle-group";
+import { ChevronDown, ChevronLeft, ChevronRight, Ellipsis, Grip, Highlighter, PenLine, Plus, Redo2, Undo2, X } from "lucide-solid";
+import { For, createEffect, createResource, createSignal, onCleanup, onMount } from "solid-js";
 
 import { Brush, PageSize, type Canvas } from "../engine/engine.ts";
 import { ViewController, type View } from "../input/gestures.ts";
 import { browserEngine, capabilities, penSamples } from "../input/pointer.ts";
 import { listTemplates } from "../storage/folder.ts";
+import { AppMark } from "../ui/Library.tsx";
+import { paperLabel } from "../ui/paper.tsx";
 import { applyTemplate, type OpenNotebook } from "./notebook.ts";
 
-const MARGIN = 16; // CSS px around the pages
-const DOUBLE_TAP_MS = 350;
-const DOUBLE_TAP_PX = 24;
+// How far past the last page, in CSS px, a pull must go to add a page.
+const PULL_THRESHOLD = 96;
+const WHEEL_RELEASE_MS = 250;
 
-export function Editor(props: { notebook: OpenNotebook; onClose: () => void }) {
+// The tool rail's pens (docs/specs/tablet-ui.md, Editor): brush and size in pt.
+const PENS = {
+  pen: { label: "Pen", brush: Brush.pressurePen, size: 1.6, rgb: 0x1a1a1a },
+  highlighter: { label: "Highlighter", brush: Brush.highlighter, size: 8, rgb: 0xf5d547 },
+} as const;
+type PenId = keyof typeof PENS;
+
+// The 15 swatches of the mockup's palette, three per row.
+export const PALETTE = [
+  0x1a1a1a, 0x8a8f98, 0xffffff, 0x1f4fd1, 0xd6455d, 0xf08a24, 0x3fa35b, 0x8b5cf6, 0xf5a3c7, 0xf5d547, 0x2bb3c0, 0xd8b4fe,
+  0x7fb2f0, 0x8b5a2b, 0x1f3a93,
+];
+const hex = (rgb: number) => `#${rgb.toString(16).padStart(6, "0").toUpperCase()}`;
+
+// Zoom factors relative to the page filling the canvas width (100%).
+const ZOOMS = [0.5, 0.75, 1, 1.25, 1.5, 2, 3];
+
+export interface Tab {
+  path: string[];
+  name: string;
+}
+
+export function Editor(props: {
+  notebook: OpenNotebook;
+  folderName: string;
+  tabs: Tab[];
+  // Each runs after the editor saved and freed the open notebook.
+  onLibrary: () => void;
+  onSelectTab: (path: string[]) => void;
+  onCloseTab: (path: string[]) => void;
+}) {
   let area!: HTMLDivElement;
   let element!: HTMLCanvasElement;
   let canvas: Canvas | undefined;
@@ -21,28 +55,64 @@ export function Editor(props: { notebook: OpenNotebook; onClose: () => void }) {
   const engineName = browserEngine();
   const { document: doc, saver, root } = props.notebook;
   const [templates] = createResource(() => listTemplates(root));
+  const [template, setTemplate] = createSignal(props.notebook.template);
+  const [pen, setPen] = createSignal<PenId>("pen");
+  const [colors, setColors] = createSignal<Record<PenId, number>>({ pen: PENS.pen.rgb, highlighter: PENS.highlighter.rgb });
+  const [view, setView] = createSignal<View>({ scale: 1, x: 0, y: 0 });
+  const [pages, setPages] = createSignal(doc.pageCount());
+  // How far, in CSS px, the view is pulled past the end of the last page.
+  const [pull, setPull] = createSignal(0);
 
-  // Keeps some page in view: the content may not scroll past the margins.
+  // The view stops at the ends of the pages (docs/specs/tablet-ui.md, "Pages
+  // in the editor"); content narrower or shorter than the canvas is centered.
   const clampView = (view: View): View => {
     const content = doc.contentSize();
     const width = content.width * view.scale, height = content.height * view.scale;
     const clampAxis = (at: number, size: number, viewport: number) =>
-      size + 2 * MARGIN <= viewport ? (viewport - size) / 2 : Math.min(MARGIN, Math.max(viewport - MARGIN - size, at));
+      size <= viewport ? (viewport - size) / 2 : Math.min(0, Math.max(viewport - size, at));
     return {
       scale: view.scale,
       x: clampAxis(view.x, width, element.clientWidth),
       y: clampAxis(view.y, height, element.clientHeight),
     };
   };
-  const controller = new ViewController({ scale: 1, x: MARGIN, y: MARGIN }, (view) => {
-    const clamped = clampView(view);
-    controller.view = clamped;
-    canvas?.setView(clamped.scale, 0, 0, clamped.scale, clamped.x, clamped.y);
-  });
+  const controller = new ViewController(
+    { scale: 1, x: 0, y: 0 },
+    (view) => {
+      const clamped = clampView(view);
+      // Movement past the end of the last page goes into the pull; moving
+      // back takes it out before the view scrolls.
+      const end = clampView({ ...view, y: -Infinity }).y;
+      if (pull() > 0 || view.y < end) {
+        const next = Math.max(0, pull() + end - view.y);
+        setPull(next);
+        if (next > 0) clamped.y = end;
+      }
+      controller.view = clamped;
+      canvas?.setView(clamped.scale, 0, 0, clamped.scale, clamped.x, clamped.y);
+      setView(clamped);
+      setPages(doc.pageCount());
+    },
+    () => releasePull(),
+  );
 
-  const fitWidth = () => {
-    const content = doc.contentSize();
-    controller.set({ scale: (element.clientWidth - 2 * MARGIN) / content.width, x: MARGIN, y: MARGIN });
+  // Releasing past the threshold adds a page after the last one; the pull
+  // springs back either way.
+  const releasePull = () => {
+    const add = pull() >= PULL_THRESHOLD;
+    setPull(0);
+    if (add) edit(() => doc.insertPage(doc.pageCount()));
+  };
+
+  const fitScale = () => element.clientWidth / doc.contentSize().width;
+
+  const fitWidth = () => controller.set({ scale: fitScale(), x: 0, y: 0 });
+
+  // Zooms about the top left of the view, keeping the page at the top in place.
+  const zoom = (factor: number) => {
+    const { scale, y } = controller.view;
+    const next = fitScale() * factor;
+    controller.set({ scale: next, x: 0, y: (y * next) / scale });
   };
 
   const resize = () => {
@@ -64,19 +134,6 @@ export function Editor(props: { notebook: OpenNotebook; onClose: () => void }) {
     return { x: rect.left, y: rect.top };
   };
 
-  // Double tap on the ghost page after the last page adds a page (Write
-  // syncscribble/scribblearea.cpp:1891-1900, scribbledoc.cpp:381-385).
-  let lastTap: { time: number; x: number; y: number } | undefined;
-  let onGhost = false;
-  const onGhostTap = (x: number, y: number, time: number) => {
-    if (lastTap && time - lastTap.time < DOUBLE_TAP_MS && Math.hypot(x - lastTap.x, y - lastTap.y) < DOUBLE_TAP_PX) {
-      lastTap = undefined;
-      edit(() => doc.insertPage(doc.pageCount()));
-      return;
-    }
-    lastTap = { time, x, y };
-  };
-
   const onPointer = (e: PointerEvent) => {
     if (!canvas) return;
     const at = origin();
@@ -84,28 +141,27 @@ export function Editor(props: { notebook: OpenNotebook; onClose: () => void }) {
       if (e.type === "pointerdown") element.setPointerCapture(e.pointerId);
       return;
     }
-    const x = e.clientX - at.x, y = e.clientY - at.y;
-    if (e.type === "pointerdown") {
-      element.setPointerCapture(e.pointerId);
-      onGhost = canvas.pageAt(x, y) === doc.pageCount();
-    }
-    if (onGhost) {
-      if (e.type === "pointerup") onGhostTap(x, y, e.timeStamp);
-      if (e.type === "pointerup" || e.type === "pointercancel") onGhost = false;
-      return;
-    }
+    if (e.type === "pointerdown") element.setPointerCapture(e.pointerId);
     canvas.input(penSamples(e, at, capabilities(engineName, e.pointerType), ids));
     if (e.type === "pointerup" || e.type === "pointercancel") saver.schedule();
   };
 
+  // A wheel or trackpad scroll has no release event: the pull is released
+  // when no wheel event has come for WHEEL_RELEASE_MS.
+  let wheelRelease = 0;
   const onWheel = (e: WheelEvent) => {
     e.preventDefault();
     controller.wheel(e, origin());
+    clearTimeout(wheelRelease);
+    wheelRelease = window.setTimeout(releasePull, WHEEL_RELEASE_MS);
   };
 
   // The page at the middle of the view; the last page below the pages.
   const currentPage = () => {
-    const page = canvas?.pageAt(element.clientWidth / 2, element.clientHeight / 2) ?? 0;
+    view();
+    pages();
+    if (!canvas) return 0;
+    const page = canvas.pageAt(element.clientWidth / 2, element.clientHeight / 2);
     const count = doc.pageCount();
     return page < 0 || page >= count ? count - 1 : page;
   };
@@ -123,7 +179,14 @@ export function Editor(props: { notebook: OpenNotebook; onClose: () => void }) {
     const { scale, x, y } = controller.view;
     const top = y + rect.y * scale, bottom = top + rect.height * scale;
     if (bottom > 0 && top < element.clientHeight) return;
-    controller.set({ scale, x, y: MARGIN - rect.y * scale });
+    controller.set({ scale, x, y: -rect.y * scale });
+  };
+
+  // Puts the top of page `index` at the top of the view.
+  const goToPage = (index: number) => {
+    if (index < 0 || index >= doc.pageCount()) return;
+    const { scale, x } = controller.view;
+    controller.set({ scale, x, y: -doc.pageRect(index).y * scale });
   };
 
   const history = (step: "undo" | "redo") => {
@@ -142,8 +205,11 @@ export function Editor(props: { notebook: OpenNotebook; onClose: () => void }) {
     window.addEventListener("keydown", onKey);
     onCleanup(() => window.removeEventListener("keydown", onKey));
     canvas = doc.createCanvas("#ink-canvas");
-    canvas.setTool({ brush: Brush.pressurePen, rgb: 0x1a1a1a, size: 1.6 });
     canvas.setUtcOffset(performance.timeOrigin);
+    createEffect(() => {
+      const { brush, size } = PENS[pen()];
+      canvas?.setTool({ brush, rgb: colors()[pen()], size });
+    });
     const observer = new ResizeObserver(resize);
     observer.observe(area);
     resize();
@@ -155,29 +221,56 @@ export function Editor(props: { notebook: OpenNotebook; onClose: () => void }) {
     });
   });
 
-  const close = async () => {
+  // Saves and frees the notebook, then `next` moves to another screen.
+  const leave = async (next: () => void) => {
     await saver.save();
     canvas?.free();
     canvas = undefined;
     doc.free();
-    props.onClose();
+    next();
   };
+
+  const isOpen = (path: string[]) => path.join("/") === props.notebook.path.join("/");
+  const zoomLabel = () => (element ? `${Math.round((view().scale / fitScale()) * 100)}%` : "100%");
 
   return (
     <div class="editor">
-      <div class="toolbar">
-        <Button class="button" onClick={() => void close()}>
-          Library
+      <header class="editor-top">
+        <Button class="link-button" aria-label="Library" onClick={() => void leave(props.onLibrary)}>
+          <ChevronLeft size={18} />
+          <AppMark />
         </Button>
-        <span>{props.notebook.name}</span>
-        <Button class="button" aria-label="Undo" title="Undo (Ctrl+Z)" onClick={() => history("undo")}>
-          Undo
-        </Button>
-        <Button class="button" aria-label="Redo" title="Redo (Shift+Ctrl+Z)" onClick={() => history("redo")}>
-          Redo
-        </Button>
+        <div class="editor-title">
+          <div class="editor-folder">{props.folderName}</div>
+          <div class="editor-note">{props.notebook.name}</div>
+        </div>
+        <div class="tabs" role="tablist" aria-label="Open notes">
+          <For each={props.tabs}>
+            {(tab) => (
+              <div class="tab" aria-current={isOpen(tab.path) ? "page" : undefined}>
+                <Button
+                  role="tab"
+                  aria-selected={isOpen(tab.path)}
+                  class="tab-label"
+                  onClick={() => !isOpen(tab.path) && void leave(() => props.onSelectTab(tab.path))}
+                >
+                  {tab.name}
+                </Button>
+                <Button
+                  class="icon-button"
+                  aria-label={`Close ${tab.name}`}
+                  onClick={() => (isOpen(tab.path) ? void leave(() => props.onCloseTab(tab.path)) : props.onCloseTab(tab.path))}
+                >
+                  <X size={14} />
+                </Button>
+              </div>
+            )}
+          </For>
+        </div>
         <DropdownMenu>
-          <DropdownMenu.Trigger class="button">Page</DropdownMenu.Trigger>
+          <DropdownMenu.Trigger class="icon-button" aria-label="Page actions">
+            <Ellipsis size={20} />
+          </DropdownMenu.Trigger>
           <DropdownMenu.Portal>
             <DropdownMenu.Content class="menu">
               <DropdownMenu.Item class="menu-item" onSelect={() => edit(() => doc.insertPage(currentPage()))}>
@@ -219,38 +312,126 @@ export function Editor(props: { notebook: OpenNotebook; onClose: () => void }) {
                   </DropdownMenu.SubContent>
                 </DropdownMenu.Portal>
               </DropdownMenu.Sub>
-              <DropdownMenu.Sub>
-                <DropdownMenu.SubTrigger class="menu-item">Template</DropdownMenu.SubTrigger>
-                <DropdownMenu.Portal>
-                  <DropdownMenu.SubContent class="menu">
-                    <For each={templates()}>
-                      {(name) => (
-                        <DropdownMenu.Item
-                          class="menu-item"
-                          onSelect={() => void applyTemplate(root, doc, name).then(() => edit(() => {}))}
-                        >
-                          {name}
-                        </DropdownMenu.Item>
-                      )}
-                    </For>
-                  </DropdownMenu.SubContent>
-                </DropdownMenu.Portal>
-              </DropdownMenu.Sub>
             </DropdownMenu.Content>
           </DropdownMenu.Portal>
         </DropdownMenu>
-      </div>
-      <div class="canvas-area" ref={area}>
-        <canvas
-          id="ink-canvas"
-          ref={element}
-          onPointerDown={onPointer}
-          onPointerMove={onPointer}
-          onPointerUp={onPointer}
-          onPointerCancel={onPointer}
-          onWheel={onWheel}
-          onContextMenu={(e) => e.preventDefault()}
-        />
+      </header>
+      <div class="editor-body">
+        <aside class="tool-rail" aria-label="Tools">
+          <ToggleGroup class="tools" value={pen()} onChange={(v) => v && setPen(v as PenId)} aria-label="Pens">
+            <For each={Object.keys(PENS) as PenId[]}>
+              {(id) => (
+                <ToggleGroup.Item class="tool" value={id} aria-label={PENS[id].label}>
+                  {id === "pen" ? <PenLine size={20} /> : <Highlighter size={20} />}
+                  <span class="tool-text">
+                    <span>{PENS[id].label}</span>
+                    <span class="tool-size">{PENS[id].size}</span>
+                  </span>
+                </ToggleGroup.Item>
+              )}
+            </For>
+          </ToggleGroup>
+          <ToggleGroup
+            class="palette"
+            value={hex(colors()[pen()])}
+            onChange={(v) => v && setColors((c) => ({ ...c, [pen()]: parseInt(v.slice(1), 16) }))}
+            aria-label="Colors"
+          >
+            <For each={PALETTE}>
+              {(rgb) => (
+                <ToggleGroup.Item class="swatch" value={hex(rgb)} aria-label={hex(rgb)} style={{ background: hex(rgb) }} />
+              )}
+            </For>
+          </ToggleGroup>
+        </aside>
+        <div class="canvas-area" ref={area}>
+          <canvas
+            id="ink-canvas"
+            ref={element}
+            onPointerDown={onPointer}
+            onPointerMove={onPointer}
+            onPointerUp={onPointer}
+            onPointerCancel={onPointer}
+            onWheel={onWheel}
+            onContextMenu={(e) => e.preventDefault()}
+          />
+          <div
+            class="pull-indicator"
+            data-active={pull() > 0 ? "" : undefined}
+            data-ready={pull() >= PULL_THRESHOLD ? "" : undefined}
+            style={{ height: `${Math.min(pull(), 1.5 * PULL_THRESHOLD)}px` }}
+          >
+            <Plus size={16} />
+            {pull() >= PULL_THRESHOLD ? "Release to add a page" : "Pull to add a page"}
+          </div>
+          <div class="bottom-bar">
+            <div class="bar-group">
+              <Button class="icon-button" aria-label="Undo" title="Undo (Ctrl+Z)" onClick={() => history("undo")}>
+                <Undo2 size={18} />
+              </Button>
+              <Button class="icon-button" aria-label="Redo" title="Redo (Shift+Ctrl+Z)" onClick={() => history("redo")}>
+                <Redo2 size={18} />
+              </Button>
+            </div>
+            <DropdownMenu>
+              <DropdownMenu.Trigger class="bar-group bar-menu" aria-label="Zoom">
+                {zoomLabel()} <ChevronDown size={14} />
+              </DropdownMenu.Trigger>
+              <DropdownMenu.Portal>
+                <DropdownMenu.Content class="menu">
+                  <DropdownMenu.Item class="menu-item" onSelect={fitWidth}>
+                    Fit width
+                  </DropdownMenu.Item>
+                  <For each={ZOOMS}>
+                    {(factor) => (
+                      <DropdownMenu.Item class="menu-item" onSelect={() => zoom(factor)}>
+                        {factor * 100}%
+                      </DropdownMenu.Item>
+                    )}
+                  </For>
+                </DropdownMenu.Content>
+              </DropdownMenu.Portal>
+            </DropdownMenu>
+            <DropdownMenu>
+              <DropdownMenu.Trigger class="bar-group bar-menu" aria-label="Paper">
+                <Grip size={16} /> {paperLabel(template())} <ChevronDown size={14} />
+              </DropdownMenu.Trigger>
+              <DropdownMenu.Portal>
+                <DropdownMenu.Content class="menu">
+                  <DropdownMenu.RadioGroup
+                    value={template()}
+                    onChange={(name) =>
+                      void applyTemplate(root, doc, name).then(() => {
+                        setTemplate(name);
+                        edit(() => {});
+                      })
+                    }
+                  >
+                    <For each={templates()}>
+                      {(name) => (
+                        <DropdownMenu.RadioItem class="menu-item" value={name}>
+                          {paperLabel(name)}
+                        </DropdownMenu.RadioItem>
+                      )}
+                    </For>
+                  </DropdownMenu.RadioGroup>
+                </DropdownMenu.Content>
+              </DropdownMenu.Portal>
+            </DropdownMenu>
+            <div class="bar-spacer" />
+            <div class="bar-group">
+              <Button class="icon-button" aria-label="Previous page" onClick={() => goToPage(currentPage() - 1)}>
+                <ChevronLeft size={18} />
+              </Button>
+              <span class="page-indicator" aria-label="Page">
+                {currentPage() + 1} / {pages()}
+              </span>
+              <Button class="icon-button" aria-label="Next page" onClick={() => goToPage(currentPage() + 1)}>
+                <ChevronRight size={18} />
+              </Button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
