@@ -1044,6 +1044,12 @@ button {
   pointer-events: none;
 }
 
+/* Actions on the selection, centered below it; the rotate handle is above (#24). */
+.selection-bar {
+  position: absolute;
+  transform: translateX(-50%);
+}
+
 .page-indicator {
   min-width: 3.5rem;
   font-size: 0.85rem;

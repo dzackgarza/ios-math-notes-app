@@ -21,6 +21,7 @@ export const Phase = { hover: 0, begin: 1, move: 2, end: 3, cancel: 4 } as const
 export const Has = { pressure: 1, altitude: 2, azimuth: 4, roll: 8, hoverHeight: 16 } as const;
 export const Brush = { pressurePen: 0, marker: 1, highlighter: 2 } as const;
 export const Eraser = { stroke: 0, free: 1 } as const;
+export const Selector = { lasso: 0, rect: 1 } as const;
 
 // Struct layouts, wasm32: byteLength, then each field's offset (ink.h).
 export const PEN_SAMPLE = {
@@ -43,11 +44,12 @@ export const PEN_SAMPLE = {
 } as const;
 export const TOOL_SETTINGS = { byteLength: 12, brush: 0, rgb: 4, size: 8 } as const;
 export const INK_FILE = { byteLength: 16, path: 0, bytes: 4, size: 8, kind: 12 } as const;
+export const SELECTION_INFO = { byteLength: 40, count: 0, page: 4, x: 8, y: 16, width: 24, height: 32 } as const;
 export const FileKind = { write: 0, delete: 1 } as const;
 export const PageSize = { a4: 0, letter: 1, custom: 2 } as const;
 
 // InkStruct ids of ink_struct_layout.
-export const Struct = { penSample: 0, toolSettings: 1, file: 2 } as const;
+export const Struct = { penSample: 0, toolSettings: 1, file: 2, selectionInfo: 3 } as const;
 
 export interface PenSample {
   x: number;
@@ -75,6 +77,17 @@ export interface ToolSettings {
   brush: number;
   rgb: number;
   size: number;
+}
+
+// The selection: how many elements, their page, and the selection rectangle
+// in view coordinates (CSS px).
+export interface SelectionInfo {
+  count: number;
+  page: number;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
 }
 
 export interface NotebookFile {
@@ -470,6 +483,72 @@ export class Canvas {
   // pen and mouse input erase.
   setEraser(kind: number, active: boolean): void {
     this.engine.check(this.engine.module._ink_canvas_set_eraser(this.pointer, kind, active ? 1 : 0));
+  }
+
+  // The lasso or rectangle selector; with `active`, pen and mouse input select.
+  setSelector(kind: number, active: boolean): void {
+    this.engine.check(this.engine.module._ink_canvas_set_selector(this.pointer, kind, active ? 1 : 0));
+  }
+
+  // The selection, or null when nothing is selected.
+  selection(): SelectionInfo | null {
+    const e = this.engine;
+    return e.withScratch(SELECTION_INFO.byteLength, (at) => {
+      e.check(e.module._ink_canvas_selection(this.pointer, at));
+      const view = e.view();
+      const o = SELECTION_INFO;
+      const count = view.getUint32(at + o.count, true);
+      if (count === 0) return null;
+      return {
+        count,
+        page: view.getInt32(at + o.page, true),
+        x: view.getFloat64(at + o.x, true),
+        y: view.getFloat64(at + o.y, true),
+        width: view.getFloat64(at + o.width, true),
+        height: view.getFloat64(at + o.height, true),
+      };
+    });
+  }
+
+  selectAll(page: number): void {
+    this.engine.check(this.engine.module._ink_canvas_select_all(this.pointer, page));
+  }
+
+  clearSelection(): void {
+    this.engine.check(this.engine.module._ink_canvas_clear_selection(this.pointer));
+  }
+
+  deleteSelection(): void {
+    this.engine.check(this.engine.module._ink_canvas_delete_selection(this.pointer));
+  }
+
+  // The selection as a standalone SVG document; a cut deletes it. Empty when
+  // nothing is selected.
+  copySelection(cut: boolean): string {
+    const e = this.engine;
+    return e.withScratch(8, (out) => {
+      e.check(e.module._ink_canvas_copy_selection(this.pointer, cut ? 1 : 0, out, out + 4));
+      const view = e.view();
+      const at = view.getUint32(out, true);
+      return decoder.decode(e.heap().subarray(at, at + view.getUint32(out + 4, true)));
+    });
+  }
+
+  // Pastes a clipboard document on the page under view point (x, y). Throws
+  // EngineError with Status.parse when the text is not a page SVG.
+  paste(svg: string, x: number, y: number): void {
+    const e = this.engine;
+    const text = encoder.encode(svg);
+    const bytes = e.copyIn(text);
+    try {
+      e.check(e.module._ink_canvas_paste(this.pointer, bytes, text.length, x, y));
+    } finally {
+      e.free(bytes);
+    }
+  }
+
+  duplicateSelection(): void {
+    this.engine.check(this.engine.module._ink_canvas_duplicate_selection(this.pointer));
   }
 
   setUtcOffset(utcMinusHostMs: number): void {

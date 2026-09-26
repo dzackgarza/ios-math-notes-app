@@ -13,6 +13,7 @@
 #include "ink/geometry/intersects.h"
 #include "ink/geometry/segment.h"
 #include "ink/strokes/stroke.h"
+#include "geometry/affine.h"
 #include "geometry/hit_shapes.h"
 #include "layout/layout.h"
 #include "strokes/clip.h"
@@ -53,16 +54,6 @@ uint32_t Channels(uint32_t has) {
   if (has & INK_HAS_AZIMUTH) channels |= kChannelOA;
   if (has & INK_HAS_ROLL) channels |= kChannelOR;
   return channels;
-}
-
-Transform Inverse(const Transform &m) {
-  double det = m.a * m.d - m.b * m.c;
-  return {m.d / det,
-          -m.b / det,
-          -m.c / det,
-          m.a / det,
-          (m.c * m.f - m.d * m.e) / det,
-          (m.b * m.e - m.a * m.f) / det};
 }
 
 // Visits every element box of a layer, with a way to replace it.
@@ -191,15 +182,18 @@ ink::StrokeInputBatch Editor::Batch(const std::vector<InkPenSample> &samples, do
 }
 
 void Editor::Input(const InkPenSample *samples, size_t count) {
-  // A batch that begins with eraser input starts an erase gesture, which takes
-  // the samples until its end.
+  // A pen-down starts a gesture, which takes the samples until its end.
   bool erasing = erase_.has_value();
-  for (size_t i = 0; i < count && !erasing && !live_; ++i) {
+  bool idle = !erasing && !live_ && !select_ && !transform_ && !ignored_;
+  for (size_t i = 0; i < count && idle; ++i) {
     const InkPenSample &s = samples[i];
     if (s.tool == INK_TOOL_TOUCH || s.phase == INK_PHASE_HOVER) continue;
-    erasing = s.phase == INK_PHASE_BEGIN && Erases(s);
+    erasing = s.phase == INK_PHASE_BEGIN && Begin(s) == Route::kErase;
     break;
   }
+  if (transform_) return TransformInput(samples, count);
+  if (select_) return SelectInput(samples, count);
+  if (ignored_) return IgnoreInput(samples, count);
   if (erasing) return EraseInput(samples, count);
 
   std::vector<InkPenSample> real, predicted;

@@ -11,6 +11,7 @@
 #include "include/core/SkColorSpace.h"
 #include "include/core/SkPaint.h"
 #include "include/core/SkPathBuilder.h"
+#include "include/effects/SkDashPathEffect.h"
 #include "include/gpu/ganesh/GrDirectContext.h"
 #include "include/gpu/ganesh/SkSurfaceGanesh.h"
 #include "strokes/outline.h"
@@ -61,12 +62,6 @@ SkPaint FillPaint(Rgb color, double opacity = 1) {
   SkPaint paint(SkColor4f::FromColor(ToSkColor(color, opacity)));
   paint.setAntiAlias(true);
   return paint;
-}
-
-// A path relative to the page file, as a path relative to the notebook.
-std::string NotebookPath(const std::string &page_file, const std::string &href) {
-  namespace fs = std::filesystem;
-  return (fs::path(page_file).parent_path() / href).lexically_normal().generic_string();
 }
 
 void CollectElements(const Elements &elements, std::unordered_set<const Element *> *out) {
@@ -313,24 +308,89 @@ void Renderer::DrawImage(SkCanvas *canvas, const Page &page, const Image &image)
   canvas->restore();
 }
 
-void Renderer::Draw(SkCanvas *screen, const LiveInk *live) {
+void Renderer::Draw(SkCanvas *screen, const LiveInk *live, const SelectionOverlay *overlay) {
   screen->save();
   screen->resetMatrix();
   content_->draw(screen, 0, 0);
-  if (live) {
-    const PagePlacement *placement = nullptr;
+  auto place = [&](size_t page) {
     for (const PagePlacement &p : layout_) {
-      if (p.page == live->page) placement = &p;
+      if (p.page != page) continue;
+      screen->setMatrix(ContentMatrix() * SkMatrix::Translate(float(p.x), float(p.y)));
+      return true;
     }
-    if (placement) {
-      screen->setMatrix(ContentMatrix() *
-                        SkMatrix::Translate(float(placement->x), float(placement->y)));
-      screen->drawPath(OutlinePath(live->outline), FillPaint(live->color));
-    }
+    return false;
+  };
+  if (live && place(live->page)) {
+    screen->drawPath(OutlinePath(live->outline), FillPaint(live->color));
   }
+  if (overlay && place(overlay->page)) DrawOverlay(screen, *overlay);
   screen->restore();
   screen_stale_ = false;
   ++stats_.frames;
+}
+
+// The selection marks in the accent color of docs/specs/tablet-ui.md ("Visual
+// style"): dashed lasso, rectangle and frame, round handles, as GoodNotes and
+// Noteful draw them. Sizes are in view units.
+void Renderer::DrawOverlay(SkCanvas *screen, const SelectionOverlay &overlay) {
+  const Rgb accent{0x2F, 0x6F, 0xEB};
+  const float unit = float(1 / overlay.view_scale);  // one view unit in pt
+  SkPaint dashed = StrokePaint(accent, 1.5 * unit);
+  const float intervals[] = {5 * unit, 4 * unit};
+  dashed.setPathEffect(SkDashPathEffect::Make(intervals, 0));
+
+  if (!overlay.floating.empty()) {
+    const Page &page = *document_->pages[overlay.page];
+    screen->save();
+    screen->concat(ToSkMatrix(overlay.live));
+    DrawElements(screen, page, overlay.floating, SkRect::MakeLTRB(-1e9f, -1e9f, 1e9f, 1e9f));
+    screen->restore();
+  }
+  if (overlay.lasso.size() > 1) {
+    SkPathBuilder lasso;
+    lasso.moveTo(float(overlay.lasso[0].x), float(overlay.lasso[0].y));
+    for (const Point &p : overlay.lasso) lasso.lineTo(float(p.x), float(p.y));
+    lasso.close();
+    SkPath path = lasso.detach();
+    screen->drawPath(path, FillPaint(accent, 0.06));
+    screen->drawPath(path, dashed);
+  }
+  if (overlay.band) {
+    const Rect &r = *overlay.band;
+    SkRect band = SkRect::MakeLTRB(float(r.left), float(r.top), float(r.right), float(r.bottom)).makeSorted();
+    screen->drawRect(band, FillPaint(accent, 0.06));
+    screen->drawRect(band, dashed);
+  }
+  if (!overlay.frame) return;
+  const Rect &r = *overlay.frame;
+  SkMatrix live = ToSkMatrix(overlay.live);
+  SkPoint corners[4] = {{float(r.left), float(r.top)}, {float(r.right), float(r.top)},
+                        {float(r.right), float(r.bottom)}, {float(r.left), float(r.bottom)}};
+  live.mapPoints(corners);
+  SkPathBuilder frame;
+  frame.addPolygon(corners, /*close=*/true);
+  screen->drawPath(frame.detach(), dashed);
+  if (!overlay.handles) return;
+  SkPaint fill = FillPaint({255, 255, 255});
+  SkPaint ring = StrokePaint(accent, 1.5 * unit);
+  auto handle = [&](SkPoint at) {
+    screen->drawCircle(at, 5 * unit, fill);
+    screen->drawCircle(at, 5 * unit, ring);
+  };
+  SkPoint top = {float((r.left + r.right) / 2), float(r.top)};
+  SkPoint rotate = {float(overlay.rotate_handle.x), float(overlay.rotate_handle.y)};
+  screen->drawLine(top, rotate, StrokePaint(accent, 1 * unit));
+  for (SkPoint corner : corners) handle(corner);
+  handle(rotate);
+}
+
+}  // namespace ink_engine
+
+namespace ink_engine {
+
+std::string NotebookPath(const std::string &page_file, const std::string &href) {
+  namespace fs = std::filesystem;
+  return (fs::path(page_file).parent_path() / href).lexically_normal().generic_string();
 }
 
 }  // namespace ink_engine

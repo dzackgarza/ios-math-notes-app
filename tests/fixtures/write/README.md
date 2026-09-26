@@ -29,6 +29,8 @@ One directory per case:
 | `stroke-erase` | Stroke erase (mode 14) over five strokes drawn on a blank page: two gestures delete three strokes, one passes beside a stroke. |
 | `free-erase` | Free erase (mode 16) over five strokes: one cut, two cuts in one gesture, a trimmed end, an untouched stroke, and a stroke erased whole. |
 | `free-erase-document` | Free erase over the three strokes of `input.html`: a wave cut once, a line cut once, an L that loses its vertical arm. |
+| `lasso-move-duplicate` | Lasso select (mode 20) around three of five strokes, a fourth about half inside, then a drag of the selection and duplicate (`cmd 123`). The lasso repeats some points closer than 2 units. |
+| `rect-scale-rotate` | Rectangle select (mode 18) of two of four strokes, the bottom-right handle dragged (fixed aspect ratio), select all (`cmd 102`), the rotate handle dragged, then the top-left handle dragged past the right edge (a negative x scale). The scale drags hold the pen button (`mm` 2), so Write scales stroke widths as well. |
 
 The upstream cases also cover free erase (`test11`, `test12`), stroke erase
 (`test8`, `test15`), lasso select (`test6`), ruled select (`test6`, `test8`),

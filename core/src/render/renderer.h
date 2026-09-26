@@ -23,6 +23,7 @@
 #include "include/core/SkRegion.h"
 #include "include/core/SkSurface.h"
 #include "layout/layout.h"
+#include "strokes/clip.h"
 
 class GrDirectContext;
 class SkCanvas;
@@ -49,9 +50,28 @@ struct LiveInk {
   Rgb color;
 };
 
+// The selection tools' marks on one page, drawn over the pages: the lasso or
+// rectangle being drawn, the selection rectangle with its handles, and the
+// selected ink while it is dragged. Page coordinates.
+struct SelectionOverlay {
+  size_t page = 0;
+  std::vector<Point> lasso;
+  std::optional<Rect> band;   // a rectangle being dragged out
+  std::optional<Rect> frame;  // the selection rectangle
+  Point rotate_handle;
+  bool handles = false;
+  Transform live;     // applied to the frame and to `floating`
+  Elements floating;  // the selected elements while dragged
+  double view_scale = 1;  // view units per pt, for marks of fixed screen size
+};
+
 // A notebook's image files by path relative to the notebook, e.g.
 // "assets/p0017.png".
 using Assets = std::map<std::string, sk_sp<SkData>>;
+
+// A path relative to the page file, e.g. "../assets/p0017.png", as a path
+// relative to the notebook, "assets/p0017.png".
+std::string NotebookPath(const std::string &page_file, const std::string &href);
 
 // What one frame shows.
 struct View {
@@ -73,8 +93,9 @@ class Renderer {
   // the screen needs a new frame.
   bool Update(const Document &document, const View &view, bool live_changed);
 
-  // Draws the content surface and then the live stroke onto `screen`.
-  void Draw(SkCanvas *screen, const LiveInk *live);
+  // Draws the content surface, then the live stroke and the selection marks
+  // onto `screen`.
+  void Draw(SkCanvas *screen, const LiveInk *live, const SelectionOverlay *overlay);
 
   // Redraws everything on the next Update: the assets changed.
   void Invalidate() { invalidated_ = true; }
@@ -96,6 +117,7 @@ class Renderer {
   void DrawElements(SkCanvas *canvas, const Page &page, const Elements &elements,
                     const SkRect &cull);
   void DrawImage(SkCanvas *canvas, const Page &page, const Image &image);
+  void DrawOverlay(SkCanvas *screen, const SelectionOverlay &overlay);
   void ElementBounds(const Page &page, const Elements &elements, SkRect *bounds);
   SkRegion DirtyRegion(const Document &next);
 

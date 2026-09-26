@@ -149,8 +149,13 @@ conflict. Assets are separate files, not base64 inside SVG.
   bookmarks) characters of lowercase base32 from a seedable generator.
   Reordering or renaming never changes an id. A pasted element whose id
   already exists on the page gets a new id.
-- Numbers: coordinates, sizes and transforms with 2 decimals; force and
-  angles with 3 decimals; `T` in whole milliseconds. Written with
+- Clipboard: copy and cut write the selected elements as a standalone page
+  SVG (`id="clipboard"`, one layer, the elements at their page coordinates),
+  which the host keeps as text on the system clipboard. Copied elements get
+  new ids; cut ones keep theirs.
+- Numbers: coordinates, sizes and translations with 2 decimals; a matrix's
+  `a`, `b`, `c`, `d` with 6 decimals (a scaled or rotated stroke then stays
+  within 0.001 pt anywhere on the page); force and angles with 3 decimals; `T` in whole milliseconds. Written with
   `std::to_chars` fixed format, `-0` written as `0`, trailing zeros removed.
   `d` is an absolute `M` followed by relative `l` commands. Colors are
   `#RRGGBB` in upper case; opacity goes in `fill-opacity`.

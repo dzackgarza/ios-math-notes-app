@@ -47,6 +47,10 @@ std::vector<WriteEvent> ReadWriteTrace(const std::string &path) {
       WriteEvent e{.kind = WriteEvent::kMode};
       Require(bool(words >> e.mode), line);
       events.push_back(e);
+    } else if (command == "cmd") {
+      WriteEvent e{.kind = WriteEvent::kCommand};
+      Require(bool(words >> e.command), line);
+      events.push_back(e);
     } else if (command == "view") {
       int page;
       double x, y;
@@ -64,7 +68,10 @@ WriteExpected ReadWriteExpected(const std::string &path) {
   nlohmann::json json = nlohmann::json::parse(in);
   WriteExpected expected;
   for (const auto &e : json["pages"][0]["elements"]) {
-    WriteElement element{.id = e["id"]};
+    const auto &m = e["transform"];
+    WriteElement element{.id = e["id"],
+                         .transform = {m[0], m[1], m[2], m[3], kWritePt * double(m[4]),
+                                       kWritePt * double(m[5])}};
     if (e.contains("penPoints")) {
       for (const auto &subpath : e["penPoints"]) {
         auto &points = element.pen_points.emplace_back();
@@ -73,6 +80,7 @@ WriteExpected ReadWriteExpected(const std::string &path) {
     }
     expected.elements.push_back(std::move(element));
   }
+  for (int id : json["selected"]) expected.selected.insert(id);
   for (int id : json["deleted"]) expected.deleted.insert(id);
   return expected;
 }
@@ -124,12 +132,25 @@ std::vector<std::string> ReplayWriteTrace(InkCanvas *canvas, const std::vector<W
   ink_canvas_set_tool(canvas, &marker);
   ink_canvas_set_eraser(canvas, INK_ERASER_STROKE, 0);
   std::vector<std::string> drawn;
-  bool erasing = false;
+  bool erasing = false, selecting = false;
   InkPenSample last{};
   for (const WriteEvent &e : trace) {
     if (e.kind == WriteEvent::kMode) {
       erasing = e.mode == 14 || e.mode == 16;
       ink_canvas_set_eraser(canvas, e.mode == 16 ? INK_ERASER_FREE : INK_ERASER_STROKE, erasing);
+      selecting = e.mode == 18 || e.mode == 20;
+      ink_canvas_set_selector(canvas, e.mode == 18 ? INK_SELECTOR_RECT : INK_SELECTOR_LASSO, selecting);
+      continue;
+    }
+    if (e.kind == WriteEvent::kCommand) {
+      int32_t moved, page;
+      switch (e.command) {
+        case 100: Require(ink_undo(canvas->document, &moved, &page) == INK_OK, "undo"); break;
+        case 101: Require(ink_redo(canvas->document, &moved, &page) == INK_OK, "redo"); break;
+        case 102: Require(ink_canvas_select_all(canvas, 0) == INK_OK, "select all"); break;
+        case 123: Require(ink_canvas_duplicate_selection(canvas) == INK_OK, "duplicate"); break;
+        default: throw std::runtime_error("unsupported trace command: cmd " + std::to_string(e.command));
+      }
       continue;
     }
     std::set<std::string> before = StrokeIds(canvas->editor.document());
@@ -142,9 +163,10 @@ std::vector<std::string> ReplayWriteTrace(InkCanvas *canvas, const std::vector<W
     ink_input(canvas, &s, 1);
     last = s;
     if (e.ev != -1) continue;
-    if (erasing) {
-      erasing = false;
+    if (erasing || selecting) {
+      erasing = selecting = false;
       ink_canvas_set_eraser(canvas, INK_ERASER_STROKE, 0);
+      ink_canvas_set_selector(canvas, INK_SELECTOR_LASSO, 0);
       continue;
     }
     for (const std::string &id : StrokeIds(canvas->editor.document())) {

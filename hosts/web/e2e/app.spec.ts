@@ -287,3 +287,76 @@ test("the pen's eraser end erases while the pen is selected", async ({ page }) =
   }, box);
   await expect.poll(() => savedStrokeIds(page, "Eraser End/pages/0001.svg"), { timeout: 5000 }).toEqual([]);
 });
+
+// The transform attribute of each saved ink path, by id ("" for none).
+async function savedTransforms(page: Page, path: string): Promise<Record<string, string>> {
+  const svg = Buffer.from(await readOpfsFile(page, path), "base64").toString();
+  return Object.fromEntries(
+    [...svg.matchAll(/<path id="(s-[a-z2-7]+)"( transform="([^"]*)")?/g)].map((m) => [m[1], m[3] ?? ""]),
+  );
+}
+
+test("the lasso selects a stroke, a drag moves it by the pen's offset, and one undo puts it back", async ({ page }, testInfo) => {
+  await startEmpty(page);
+  await newNote(page, "Lasso");
+  const box = (await page.locator("#ink-canvas").boundingBox())!;
+  const scale = box.width / 595.28; // CSS px per pt: the A4 page fills the canvas width
+  const line = (y: number) => Array.from({ length: 20 }, (_, i) => ({ x: box.x + 150 + i * 8, y: box.y + y }));
+  await drawWithPen(page, line(100));
+  await drawWithPen(page, line(200));
+  await expect.poll(() => savedStrokeIds(page, "Lasso/pages/0001.svg"), { timeout: 5000 }).toHaveLength(2);
+  const [first, second] = await savedStrokeIds(page, "Lasso/pages/0001.svg");
+
+  await page.getByRole("button", { name: "Lasso", exact: true }).click();
+  const loop = [
+    ...Array.from({ length: 10 }, (_, i) => ({ x: 130 + i * 22, y: 75 })),
+    ...Array.from({ length: 5 }, (_, i) => ({ x: 350, y: 75 + i * 12 })),
+    ...Array.from({ length: 10 }, (_, i) => ({ x: 350 - i * 22, y: 130 })),
+    ...Array.from({ length: 5 }, (_, i) => ({ x: 130, y: 130 - i * 12 })),
+  ].map((p) => ({ x: box.x + p.x, y: box.y + p.y }));
+  await drawWithPen(page, loop);
+  await page.screenshot({ path: testInfo.outputPath("lasso-selection.png") });
+  // From the middle of the selected stroke, 60 px right and 80 px down.
+  await drawWithPen(page, Array.from({ length: 11 }, (_, i) => ({ x: box.x + 226 + i * 6, y: box.y + 100 + i * 8 })));
+  await page.screenshot({ path: testInfo.outputPath("lasso-moved.png") });
+
+  const translate = (t: string) => t.match(/^translate\(([-\d.]+),([-\d.]+)\)$/)?.slice(1).map(Number);
+  await expect
+    .poll(async () => translate((await savedTransforms(page, "Lasso/pages/0001.svg"))[first] ?? ""), { timeout: 5000 })
+    .toBeDefined();
+  const moved = await savedTransforms(page, "Lasso/pages/0001.svg");
+  const [dx, dy] = translate(moved[first])!;
+  expect(Math.abs(dx - 60 / scale)).toBeLessThan(0.05);
+  expect(Math.abs(dy - 80 / scale)).toBeLessThan(0.05);
+  expect(moved[second]).toBe("");
+
+  await page.keyboard.press("Control+z");
+  await expect.poll(async () => (await savedTransforms(page, "Lasso/pages/0001.svg"))[first], { timeout: 5000 }).toBe("");
+});
+
+test("ink copied in one note and pasted into another keeps its path data and gets new ids", async ({ page, context }) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  await startEmpty(page);
+  await newNote(page, "Source");
+  const box = (await page.locator("#ink-canvas").boundingBox())!;
+  await drawWithPen(page, Array.from({ length: 20 }, (_, i) => ({ x: box.x + 150 + i * 8, y: box.y + 120 + 6 * Math.sin(i / 2) })));
+  await drawWithPen(page, Array.from({ length: 12 }, (_, i) => ({ x: box.x + 180 + i * 5, y: box.y + 180 + i * 4 })));
+  await expect.poll(() => savedStrokeIds(page, "Source/pages/0001.svg"), { timeout: 5000 }).toHaveLength(2);
+  await page.keyboard.press("Control+a");
+  await page.keyboard.press("Control+c");
+  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText()), { timeout: 5000 }).toContain("<svg");
+
+  await page.getByRole("button", { name: "Library" }).click();
+  await newNote(page, "Target");
+  await page.keyboard.press("Control+v");
+  await expect.poll(() => savedStrokeIds(page, "Target/pages/0001.svg"), { timeout: 5000 }).toHaveLength(2);
+
+  const paths = async (path: string) => {
+    const svg = Buffer.from(await readOpfsFile(page, path), "base64").toString();
+    return [...svg.matchAll(/<path id="(s-[a-z2-7]+)"[^>]*? d="([^"]+)"/g)].map((m) => ({ id: m[1], d: m[2] }));
+  };
+  const source = await paths("Source/pages/0001.svg");
+  const target = await paths("Target/pages/0001.svg");
+  expect(target.map((p) => p.d)).toEqual(source.map((p) => p.d));
+  for (const { id } of target) expect(source.map((p) => p.id)).not.toContain(id);
+});
