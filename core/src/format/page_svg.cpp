@@ -68,15 +68,18 @@ Transform ReadTransform(std::string_view text) {
 
 double Rounded(double v) { return *ParseNumber(Coord(v)); }
 
+std::string Linear(double v) { return FormatNumber(v, kMatrixPrecision); }
+
 void AppendTransform(pugi::xml_node &node, const Transform &exact) {
   // Decide the form from the written values: translate(-0.0001,0.004) is identity.
-  Transform t{Rounded(exact.a), Rounded(exact.b), Rounded(exact.c),
-              Rounded(exact.d), Rounded(exact.e), Rounded(exact.f)};
+  auto linear = [](double v) { return *ParseNumber(Linear(v)); };
+  Transform t{linear(exact.a), linear(exact.b), linear(exact.c),
+              linear(exact.d), Rounded(exact.e), Rounded(exact.f)};
   if (t.IsIdentity()) return;
   std::string value = t.IsTranslation()
                           ? "translate(" + Coord(t.e) + "," + Coord(t.f) + ")"
-                          : "matrix(" + Coord(t.a) + "," + Coord(t.b) + "," + Coord(t.c) + "," +
-                                Coord(t.d) + "," + Coord(t.e) + "," + Coord(t.f) + ")";
+                          : "matrix(" + Linear(t.a) + "," + Linear(t.b) + "," + Linear(t.c) + "," +
+                                Linear(t.d) + "," + Coord(t.e) + "," + Coord(t.f) + ")";
   node.append_attribute("transform") = value.c_str();
 }
 

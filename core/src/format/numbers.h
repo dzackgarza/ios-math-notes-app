@@ -9,7 +9,10 @@
 
 namespace ink_engine {
 
-inline constexpr int kCoordinatePrecision = 2;  // coordinates, sizes, transforms
+inline constexpr int kCoordinatePrecision = 2;  // coordinates, sizes, translations
+// A transform's linear part (a, b, c, d): 6 decimals keep every point of a
+// page within 0.001 pt of where the exact matrix puts it.
+inline constexpr int kMatrixPrecision = 6;
 inline constexpr int kAnglePrecision = 3;       // force and angles
 inline constexpr int kTimePrecision = 0;        // T, whole milliseconds
 
