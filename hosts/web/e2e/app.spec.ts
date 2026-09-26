@@ -149,6 +149,32 @@ test("Drawing mode saves a bounded TikZ figure and reopens its scene after reloa
   await expect(page.getByRole("textbox", { name: "Generated TikZ source" })).toHaveValue(source);
 });
 
+test("pages have a narrow desk gap and one finger moves the view", async ({ page }, testInfo) => {
+  await startEmpty(page);
+  await newNote(page, "Two Pages");
+  await page.getByRole("button", { name: "Page actions" }).click();
+  await page.getByText("Insert page after", { exact: true }).click();
+  await expect(page.locator("ion-popover")).toBeHidden();
+  const box = (await page.locator("#ink-canvas").boundingBox())!;
+  const x = box.x + box.width / 2;
+  const y = box.y + box.height / 2;
+  const scale = box.width / 595.28;
+  await page.mouse.move(x, y);
+  await page.mouse.wheel(0, 841.89 * scale - box.height / 2);
+  const gapColor = async (at: number) => (await pixel(page, x, at))[0];
+  await expect.poll(() => gapColor(y + 3 * scale)).toBeLessThan(242);
+  await page.screenshot({ path: testInfo.outputPath("page-gap.png") });
+  expect(await gapColor(y - 4)).toBeGreaterThan(245);
+  expect(await gapColor(y + 7 * scale)).toBeGreaterThan(245);
+
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send("Emulation.setTouchEmulationEnabled", { enabled: true, maxTouchPoints: 2 });
+  await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x, y: y + 80, id: 1 }] });
+  await cdp.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ x, y, id: 1 }] });
+  await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+  await expect.poll(() => gapColor(y + 3 * scale - 80)).toBeLessThan(242);
+});
+
 test("nginx serves the engine as application/wasm", async ({ page }) => {
   const wasm = page.waitForResponse((r) => r.url().endsWith(".wasm"));
   await page.goto(APP);

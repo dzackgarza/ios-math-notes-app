@@ -1014,7 +1014,7 @@ export function Editor(props: {
             onWheel={onWheel}
             onContextMenu={(e) => e.preventDefault()}
           />
-          <Show when={figureBox()}>{(box) => <div class="figure-page-bounds" style={box()} aria-label={drawing() ? "Drawing bounds" : `Figure ${figureId()} bounds`} />}</Show>
+          <Show when={figureBox()}>{(box) => <div class="figure-page-bounds" classList={{ "is-capturing": drawing() }} style={box()} aria-label={drawing() ? "Drawing bounds" : `Figure ${figureId()} bounds`} />}</Show>
           <div class="page-tags" aria-label="Tags">
             <For each={props.tags}>
               {(tag) => (

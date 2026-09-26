@@ -142,6 +142,8 @@ TEST_CASE("The page under a view point, and the pages' extent") {
   int32_t page = 0;
   ink_canvas_page_at(canvas, 100, 100, &page);
   CHECK(page == 0);
+  ink_canvas_page_at(canvas, 100, (841.89 + 3) * 0.5, &page);
+  CHECK(page == -1);  // desk gap
   ink_canvas_page_at(canvas, 100, (841.89 + 100) * 0.5, &page);
   CHECK(page == 1);
   ink_canvas_page_at(canvas, 100, (2 * 841.89 + 100) * 0.5, &page);
@@ -150,7 +152,7 @@ TEST_CASE("The page under a view point, and the pages' extent") {
   CHECK(page == -1);  // beside the page
   double width = 0, height = 0;
   ink_document_content_size(session.document, &width, &height);
-  CHECK(height == 2 * 841.89);
+  CHECK(height == 2 * 841.89 + 6);
 }
 
 TEST_CASE("Built-in templates are the Write presets") {

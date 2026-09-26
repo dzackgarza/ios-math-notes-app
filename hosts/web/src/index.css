@@ -922,10 +922,14 @@ ion-popover.pen-editor-popover {
 .figure-page-bounds {
   position: absolute;
   box-sizing: border-box;
-  border: 1.5px dashed var(--ion-color-primary);
-  border-radius: 3px;
-  background: rgb(47 111 235 / 4%);
+  border: 1px solid rgb(71 85 105 / 17%);
+  border-radius: 2px;
   pointer-events: none;
+}
+
+.figure-page-bounds.is-capturing {
+  border: 1.5px dashed var(--ion-color-primary);
+  background: rgb(47 111 235 / 4%);
 }
 
 .figure-sidebar {

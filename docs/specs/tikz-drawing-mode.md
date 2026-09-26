@@ -32,11 +32,13 @@ figures use standard TikZ and only the libraries they need. The custom
    adds an interpretation; it never destroys the ink. The user can accept,
    reject, or change an interpretation.
 3. Turning Drawing mode off completes the current session. The app computes
-   the union of the captured strokes' page-space bounds and places one visible
-   bounding rectangle around them. The figure behaves as one selectable page
-   object for move, resize, copy, and delete. Reopening it restores the scene,
-   source, and original ink for further editing. An empty session creates no
-   figure.
+   the union of the captured strokes' page-space bounds and places a very
+   subtle neutral rectangle around them. During capture the boundary uses a
+   dashed accent; an active selection uses the normal selection outline. The
+   boundary is editor chrome, not part of the exported figure. The figure is
+   one selectable page object for move, resize, copy, and delete. Reopening it
+   restores the scene, source, and original ink for further editing. An empty
+   session creates no figure.
 4. The rectangle identifies the work captured in that session. It is an edit
    boundary, not a page background or an image export. If a figure is moved or
    resized, its bounds and contents change together. Two completed sessions
@@ -192,9 +194,6 @@ figure workflow before a PR is opened.
 
 ## Decisions still needed at the child-plan boundary
 
-- Whether completion draws a persistent visible border or a selection outline
-  that appears only while the figure is selected. The bounding rectangle and
-  its selection behavior are required either way.
 - The source parser and TeX compilation integration, based on a survey of
   existing TikZ editor and parser implementations.
 - The interface for sharing the drawing editor between the web and native

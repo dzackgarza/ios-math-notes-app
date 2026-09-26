@@ -68,8 +68,9 @@ are the reference for look and interaction.
 
 ## Pages in the editor
 
-- Pages follow each other with no gap. In the default view a page fills the
-  full width of the canvas.
+- Pages have a 6 pt desk-colored gap between them. In the default view a page
+  fills the full width of the canvas.
+- One finger pans the pages. Two fingers pinch to zoom. Pen input draws.
 - The view cannot scroll past the pages. Pulling past the end of the last page
   shows an indicator that grows with the pull. Past a threshold the indicator
   changes to confirm that a release adds a page. Releasing there adds a page
