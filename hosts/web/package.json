@@ -15,8 +15,10 @@
     "vitest": "^5.0.2"
   },
   "dependencies": {
-    "@kobalte/core": "^0.13.14",
+    "@ionic-solidjs/core": "^1.3.0",
+    "@ionic/core": "^8.6.5",
     "idb-keyval": "^6.3.0",
+    "ionicons": "^8",
     "lucide-solid": "^1.48.0",
     "solid-js": "^1.9.15"
   }

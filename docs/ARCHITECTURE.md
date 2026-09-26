@@ -121,7 +121,7 @@ needs no COOP/COEP headers.
 
 | Concern | Library | Introduced in |
 | --- | --- | --- |
-| UI chrome (toolbars, library, panels) | SolidJS 1.9, [Ionic](https://ionicframework.com/docs/components) web components in iOS mode, so the web chrome matches the iPad host's SwiftUI controls | [#57](https://github.com/dzackgarza/math-notes-app/issues/57) |
+| UI chrome (toolbars, library, panels) | SolidJS 1.9, [Ionic](https://ionicframework.com/docs/components) 8 web components in iOS mode, so the web chrome matches the iPad host's SwiftUI controls, through the Solid components of [@ionic-solidjs/core](https://github.com/ionic-solidjs/ionic-solidjs); tool icons from lucide-solid | [#57](https://github.com/dzackgarza/math-notes-app/issues/57) |
 | Build, dev server, PWA | Vite 8 (run with `bunx --bun vite`), vite-plugin-pwa 1.3 | [#5](https://github.com/dzackgarza/math-notes-app/issues/5) |
 | Folder handle persistence (Chromium) | idb-keyval 6.3 | [#5](https://github.com/dzackgarza/math-notes-app/issues/5) |
 | PDF page rasterizer | [mupdf](https://www.npmjs.com/package/mupdf) (Artifex's WASM build), in a Web Worker, loaded only at import | [#8](https://github.com/dzackgarza/math-notes-app/issues/8) |

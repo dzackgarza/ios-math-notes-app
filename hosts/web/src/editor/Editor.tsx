@@ -1,37 +1,41 @@
-import { Button } from "@kobalte/core/button";
-import { ColorField } from "@kobalte/core/color-field";
-import { DropdownMenu } from "@kobalte/core/dropdown-menu";
-import { Popover } from "@kobalte/core/popover";
-import { Slider } from "@kobalte/core/slider";
-import { ToggleGroup } from "@kobalte/core/toggle-group";
+import { IonButton, IonButtons, IonCheckbox, IonChip, IonHeader, IonIcon, IonInput, IonItem, IonLabel, IonList, IonListHeader, IonNote, IonRange, IonToolbar } from "@ionic-solidjs/core";
+import {
+  add,
+  arrowRedo,
+  arrowUndo,
+  checkmark,
+  chevronBack,
+  chevronDown,
+  chevronForward,
+  close,
+  copyOutline,
+  cutOutline,
+  duplicateOutline,
+  ellipsisHorizontal,
+  gridOutline,
+  shareOutline,
+  trashOutline,
+} from "ionicons/icons";
 import {
   Brush as BrushIcon,
-  ChevronDown,
-  ChevronLeft,
-  ChevronRight,
-  Copy,
-  CopyPlus,
-  Ellipsis,
   Eraser as EraserIcon,
-  Grip,
   Highlighter,
+  Image as ImageIcon,
   Lasso,
   PenLine,
-  Plus,
-  Redo2,
-  Scissors,
-  Trash2,
-  Undo2,
-  X,
+  Shapes,
+  Type as TextIcon,
 } from "lucide-solid";
-import { For, Match, Show, Switch, createEffect, createResource, createSignal, onCleanup, onMount } from "solid-js";
+import { For, type JSX, Show, createEffect, createResource, createSignal, onCleanup, onMount } from "solid-js";
 
 import { Brush, Eraser, PageSize, Selector, type Canvas, type Pen, type SelectionInfo, type ToolSettings } from "../engine/engine.ts";
 import { ViewController, type View } from "../input/gestures.ts";
 import { capabilities, penSamples } from "../input/pointer.ts";
 import { listTemplates } from "../storage/folder.ts";
+import type { Tag } from "../storage/metadata.ts";
 import { readPens, writePens } from "../storage/pens.ts";
-import { AppMark } from "../ui/Library.tsx";
+import { notImplemented, presentPopover } from "../ui/ionic.ts";
+import { AppMark, MenuItem, noteCount } from "../ui/Library.tsx";
 import { paperLabel } from "../ui/paper.tsx";
 import { applyTemplate, type OpenNotebook } from "./notebook.ts";
 
@@ -53,11 +57,11 @@ const PEN_WRITE_MS = 300;
 
 const penIcon = (brush: number, color: string) =>
   brush === Brush.highlighter ? (
-    <Highlighter size={20} color={color} />
+    <Highlighter size={22} color={color} />
   ) : brush === Brush.marker ? (
-    <BrushIcon size={20} color={color} />
+    <BrushIcon size={22} color={color} />
   ) : (
-    <PenLine size={20} color={color} />
+    <PenLine size={22} color={color} />
   );
 
 // A pen preset's id, or one of the other tools.
@@ -81,18 +85,50 @@ const hex = (rgb: number) => `#${rgb.toString(16).padStart(6, "0").toUpperCase()
 // A size in pt as .pens.json writes it: at most 2 decimals.
 const sizeLabel = (size: number) => String(Math.round(size * 100) / 100);
 
-function Swatches(props: { value: number | undefined; onChange: (rgb: number) => void }) {
+function Swatches(props: { value: number | undefined; onChange: (rgb: number) => void; children?: JSX.Element }) {
   return (
-    <ToggleGroup
-      class="palette"
-      value={props.value === undefined ? null : hex(props.value)}
-      onChange={(v) => v && props.onChange(parseInt(v.slice(1), 16))}
-      aria-label="Colors"
-    >
+    <div class="palette" role="group" aria-label="Colors">
       <For each={PALETTE}>
-        {(rgb) => <ToggleGroup.Item class="swatch" value={hex(rgb)} aria-label={hex(rgb)} style={{ background: hex(rgb) }} />}
+        {(rgb) => (
+          <IonButton
+            class="swatch"
+            classList={{ selected: props.value === rgb }}
+            shape="round"
+            aria-label={hex(rgb)}
+            aria-pressed={props.value === rgb}
+            style={{ "--background": hex(rgb), "--background-hover": hex(rgb) }}
+            onClick={() => props.onChange(rgb)}
+          />
+        )}
       </For>
-    </ToggleGroup>
+      {props.children}
+    </div>
+  );
+}
+
+// An entry of the tool rail: a tool with its name and its setting below.
+function ToolItem(props: { label: string; detail?: string; selected: boolean; icon: JSX.Element; onSelect: (e: Event) => void }) {
+  return (
+    <IonItem
+      button
+      detail={false}
+      lines="none"
+      class="tool"
+      classList={{ selected: props.selected }}
+      aria-label={props.label}
+      aria-pressed={props.selected}
+      onClick={(e) => props.onSelect(e)}
+    >
+      <span slot="start" class="tool-icon">
+        {props.icon}
+      </span>
+      <IonLabel>
+        {props.label}
+        <Show when={props.detail}>
+          <p class="tool-size">{props.detail}</p>
+        </Show>
+      </IonLabel>
+    </IonItem>
   );
 }
 
@@ -101,54 +137,74 @@ function Swatches(props: { value: number | undefined; onChange: (rgb: number) =>
 // syncscribble/pentoolbar.cpp:474-527, styluslabs/Write 401b65d).
 function PenEditor(props: { pen: Pen; onChange: (change: Partial<ToolSettings>) => void }) {
   return (
-    <div class="pen-editor-fields">
-      <div class="pen-editor-title">{props.pen.name}</div>
-      <ToggleGroup
-        class="brush-list"
-        value={String(props.pen.tool.brush)}
-        onChange={(v) => {
-          const choice = BRUSHES.find((b) => String(b.brush) === v);
-          if (choice) props.onChange({ brush: choice.brush, opacity: choice.opacity });
-        }}
-        aria-label="Brush"
-      >
+    <div class="pen-editor" aria-label="Pen editor">
+      <IonListHeader>
+        <IonLabel>{props.pen.name}</IonLabel>
+      </IonListHeader>
+      <IonList lines="full">
         <For each={BRUSHES}>
           {(b) => (
-            <ToggleGroup.Item class="tool" value={String(b.brush)}>
-              {penIcon(b.brush, "currentColor")}
-              {b.label}
-            </ToggleGroup.Item>
+            <IonItem button detail={false} aria-label={b.label} onClick={() => props.onChange({ brush: b.brush, opacity: b.opacity })}>
+              <span slot="start" class="tool-icon">
+                {penIcon(b.brush, "currentColor")}
+              </span>
+              <IonLabel>{b.label}</IonLabel>
+              <Show when={props.pen.tool.brush === b.brush}>
+                <IonIcon slot="end" color="primary" icon={checkmark} aria-hidden="true" />
+              </Show>
+            </IonItem>
           )}
         </For>
-      </ToggleGroup>
+      </IonList>
       <Swatches value={props.pen.tool.rgb} onChange={(rgb) => props.onChange({ rgb })} />
-      <ColorField
-        class="hex-field"
-        value={hex(props.pen.tool.rgb)}
-        onChange={(v) => /^#?[0-9a-f]{6}$/i.test(v) && props.onChange({ rgb: parseInt(v.replace("#", ""), 16) })}
-      >
-        <ColorField.Label class="field-label">Hex</ColorField.Label>
-        <ColorField.Input class="input" />
-      </ColorField>
-      <Slider
-        class="size-slider"
-        minValue={SIZE_RANGE.min}
-        maxValue={SIZE_RANGE.max}
-        step={SIZE_RANGE.step}
-        value={[props.pen.tool.size]}
-        onChange={([size]) => props.onChange({ size })}
-        getValueLabel={({ values }) => `${sizeLabel(values[0])} pt`}
-      >
-        <div class="slider-head">
-          <Slider.Label class="field-label">Size</Slider.Label>
-          <Slider.ValueLabel class="tool-size" />
-        </div>
-        <Slider.Track class="slider-track">
-          <Slider.Fill class="slider-fill" />
-          <Slider.Thumb class="slider-thumb" />
-        </Slider.Track>
-      </Slider>
+      <IonList lines="none">
+        <IonItem>
+          <IonInput
+            label="Hex"
+            value={hex(props.pen.tool.rgb)}
+            on:ionChange={(e) => {
+              const v = String(e.detail.value ?? "");
+              if (/^#?[0-9a-f]{6}$/i.test(v)) props.onChange({ rgb: parseInt(v.replace("#", ""), 16) });
+            }}
+          />
+        </IonItem>
+        <IonItem>
+          <IonRange
+            aria-label="Size"
+            min={SIZE_RANGE.min}
+            max={SIZE_RANGE.max}
+            step={SIZE_RANGE.step}
+            value={props.pen.tool.size}
+            on:ionInput={(e) => props.onChange({ size: Number(e.detail.value) })}
+          >
+            <IonLabel slot="start">Size</IonLabel>
+            <IonNote slot="end" class="tool-size">
+              {sizeLabel(props.pen.tool.size)} pt
+            </IonNote>
+          </IonRange>
+        </IonItem>
+      </IonList>
     </div>
+  );
+}
+
+// A bottom-bar menu button: its label, and a popover of choices.
+function BarMenu(props: { label: string; icon?: string; text: string; items: (dismiss: () => void) => JSX.Element }) {
+  return (
+    <IonButton
+      class="bar-group bar-menu"
+      fill="clear"
+      color="dark"
+      size="small"
+      aria-label={props.label}
+      onClick={(e) =>
+        void presentPopover(e, (dismiss) => <IonList lines="full">{props.items(dismiss)}</IonList>, { side: "top", alignment: "start" })
+      }
+    >
+      <Show when={props.icon}>{(icon) => <IonIcon slot="start" icon={icon()} />}</Show>
+      {props.text}
+      <IonIcon slot="end" icon={chevronDown} />
+    </IonButton>
   );
 }
 
@@ -163,7 +219,14 @@ export interface Tab {
 export function Editor(props: {
   notebook: OpenNotebook;
   folderName: string;
+  // The notes of the open note's folder, for the title menu.
+  folderNotes: Tab[];
   tabs: Tab[];
+  // The note's tags, and the library's tags to add.
+  tags: string[];
+  allTags: Tag[];
+  onToggleTag: (tag: string) => void;
+  onNewTag: () => void;
   // Each runs after the editor saved and freed the open notebook.
   onLibrary: () => void;
   onSelectTab: (path: string[]) => void;
@@ -184,8 +247,6 @@ export function Editor(props: {
   // the last one before the eraser or the lasso.
   const [penId, setPenId] = createSignal("");
   const pen = () => pens().find((p) => p.id === penId());
-  const [editing, setEditing] = createSignal(false);
-  const penButtons = new Map<string, HTMLElement>();
   const [eraser, setEraser] = createSignal<EraserId>("stroke");
   const [selector, setSelector] = createSignal<SelectorId>("lasso");
   const [selection, setSelection] = createSignal<SelectionInfo | null>(null);
@@ -210,6 +271,13 @@ export function Editor(props: {
     clearTimeout(penWrite);
     penWrite = window.setTimeout(() => void writePensNow(), PEN_WRITE_MS);
   };
+  // The selected pen's editor, beside the control that opened it.
+  const openPenEditor = (e: Event) =>
+    void presentPopover(e, () => <Show when={pen()}>{(p) => <PenEditor pen={p()} onChange={editPen} />}</Show>, {
+      side: "right",
+      alignment: "start",
+      cssClass: "pen-editor-popover",
+    });
   // Reads the presets again: on opening and when the window gains focus, as
   // another device may have changed the file. An edit not yet written wins.
   const loadPens = async () => {
@@ -459,180 +527,164 @@ export function Editor(props: {
 
   const isOpen = (path: string[]) => path.join("/") === props.notebook.path.join("/");
   const zoomLabel = () => (element ? `${Math.round((view().scale / fitScale()) * 100)}%` : "100%");
+  const tagColor = (name: string) => props.allTags.find((t) => t.name === name)?.color ?? "#8A8F98";
+
+  const pageMenu = (e: Event) =>
+    void presentPopover(e, (dismiss) => (
+      <IonList lines="full">
+        <MenuItem label="Paste" dismiss={dismiss} onSelect={() => void navigator.clipboard.readText().then(paste)} />
+        <MenuItem label="Insert page before" dismiss={dismiss} onSelect={() => edit(() => doc.insertPage(currentPage()))} />
+        <MenuItem label="Insert page after" dismiss={dismiss} onSelect={() => edit(() => doc.insertPage(currentPage() + 1))} />
+        <MenuItem label="Delete page" dismiss={dismiss} onSelect={() => edit(() => doc.pageCount() > 1 && doc.deletePage(currentPage()))} />
+        <MenuItem
+          label="Move page up"
+          dismiss={dismiss}
+          onSelect={() => edit(() => currentPage() > 0 && doc.movePage(currentPage(), currentPage() - 1))}
+        />
+        <MenuItem
+          label="Move page down"
+          dismiss={dismiss}
+          onSelect={() => edit(() => currentPage() < doc.pageCount() - 1 && doc.movePage(currentPage(), currentPage() + 1))}
+        />
+        <MenuItem label="Page size: A4" dismiss={dismiss} onSelect={() => edit(() => doc.setPageSize(PageSize.a4))} />
+        <MenuItem label="Page size: Letter" dismiss={dismiss} onSelect={() => edit(() => doc.setPageSize(PageSize.letter))} />
+      </IonList>
+    ));
+
+  const titleMenu = (e: Event) =>
+    void presentPopover(e, (dismiss) => (
+      <IonList lines="full">
+        <For each={props.folderNotes}>
+          {(note) => (
+            <MenuItem
+              label={note.name}
+              checked={isOpen(note.path)}
+              dismiss={dismiss}
+              onSelect={() => !isOpen(note.path) && void leave(() => props.onSelectTab(note.path))}
+            />
+          )}
+        </For>
+      </IonList>
+    ));
+
+  const tagMenu = (e: Event) =>
+    void presentPopover(e, () => (
+      <IonList lines="full">
+        <For each={props.allTags}>
+          {(tag) => (
+            <IonItem>
+              <span slot="start" class="tag-dot" style={{ background: tag.color }} />
+              <IonCheckbox justify="space-between" checked={props.tags.includes(tag.name)} on:ionChange={() => props.onToggleTag(tag.name)}>
+                {tag.name}
+              </IonCheckbox>
+            </IonItem>
+          )}
+        </For>
+        <IonItem button detail={false} onClick={() => props.onNewTag()}>
+          <IonIcon slot="start" icon={add} />
+          <IonLabel>New Tag…</IonLabel>
+        </IonItem>
+      </IonList>
+    ));
 
   return (
-    <div class="editor">
-      <header class="editor-top">
-        <Button class="link-button" aria-label="Library" onClick={() => void leave(props.onLibrary)}>
-          <ChevronLeft size={18} />
-          <AppMark />
-        </Button>
-        <div class="editor-title">
-          <div class="editor-folder">{props.folderName}</div>
-          <div class="editor-note">{props.notebook.name}</div>
-        </div>
-        <div class="tabs" role="tablist" aria-label="Open notes">
-          <For each={props.tabs}>
-            {(tab) => (
-              <div class="tab" aria-current={isOpen(tab.path) ? "page" : undefined}>
-                <Button
-                  role="tab"
-                  aria-selected={isOpen(tab.path)}
-                  class="tab-label"
-                  onClick={() => !isOpen(tab.path) && void leave(() => props.onSelectTab(tab.path))}
-                >
-                  {tab.name}
-                </Button>
-                <Button
-                  class="icon-button"
-                  aria-label={`Close ${tab.name}`}
-                  onClick={() => (isOpen(tab.path) ? void leave(() => props.onCloseTab(tab.path)) : props.onCloseTab(tab.path))}
-                >
-                  <X size={14} />
-                </Button>
-              </div>
-            )}
-          </For>
-        </div>
-        <DropdownMenu>
-          <DropdownMenu.Trigger class="icon-button" aria-label="Page actions">
-            <Ellipsis size={20} />
-          </DropdownMenu.Trigger>
-          <DropdownMenu.Portal>
-            <DropdownMenu.Content class="menu">
-              <DropdownMenu.Item class="menu-item" onSelect={() => void navigator.clipboard.readText().then(paste)}>
-                Paste
-              </DropdownMenu.Item>
-              <DropdownMenu.Item class="menu-item" onSelect={() => edit(() => doc.insertPage(currentPage()))}>
-                Insert page before
-              </DropdownMenu.Item>
-              <DropdownMenu.Item class="menu-item" onSelect={() => edit(() => doc.insertPage(currentPage() + 1))}>
-                Insert page after
-              </DropdownMenu.Item>
-              <DropdownMenu.Item
-                class="menu-item"
-                onSelect={() => edit(() => doc.pageCount() > 1 && doc.deletePage(currentPage()))}
-              >
-                Delete page
-              </DropdownMenu.Item>
-              <DropdownMenu.Item
-                class="menu-item"
-                onSelect={() => edit(() => currentPage() > 0 && doc.movePage(currentPage(), currentPage() - 1))}
-              >
-                Move page up
-              </DropdownMenu.Item>
-              <DropdownMenu.Item
-                class="menu-item"
-                onSelect={() =>
-                  edit(() => currentPage() < doc.pageCount() - 1 && doc.movePage(currentPage(), currentPage() + 1))
-                }
-              >
-                Move page down
-              </DropdownMenu.Item>
-              <DropdownMenu.Sub>
-                <DropdownMenu.SubTrigger class="menu-item">Page size</DropdownMenu.SubTrigger>
-                <DropdownMenu.Portal>
-                  <DropdownMenu.SubContent class="menu">
-                    <DropdownMenu.Item class="menu-item" onSelect={() => edit(() => doc.setPageSize(PageSize.a4))}>
-                      A4
-                    </DropdownMenu.Item>
-                    <DropdownMenu.Item class="menu-item" onSelect={() => edit(() => doc.setPageSize(PageSize.letter))}>
-                      Letter
-                    </DropdownMenu.Item>
-                  </DropdownMenu.SubContent>
-                </DropdownMenu.Portal>
-              </DropdownMenu.Sub>
-            </DropdownMenu.Content>
-          </DropdownMenu.Portal>
-        </DropdownMenu>
-      </header>
-      <div class="editor-body">
-        <aside class="tool-rail" aria-label="Tools">
-          <ToggleGroup
-            class="tools"
-            value={tool()}
-            // A tap on the selected pen gives no value: it opens that pen's
-            // editor, as in GoodNotes and Noteful.
-            onChange={(v) => (v ? selectTool(v) : tool() === penId() && setEditing(true))}
-            aria-label="Pens"
-          >
-            <For each={pens()}>
-              {(p) => (
-                <ToggleGroup.Item class="tool" value={p.id} aria-label={p.name} ref={(el) => penButtons.set(p.id, el)}>
-                  {penIcon(p.tool.brush, hex(p.tool.rgb))}
-                  <span class="tool-text">
-                    <span>{p.name}</span>
-                    <span class="tool-size">{sizeLabel(p.tool.size)}</span>
-                  </span>
-                </ToggleGroup.Item>
+    <div class="editor ion-page">
+      <IonHeader class="editor-header">
+        <IonToolbar>
+          <IonButtons slot="start">
+            <IonButton aria-label="Library" onClick={() => void leave(props.onLibrary)}>
+              <IonIcon slot="start" icon={chevronBack} />
+              <AppMark />
+            </IonButton>
+            <IonButton class="editor-title" color="dark" aria-label="Notes in this notebook" onClick={titleMenu}>
+              <span class="editor-title-text">
+                <span class="editor-folder">{props.folderName}</span>
+                <IonNote class="editor-subtitle">{noteCount(props.folderNotes.length)}</IonNote>
+              </span>
+              <IonIcon slot="end" icon={chevronDown} />
+            </IonButton>
+          </IonButtons>
+          <div class="tabs" role="tablist" aria-label="Open notes">
+            <For each={props.tabs}>
+              {(tab) => (
+                <div class={isOpen(tab.path) ? "tab selected" : "tab"} aria-current={isOpen(tab.path) ? "page" : undefined}>
+                  <IonButton
+                    fill="clear"
+                    size="small"
+                    color={isOpen(tab.path) ? "primary" : "medium"}
+                    class="tab-label"
+                    role="tab"
+                    aria-selected={isOpen(tab.path)}
+                    onClick={() => !isOpen(tab.path) && void leave(() => props.onSelectTab(tab.path))}
+                  >
+                    <span class="tab-text">{tab.name}</span>
+                  </IonButton>
+                  <IonButton
+                    fill="clear"
+                    size="small"
+                    color="medium"
+                    aria-label={`Close ${tab.name}`}
+                    onClick={() => (isOpen(tab.path) ? void leave(() => props.onCloseTab(tab.path)) : props.onCloseTab(tab.path))}
+                  >
+                    <IonIcon slot="icon-only" icon={close} />
+                  </IonButton>
+                </div>
               )}
             </For>
-            <ToggleGroup.Item class="tool" value="eraser" aria-label="Eraser">
-              <EraserIcon size={20} />
-              <span class="tool-text">
-                <span>Eraser</span>
-                <span class="tool-size">{ERASERS[eraser()].label}</span>
-              </span>
-            </ToggleGroup.Item>
-            <ToggleGroup.Item class="tool" value="select" aria-label="Lasso">
-              <Lasso size={20} />
-              <span class="tool-text">
-                <span>Lasso</span>
-                <span class="tool-size">{SELECTORS[selector()].label}</span>
-              </span>
-            </ToggleGroup.Item>
-          </ToggleGroup>
-          <Switch
-            fallback={
-              <Swatches value={pen()?.tool.rgb} onChange={(rgb) => editPen({ rgb })} />
-            }
-          >
-            <Match when={tool() === "eraser"}>
-              <ToggleGroup
-                class="tools eraser-kinds"
-                value={eraser()}
-                onChange={(v) => v && setEraser(v as EraserId)}
-                aria-label="Eraser"
-              >
-                <For each={Object.keys(ERASERS) as EraserId[]}>
-                  {(id) => (
-                    <ToggleGroup.Item class="tool" value={id}>
-                      {ERASERS[id].label}
-                    </ToggleGroup.Item>
-                  )}
-                </For>
-              </ToggleGroup>
-            </Match>
-            <Match when={tool() === "select"}>
-              <ToggleGroup
-                class="tools"
-                value={selector()}
-                onChange={(v) => v && setSelector(v as SelectorId)}
-                aria-label="Selection"
-              >
-                <For each={Object.keys(SELECTORS) as SelectorId[]}>
-                  {(id) => (
-                    <ToggleGroup.Item class="tool" value={id}>
-                      {SELECTORS[id].label}
-                    </ToggleGroup.Item>
-                  )}
-                </For>
-              </ToggleGroup>
-            </Match>
-          </Switch>
-          <Popover open={editing()} onOpenChange={setEditing} anchorRef={() => penButtons.get(penId())} placement="right-start" gutter={12}>
-            <Popover.Portal>
-              <Popover.Content
-                class="pen-editor"
-                aria-label="Pen editor"
-                // The tap on the pen that opened the editor focuses that pen
-                // afterwards; that focus stays with the editor open.
-                onFocusOutside={(e) => e.target === penButtons.get(penId()) && e.preventDefault()}
-              >
-                <Show when={pen()}>{(p) => <PenEditor pen={p()} onChange={editPen} />}</Show>
-              </Popover.Content>
-            </Popover.Portal>
-          </Popover>
+            <IonButton fill="clear" size="small" aria-label="Open another note" onClick={() => notImplemented(62)}>
+              <IonIcon slot="icon-only" icon={add} />
+            </IonButton>
+          </div>
+          <IonButtons slot="end">
+            <IonButton aria-label="Share" onClick={() => notImplemented(29)}>
+              <IonIcon slot="icon-only" icon={shareOutline} />
+            </IonButton>
+            <IonButton aria-label="Page actions" onClick={pageMenu}>
+              <IonIcon slot="icon-only" icon={ellipsisHorizontal} />
+            </IonButton>
+          </IonButtons>
+        </IonToolbar>
+      </IonHeader>
+      <div class="editor-body">
+        <aside class="tool-rail" aria-label="Tools">
+          <IonList lines="none" class="tools">
+            <For each={pens()}>
+              {(p) => (
+                <ToolItem
+                  label={p.name}
+                  detail={sizeLabel(p.tool.size)}
+                  selected={tool() === p.id}
+                  icon={penIcon(p.tool.brush, hex(p.tool.rgb))}
+                  // A tap on the selected pen opens its editor, as in GoodNotes and Noteful.
+                  onSelect={(e) => (tool() === p.id ? openPenEditor(e) : selectTool(p.id))}
+                />
+              )}
+            </For>
+            <ToolItem label="Eraser" detail={ERASERS[eraser()].label} selected={tool() === ERASER} icon={<EraserIcon size={22} />} onSelect={() => selectTool(ERASER)} />
+            <ToolItem label="Lasso" detail={SELECTORS[selector()].label} selected={tool() === SELECT} icon={<Lasso size={22} />} onSelect={() => selectTool(SELECT)} />
+            <ToolItem label="Shapes" selected={false} icon={<Shapes size={22} />} onSelect={() => notImplemented(10)} />
+            <ToolItem label="Image" selected={false} icon={<ImageIcon size={22} />} onSelect={() => notImplemented(60)} />
+            <ToolItem label="Text" selected={false} icon={<TextIcon size={22} />} onSelect={() => notImplemented(61)} />
+          </IonList>
+          <Show when={tool() === ERASER}>
+            <IonList lines="none" class="tools kinds" aria-label="Eraser">
+              <For each={Object.keys(ERASERS) as EraserId[]}>
+                {(id) => <ToolItem label={ERASERS[id].label} selected={eraser() === id} icon={<span />} onSelect={() => setEraser(id)} />}
+              </For>
+            </IonList>
+          </Show>
+          <Show when={tool() === SELECT}>
+            <IonList lines="none" class="tools kinds" aria-label="Selection">
+              <For each={Object.keys(SELECTORS) as SelectorId[]}>
+                {(id) => <ToolItem label={SELECTORS[id].label} selected={selector() === id} icon={<span />} onSelect={() => setSelector(id)} />}
+              </For>
+            </IonList>
+          </Show>
+          <Swatches value={pen()?.tool.rgb} onChange={(rgb) => editPen({ rgb })}>
+            <IonButton class="swatch add" shape="round" fill="outline" color="medium" aria-label="Custom color" onClick={openPenEditor}>
+              <IonIcon slot="icon-only" icon={add} />
+            </IonButton>
+          </Swatches>
         </aside>
         <div class="canvas-area" ref={area}>
           <canvas
@@ -645,6 +697,18 @@ export function Editor(props: {
             onWheel={onWheel}
             onContextMenu={(e) => e.preventDefault()}
           />
+          <div class="page-tags" aria-label="Tags">
+            <For each={props.tags}>
+              {(tag) => (
+                <IonChip class="tag-chip" style={{ "--chip": tagColor(tag) }}>
+                  <IonLabel>#{tag}</IonLabel>
+                </IonChip>
+              )}
+            </For>
+            <IonButton class="chip-add" size="small" fill="outline" color="medium" shape="round" aria-label="Add tag" onClick={tagMenu}>
+              <IonIcon slot="icon-only" icon={add} />
+            </IonButton>
+          </div>
           <Show when={selection()}>
             {(sel) => (
               <div
@@ -653,28 +717,31 @@ export function Editor(props: {
                 aria-label="Selection actions"
                 style={{ left: `${sel().x + sel().width / 2}px`, top: `${sel().y + sel().height + 12}px` }}
               >
-                <Button class="icon-button" aria-label="Copy" title="Copy (Ctrl+C)" onClick={() => copy(false)}>
-                  <Copy size={18} />
-                </Button>
-                <Button class="icon-button" aria-label="Cut" title="Cut (Ctrl+X)" onClick={() => copy(true)}>
-                  <Scissors size={18} />
-                </Button>
-                <Button
-                  class="icon-button"
+                <IonButton fill="clear" size="small" aria-label="Copy" title="Copy (Ctrl+C)" onClick={() => copy(false)}>
+                  <IonIcon slot="icon-only" icon={copyOutline} />
+                </IonButton>
+                <IonButton fill="clear" size="small" aria-label="Cut" title="Cut (Ctrl+X)" onClick={() => copy(true)}>
+                  <IonIcon slot="icon-only" icon={cutOutline} />
+                </IonButton>
+                <IonButton
+                  fill="clear"
+                  size="small"
                   aria-label="Duplicate"
                   title="Duplicate (Ctrl+D)"
                   onClick={() => edit(() => canvas?.duplicateSelection())}
                 >
-                  <CopyPlus size={18} />
-                </Button>
-                <Button
-                  class="icon-button"
+                  <IonIcon slot="icon-only" icon={duplicateOutline} />
+                </IonButton>
+                <IonButton
+                  fill="clear"
+                  size="small"
+                  color="danger"
                   aria-label="Delete"
                   title="Delete (Del)"
                   onClick={() => edit(() => canvas?.deleteSelection())}
                 >
-                  <Trash2 size={18} />
-                </Button>
+                  <IonIcon slot="icon-only" icon={trashOutline} />
+                </IonButton>
               </div>
             )}
           </Show>
@@ -684,74 +751,61 @@ export function Editor(props: {
             data-ready={pull() >= PULL_THRESHOLD ? "" : undefined}
             style={{ height: `${Math.min(pull(), 1.5 * PULL_THRESHOLD)}px` }}
           >
-            <Plus size={16} />
+            <IonIcon icon={add} />
             {pull() >= PULL_THRESHOLD ? "Release to add a page" : "Pull to add a page"}
           </div>
           <div class="bottom-bar">
             <div class="bar-group">
-              <Button class="icon-button" aria-label="Undo" title="Undo (Ctrl+Z)" onClick={() => history("undo")}>
-                <Undo2 size={18} />
-              </Button>
-              <Button class="icon-button" aria-label="Redo" title="Redo (Shift+Ctrl+Z)" onClick={() => history("redo")}>
-                <Redo2 size={18} />
-              </Button>
+              <IonButton fill="clear" size="small" color="dark" aria-label="Undo" title="Undo (Ctrl+Z)" onClick={() => history("undo")}>
+                <IonIcon slot="icon-only" icon={arrowUndo} />
+              </IonButton>
+              <IonButton fill="clear" size="small" color="dark" aria-label="Redo" title="Redo (Shift+Ctrl+Z)" onClick={() => history("redo")}>
+                <IonIcon slot="icon-only" icon={arrowRedo} />
+              </IonButton>
             </div>
-            <DropdownMenu>
-              <DropdownMenu.Trigger class="bar-group bar-menu" aria-label="Zoom">
-                {zoomLabel()} <ChevronDown size={14} />
-              </DropdownMenu.Trigger>
-              <DropdownMenu.Portal>
-                <DropdownMenu.Content class="menu">
-                  <DropdownMenu.Item class="menu-item" onSelect={fitWidth}>
-                    Fit width
-                  </DropdownMenu.Item>
-                  <For each={ZOOMS}>
-                    {(factor) => (
-                      <DropdownMenu.Item class="menu-item" onSelect={() => zoom(factor)}>
-                        {factor * 100}%
-                      </DropdownMenu.Item>
-                    )}
-                  </For>
-                </DropdownMenu.Content>
-              </DropdownMenu.Portal>
-            </DropdownMenu>
-            <DropdownMenu>
-              <DropdownMenu.Trigger class="bar-group bar-menu" aria-label="Paper">
-                <Grip size={16} /> {paperLabel(template())} <ChevronDown size={14} />
-              </DropdownMenu.Trigger>
-              <DropdownMenu.Portal>
-                <DropdownMenu.Content class="menu">
-                  <DropdownMenu.RadioGroup
-                    value={template()}
-                    onChange={(name) =>
-                      void applyTemplate(root, doc, name).then(() => {
-                        setTemplate(name);
-                        edit(() => {});
-                      })
-                    }
-                  >
-                    <For each={templates()}>
-                      {(name) => (
-                        <DropdownMenu.RadioItem class="menu-item" value={name}>
-                          {paperLabel(name)}
-                        </DropdownMenu.RadioItem>
-                      )}
-                    </For>
-                  </DropdownMenu.RadioGroup>
-                </DropdownMenu.Content>
-              </DropdownMenu.Portal>
-            </DropdownMenu>
+            <BarMenu
+              label="Zoom"
+              text={zoomLabel()}
+              items={(dismiss) => (
+                <>
+                  <MenuItem label="Fit width" dismiss={dismiss} onSelect={fitWidth} />
+                  <For each={ZOOMS}>{(factor) => <MenuItem label={`${factor * 100}%`} dismiss={dismiss} onSelect={() => zoom(factor)} />}</For>
+                </>
+              )}
+            />
+            <BarMenu
+              label="Paper"
+              icon={gridOutline}
+              text={paperLabel(template())}
+              items={(dismiss) => (
+                <For each={templates()}>
+                  {(name) => (
+                    <MenuItem
+                      label={paperLabel(name)}
+                      checked={template() === name}
+                      dismiss={dismiss}
+                      onSelect={() =>
+                        void applyTemplate(root, doc, name).then(() => {
+                          setTemplate(name);
+                          edit(() => {});
+                        })
+                      }
+                    />
+                  )}
+                </For>
+              )}
+            />
             <div class="bar-spacer" />
             <div class="bar-group">
-              <Button class="icon-button" aria-label="Previous page" onClick={() => goToPage(currentPage() - 1)}>
-                <ChevronLeft size={18} />
-              </Button>
+              <IonButton fill="clear" size="small" color="dark" aria-label="Previous page" onClick={() => goToPage(currentPage() - 1)}>
+                <IonIcon slot="icon-only" icon={chevronBack} />
+              </IonButton>
               <span class="page-indicator" aria-label="Page">
                 {currentPage() + 1} / {pages()}
               </span>
-              <Button class="icon-button" aria-label="Next page" onClick={() => goToPage(currentPage() + 1)}>
-                <ChevronRight size={18} />
-              </Button>
+              <IonButton fill="clear" size="small" color="dark" aria-label="Next page" onClick={() => goToPage(currentPage() + 1)}>
+                <IonIcon slot="icon-only" icon={chevronForward} />
+              </IonButton>
             </div>
           </div>
         </div>

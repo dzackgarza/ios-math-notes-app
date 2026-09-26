@@ -51,8 +51,11 @@
 
 ## Web host
 
-- **A Kobalte `Popover` opened from a tap on another control closed at once** when that control did not have focus before the tap (the pen editor, after drawing on the canvas): the control takes focus after the tap, the popover sees focus outside and closes. The pen editor's `Popover.Content` ignores `onFocusOutside` whose target is the pen button that opened it.
-- **Kobalte `Slider.Input` adds a second `role="slider"`** (a hidden `input type="range"`) with the same label, so `getByRole("slider", { name })` matches two elements. The pen editor has no `Slider.Input`; it submits no form.
+- **Nested `<ion-*>` tags in Solid JSX crashed with `Cannot read properties of null (reading 'firstChild')`.** Solid clones a template holding custom elements with `document.importNode`, which upgrades them, and Stencil's slot patches on Ionic's non-shadow components (`ion-header`, `ion-buttons`, `ion-label`, `ion-input`, ...) make `firstChild` and `childNodes` return only slotted nodes, empty before render (ionic-framework#29756). The template walk found no children. JSX uses the components of `@ionic-solidjs/core`, which create each element alone and insert the children afterwards.
+- **A reactive `class` on an Ionic component wipes Ionic's own host classes** (`button-solid`, `ios`, ...): Solid assigns `className`, and the component lost its styles. Conditional classes on Ionic components use `classList`.
+- **Pen input right after New Note went to the closing sheet**, not the canvas: the editor showed while the modal was still animating out, and its backdrop took the pointer events. The sheets create after `dismiss()` resolves.
+- **Ionic's `fill` on `ion-input` and `ion-textarea` applies only in md mode;** in iOS mode the field has no box.
+
 - **`FileSystemDirectoryHandle.move` is missing in Playwright's Chromium** (`knots.move is not a function`), even on the origin-private file system, and Chrome's local file system moves no directories. A test that moved a directory with it passed nowhere; the library renames and moves a directory by copying it and removing the original, and tests simulate `mv` the same way.
 - **A reload less than 1 s after the last stroke drops the pending save** (the saver writes 1 s after edits pause). `e2e/screenshots.ts` showed covers without ink until it waited for the page write before reloading.
 - **Every rescan made the library covers show plain paper for a moment.** A rescan creates new note objects, so each cover's resource loaded again from empty, and the paper tile showed until the cache read ended. A screenshot taken after a rescan showed no ink in the covers, although the cached PNGs had ink. Covers now start from the last thumbnail loaded for their path.

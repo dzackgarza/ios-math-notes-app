@@ -1,7 +1,7 @@
 // The deployed web app in Chromium: pen input through CDP, saving to the
 // origin-private file system (?root=opfs), reload, and offline start.
 /// <reference path="../src/window.d.ts" />
-import { expect, test, type Page } from "@playwright/test";
+import { expect, type Locator, test, type Page } from "@playwright/test";
 
 const APP = "?root=opfs";
 
@@ -224,7 +224,7 @@ test("an edited pen is written to .pens.json in FORMAT.md key order, and earlier
   await blue.click();
   await drawWithPen(page, line(100));
   await blue.click(); // the selected pen again: its editor
-  const editor = page.getByRole("dialog");
+  const editor = page.locator("ion-popover");
   await editor.getByRole("button", { name: "Marker" }).click();
   await editor.getByRole("textbox", { name: "Hex" }).fill("#3FA35B");
   await editor.getByRole("textbox", { name: "Hex" }).press("Tab");
@@ -471,7 +471,7 @@ async function focusWindow(page: Page): Promise<void> {
 // Chooses `item` in the ⋯ menu of the note or folder `name`.
 async function entryMenu(page: Page, name: string, item: string): Promise<void> {
   await page.getByRole("button", { name: `${name} actions` }).first().click();
-  await page.getByRole("menuitem", { name: item }).click();
+  await page.locator("ion-popover").getByRole("button", { name: item }).click();
 }
 
 test("a notebook renamed outside the app is listed at its new path once the window regains focus", async ({ page }) => {
@@ -520,22 +520,22 @@ test("rename, move and delete from the ⋯ menus change the notebook and folder 
 
   await entryMenu(page, "Knots", "Rename…");
   await page.getByRole("textbox", { name: "Name" }).fill("Braids");
-  await page.getByRole("button", { name: "Rename" }).click();
+  await page.getByRole("button", { name: "Rename", exact: true }).click();
   await expect.poll(() => directoriesExist(page, ["Topology/Braids/pages", "Topology/Knots"])).toEqual([true, false]);
 
   await entryMenu(page, "Braids", "Move to…");
-  await page.getByRole("button", { name: "My Notes" }).last().click();
+  await page.locator("ion-action-sheet").getByRole("button", { name: "My Notes" }).click();
   await expect.poll(() => directoriesExist(page, ["Braids/pages", "Topology/Braids"])).toEqual([true, false]);
 
   await openFolder(page, "My Notes");
   await entryMenu(page, "Topology", "Rename…");
   await page.getByRole("textbox", { name: "Name" }).fill("Geometry");
-  await page.getByRole("button", { name: "Rename" }).click();
+  await page.getByRole("button", { name: "Rename", exact: true }).click();
   await expect.poll(() => directoriesExist(page, ["Geometry", "Topology"])).toEqual([true, false]);
 
   await page.getByRole("button", { name: "My Notes", exact: true }).click();
   await entryMenu(page, "Braids", "Move to…");
-  await page.getByRole("button", { name: "Geometry" }).last().click();
+  await page.locator("ion-action-sheet").getByRole("button", { name: "Geometry" }).click();
   await expect.poll(() => directoriesExist(page, ["Geometry/Braids/pages", "Braids"])).toEqual([true, false]);
 
   await entryMenu(page, "Geometry", "Move to Trash");
@@ -714,4 +714,76 @@ test("a thumbnail is rendered again when an image that page 1 shows changes", as
   await focusWindow(page);
   await expect.poll(async () => (await stats()).renders).toBe(2);
   expect(await cachedColor()).toEqual([0, 0, 255]);
+});
+
+// Every file under the notes root, with its size and modification time.
+async function notesFolderState(page: Page): Promise<string[]> {
+  return page.evaluate(async () => {
+    const files: string[] = [];
+    const walk = async (dir: FileSystemDirectoryHandle, prefix: string) => {
+      for await (const [name, handle] of dir.entries()) {
+        if (handle.kind === "directory") {
+          await walk(handle, `${prefix}${name}/`);
+          continue;
+        }
+        const file = await handle.getFile();
+        files.push(`${prefix}${name} ${file.size} ${file.lastModified}`);
+      }
+    };
+    await walk(await navigator.storage.getDirectory(), "");
+    return files.sort();
+  });
+}
+
+// Clicks each control, which is placed from the mockups before its feature
+// lands (#57): each shows a toast naming the issue that implements it, and
+// the notes folder is unchanged.
+async function expectStubs(page: Page, controls: [Locator, number][]): Promise<void> {
+  const before = await notesFolderState(page);
+  for (const [control, issue] of controls) {
+    await control.click();
+    await expect(page.locator("ion-toast")).toHaveCount(1);
+    await expect(page.getByText(`Not implemented yet (#${issue})`, { exact: true })).toBeVisible();
+    await page.evaluate(() => Promise.all(Array.from(document.querySelectorAll<HTMLElement & { dismiss(): Promise<boolean> }>("ion-toast"), (t) => t.dismiss())));
+    await expect(page.locator("ion-toast")).toHaveCount(0);
+  }
+  expect(await notesFolderState(page)).toEqual(before);
+}
+
+test("each control whose feature has not landed names its issue and changes no file", async ({ page }) => {
+  await startEmpty(page);
+  await newNote(page, "Stubs");
+  await expect.poll(async () => (await notesFolderState(page)).some((f) => f.startsWith(".pens.json ")), { timeout: 5000 }).toBe(true);
+  await expectStubs(page, [
+    [page.getByRole("button", { name: "Shapes", exact: true }), 10],
+    [page.getByRole("button", { name: "Image", exact: true }), 60],
+    [page.getByRole("button", { name: "Text", exact: true }), 61],
+    [page.getByRole("button", { name: "Open another note" }), 62],
+    [page.getByRole("button", { name: "Share" }), 29],
+  ]);
+
+  await page.getByRole("button", { name: "Library" }).click();
+  await page.getByRole("button", { name: "My Notes", exact: true }).click();
+  // Opening the library renders the note's cover into .thumbnail-cache/.
+  await expect.poll(() => page.evaluate(() => window.mathNotesThumbnails!.renders), { timeout: 5000 }).toBe(1);
+  await expectStubs(page, [
+    [page.getByRole("button", { name: "Shared", exact: true }), 59],
+    [page.getByRole("button", { name: "Add notebook tag" }), 58],
+  ]);
+
+  await page.getByRole("button", { name: "New Notebook" }).click();
+  await expectStubs(page, [
+    [page.getByRole("textbox", { name: "Description" }), 58],
+    [page.getByRole("button", { name: "Graph Paper" }), 58],
+    [page.getByRole("button", { name: "Cover #C9B8F0" }), 58],
+    [page.getByRole("button", { name: "Spine" }), 58],
+    [page.getByRole("button", { name: "Add a tag" }), 58],
+  ]);
+  await page.getByRole("button", { name: "Cancel" }).click();
+
+  await page.getByRole("button", { name: "New Note", exact: true }).click();
+  await expectStubs(page, [
+    [page.getByRole("button", { name: "Theorem / Proof" }), 49],
+    [page.getByRole("button", { name: "Save as Draft" }), 63],
+  ]);
 });
