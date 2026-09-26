@@ -1,8 +1,8 @@
 # TikZ drawing mode
 
-> Review copy of plan `PLAN-TIKZ-DRAWING-MODE` in the project agent-memory vault.
-> The plan record owns progress and decisions. This file records the product
-> contract; the GitHub issue tree owns execution after the plan is accepted.
+> Product contract for [Drawing mode issue #10](https://github.com/dzackgarza/math-notes-app/issues/10).
+> The issue tree owns execution. The project agent-memory plan
+> `PLAN-TIKZ-DRAWING-MODE` points here.
 
 ## Result
 
@@ -174,8 +174,8 @@ remains a prerequisite to treating the web app as usable.
 
 | Existing issue or contract | Disposition |
 | --- | --- |
-| [#10](https://github.com/dzackgarza/math-notes-app/issues/10) shape recognition | Replace with the Drawing mode workstream. Its stroke-hold recognizer, shape conversion, and dedicated Shapes tool are superseded. |
-| [#35](https://github.com/dzackgarza/math-notes-app/issues/35) iPad Pencil interactions | Keep the Write-parity tools and Pencil gestures. Revise its figure-completion haptic reference to the drawing-mode interaction; it must not depend on #10. |
+| [#10](https://github.com/dzackgarza/math-notes-app/issues/10) drawing mode | Tracks the bounded figure and editor workstream. |
+| [#35](https://github.com/dzackgarza/math-notes-app/issues/35) iPad Pencil interactions | Keeps the Write-parity tools and Pencil gestures. Figure-completion feedback applies to the drawing-mode interaction. |
 | [#9](https://github.com/dzackgarza/math-notes-app/issues/9) layers | Keep notebook layers. Figure-internal layers are a separate scene concern; define their interaction in the format child plan. |
 | [#29](https://github.com/dzackgarza/math-notes-app/issues/29) PDF export | Keep. Export must paint the page-visible figure. |
 | [#33](https://github.com/dzackgarza/math-notes-app/issues/33) clippings | Keep. A completed figure can be selected and clipped without flattening its edit state. |
@@ -184,8 +184,7 @@ remains a prerequisite to treating the web app as usable.
 | [#49](https://github.com/dzackgarza/math-notes-app/issues/49), [#58](https://github.com/dzackgarza/math-notes-app/issues/58), [#62](https://github.com/dzackgarza/math-notes-app/issues/62), [#63](https://github.com/dzackgarza/math-notes-app/issues/63) | Keep their notebook, note, tab, and draft behavior. |
 | [#8](https://github.com/dzackgarza/math-notes-app/issues/8) PDF annotation | Keep. Its page backgrounds and imported page sizes are independent of figures. |
 
-The accepted issue-tree change should create a grouping issue for the drawing
-mode under #17, with independently trackable scene/capture, source round-trip,
+Issue #10 groups independently trackable scene/capture, source round-trip,
 label/preamble, constraints/generation, precision editing, and backend work.
 Issue nodes are tracking units, not prescribed PR boundaries. The first
 coherent implementation milestone should cover the complete mode-to-embedded-
