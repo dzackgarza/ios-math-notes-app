@@ -1,7 +1,11 @@
 import { Button } from "@kobalte/core/button";
+import { ColorField } from "@kobalte/core/color-field";
 import { DropdownMenu } from "@kobalte/core/dropdown-menu";
+import { Popover } from "@kobalte/core/popover";
+import { Slider } from "@kobalte/core/slider";
 import { ToggleGroup } from "@kobalte/core/toggle-group";
 import {
+  Brush as BrushIcon,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -22,10 +26,11 @@ import {
 } from "lucide-solid";
 import { For, Match, Show, Switch, createEffect, createResource, createSignal, onCleanup, onMount } from "solid-js";
 
-import { Brush, Eraser, PageSize, Selector, type Canvas, type SelectionInfo } from "../engine/engine.ts";
+import { Brush, Eraser, PageSize, Selector, type Canvas, type Pen, type SelectionInfo, type ToolSettings } from "../engine/engine.ts";
 import { ViewController, type View } from "../input/gestures.ts";
 import { browserEngine, capabilities, penSamples } from "../input/pointer.ts";
 import { listTemplates } from "../storage/folder.ts";
+import { readPens, writePens } from "../storage/pens.ts";
 import { AppMark } from "../ui/Library.tsx";
 import { paperLabel } from "../ui/paper.tsx";
 import { applyTemplate, type OpenNotebook } from "./notebook.ts";
@@ -34,13 +39,30 @@ import { applyTemplate, type OpenNotebook } from "./notebook.ts";
 const PULL_THRESHOLD = 96;
 const WHEEL_RELEASE_MS = 250;
 
-// The tool rail's pens (docs/specs/tablet-ui.md, Editor): brush and size in pt.
-const PENS = {
-  pen: { label: "Pen", brush: Brush.pressurePen, size: 1.6, rgb: 0x1a1a1a },
-  highlighter: { label: "Highlighter", brush: Brush.highlighter, size: 8, rgb: 0xf5d547 },
-} as const;
-type PenId = keyof typeof PENS;
-type ToolId = PenId | "eraser" | "select";
+// The pen editor's brush list: the stock brushes of a pen set, as in Google
+// Cahier DrawingToolbox.kt:483-505 (android/cahier 209db71). A highlighter
+// draws at the default highlighter preset's opacity, the others opaque.
+const BRUSHES = [
+  { label: "Pen", brush: Brush.pressurePen, opacity: 1 },
+  { label: "Marker", brush: Brush.marker, opacity: 1 },
+  { label: "Highlighter", brush: Brush.highlighter, opacity: 0.35 },
+] as const;
+const SIZE_RANGE = { min: 0.2, max: 20, step: 0.1 }; // pt
+// A preset edit is written to .pens.json once edits pause this long (a size drag).
+const PEN_WRITE_MS = 300;
+
+const penIcon = (brush: number, color: string) =>
+  brush === Brush.highlighter ? (
+    <Highlighter size={20} color={color} />
+  ) : brush === Brush.marker ? (
+    <BrushIcon size={20} color={color} />
+  ) : (
+    <PenLine size={20} color={color} />
+  );
+
+// A pen preset's id, or one of the other tools.
+type ToolId = string;
+const ERASER = "eraser", SELECT = "select";
 
 // The eraser's two kinds (#23); the pen's eraser end uses the selected one.
 const ERASERS = { stroke: { label: "Whole stroke", kind: Eraser.stroke }, free: { label: "Partial", kind: Eraser.free } } as const;
@@ -56,6 +78,79 @@ export const PALETTE = [
   0x7fb2f0, 0x8b5a2b, 0x1f3a93,
 ];
 const hex = (rgb: number) => `#${rgb.toString(16).padStart(6, "0").toUpperCase()}`;
+// A size in pt as .pens.json writes it: at most 2 decimals.
+const sizeLabel = (size: number) => String(Math.round(size * 100) / 100);
+
+function Swatches(props: { value: number | undefined; onChange: (rgb: number) => void }) {
+  return (
+    <ToggleGroup
+      class="palette"
+      value={props.value === undefined ? null : hex(props.value)}
+      onChange={(v) => v && props.onChange(parseInt(v.slice(1), 16))}
+      aria-label="Colors"
+    >
+      <For each={PALETTE}>
+        {(rgb) => <ToggleGroup.Item class="swatch" value={hex(rgb)} aria-label={hex(rgb)} style={{ background: hex(rgb) }} />}
+      </For>
+    </ToggleGroup>
+  );
+}
+
+// The fields of Write's pen editor that the stock brushes use: pen tip,
+// color, width (PenToolbar::setPen, updateColor, updateWidth,
+// syncscribble/pentoolbar.cpp:474-527, styluslabs/Write 401b65d).
+function PenEditor(props: { pen: Pen; onChange: (change: Partial<ToolSettings>) => void }) {
+  return (
+    <div class="pen-editor-fields">
+      <div class="pen-editor-title">{props.pen.name}</div>
+      <ToggleGroup
+        class="brush-list"
+        value={String(props.pen.tool.brush)}
+        onChange={(v) => {
+          const choice = BRUSHES.find((b) => String(b.brush) === v);
+          if (choice) props.onChange({ brush: choice.brush, opacity: choice.opacity });
+        }}
+        aria-label="Brush"
+      >
+        <For each={BRUSHES}>
+          {(b) => (
+            <ToggleGroup.Item class="tool" value={String(b.brush)}>
+              {penIcon(b.brush, "currentColor")}
+              {b.label}
+            </ToggleGroup.Item>
+          )}
+        </For>
+      </ToggleGroup>
+      <Swatches value={props.pen.tool.rgb} onChange={(rgb) => props.onChange({ rgb })} />
+      <ColorField
+        class="hex-field"
+        value={hex(props.pen.tool.rgb)}
+        onChange={(v) => /^#?[0-9a-f]{6}$/i.test(v) && props.onChange({ rgb: parseInt(v.replace("#", ""), 16) })}
+      >
+        <ColorField.Label class="field-label">Hex</ColorField.Label>
+        <ColorField.Input class="input" />
+      </ColorField>
+      <Slider
+        class="size-slider"
+        minValue={SIZE_RANGE.min}
+        maxValue={SIZE_RANGE.max}
+        step={SIZE_RANGE.step}
+        value={[props.pen.tool.size]}
+        onChange={([size]) => props.onChange({ size })}
+        getValueLabel={({ values }) => `${sizeLabel(values[0])} pt`}
+      >
+        <div class="slider-head">
+          <Slider.Label class="field-label">Size</Slider.Label>
+          <Slider.ValueLabel class="tool-size" />
+        </div>
+        <Slider.Track class="slider-track">
+          <Slider.Fill class="slider-fill" />
+          <Slider.Thumb class="slider-thumb" />
+        </Slider.Track>
+      </Slider>
+    </div>
+  );
+}
 
 // Zoom factors relative to the page filling the canvas width (100%).
 const ZOOMS = [0.5, 0.75, 1, 1.25, 1.5, 2, 3];
@@ -83,17 +178,48 @@ export function Editor(props: {
   const { document: doc, saver, root } = props.notebook;
   const [templates] = createResource(() => listTemplates(root));
   const [template, setTemplate] = createSignal(props.notebook.template);
-  const [tool, setTool] = createSignal<ToolId>("pen");
-  // The pen the palette colors: the selected pen, or the last one before the eraser.
-  const [pen, setPen] = createSignal<PenId>("pen");
+  // The presets of Notes/.pens.json, in toolbar order.
+  const [pens, setPens] = createSignal<Pen[]>([]);
+  const [tool, setTool] = createSignal<ToolId>("");
+  // The preset the palette and the pen editor change: the selected pen, or
+  // the last one before the eraser or the lasso.
+  const [penId, setPenId] = createSignal("");
+  const pen = () => pens().find((p) => p.id === penId());
+  const [editing, setEditing] = createSignal(false);
+  const penButtons = new Map<string, HTMLElement>();
   const [eraser, setEraser] = createSignal<EraserId>("stroke");
   const [selector, setSelector] = createSignal<SelectorId>("lasso");
   const [selection, setSelection] = createSignal<SelectionInfo | null>(null);
   const selectTool = (id: ToolId) => {
     setTool(id);
-    if (id !== "eraser" && id !== "select") setPen(id);
+    if (id !== ERASER && id !== SELECT) setPenId(id);
   };
-  const [colors, setColors] = createSignal<Record<PenId, number>>({ pen: PENS.pen.rgb, highlighter: PENS.highlighter.rgb });
+
+  // A pen edit applies at once (Write PenToolbar::updateColor, updateWidth,
+  // syncscribble/pentoolbar.cpp:506-527, styluslabs/Write 401b65d); the file
+  // is written when the edits pause.
+  let penWrite = 0;
+  let penWritePending: Promise<void> | undefined;
+  const writePensNow = () => {
+    clearTimeout(penWrite);
+    penWrite = 0;
+    penWritePending = writePens(root, doc.engine, pens());
+    return penWritePending;
+  };
+  const editPen = (change: Partial<ToolSettings>) => {
+    setPens((list) => list.map((p) => (p.id === penId() ? { ...p, tool: { ...p.tool, ...change } } : p)));
+    clearTimeout(penWrite);
+    penWrite = window.setTimeout(() => void writePensNow(), PEN_WRITE_MS);
+  };
+  // Reads the presets again: on opening and when the window gains focus, as
+  // another device may have changed the file. An edit not yet written wins.
+  const loadPens = async () => {
+    if (penWrite) return;
+    const list = await readPens(root, doc.engine);
+    setPens(list);
+    if (!list.some((p) => p.id === penId())) setPenId(list[0]?.id ?? "");
+    if (tool() === "" || (tool() !== ERASER && tool() !== SELECT && !list.some((p) => p.id === tool()))) setTool(penId());
+  };
   const [view, setView] = createSignal<View>({ scale: 1, x: 0, y: 0 });
   const [pages, setPages] = createSignal(doc.pageCount());
   // How far, in CSS px, the view is pulled past the end of the last page.
@@ -301,11 +427,15 @@ export function Editor(props: {
     canvas = doc.createCanvas("#ink-canvas");
     canvas.setUtcOffset(performance.timeOrigin);
     createEffect(() => {
-      const { brush, size } = PENS[pen()];
-      canvas?.setTool({ brush, rgb: colors()[pen()], size });
+      const current = pen();
+      if (current) canvas?.setTool(current.tool);
     });
-    createEffect(() => canvas?.setEraser(ERASERS[eraser()].kind, tool() === "eraser"));
-    createEffect(() => canvas?.setSelector(SELECTORS[selector()].kind, tool() === "select"));
+    createEffect(() => canvas?.setEraser(ERASERS[eraser()].kind, tool() === ERASER));
+    createEffect(() => canvas?.setSelector(SELECTORS[selector()].kind, tool() === SELECT));
+    const onFocus = () => void loadPens();
+    window.addEventListener("focus", onFocus);
+    onCleanup(() => window.removeEventListener("focus", onFocus));
+    void loadPens();
     const observer = new ResizeObserver(resize);
     observer.observe(area);
     resize();
@@ -320,6 +450,8 @@ export function Editor(props: {
   // Saves and frees the notebook, then `next` moves to another screen.
   const leave = async (next: () => void) => {
     await saver.save();
+    if (penWrite) await writePensNow();
+    await penWritePending;
     canvas?.free();
     canvas = undefined;
     doc.free();
@@ -417,14 +549,21 @@ export function Editor(props: {
       </header>
       <div class="editor-body">
         <aside class="tool-rail" aria-label="Tools">
-          <ToggleGroup class="tools" value={tool()} onChange={(v) => v && selectTool(v as ToolId)} aria-label="Pens">
-            <For each={Object.keys(PENS) as PenId[]}>
-              {(id) => (
-                <ToggleGroup.Item class="tool" value={id} aria-label={PENS[id].label}>
-                  {id === "pen" ? <PenLine size={20} /> : <Highlighter size={20} />}
+          <ToggleGroup
+            class="tools"
+            value={tool()}
+            // A tap on the selected pen gives no value: it opens that pen's
+            // editor, as in GoodNotes and Noteful.
+            onChange={(v) => (v ? selectTool(v) : tool() === penId() && setEditing(true))}
+            aria-label="Pens"
+          >
+            <For each={pens()}>
+              {(p) => (
+                <ToggleGroup.Item class="tool" value={p.id} aria-label={p.name} ref={(el) => penButtons.set(p.id, el)}>
+                  {penIcon(p.tool.brush, hex(p.tool.rgb))}
                   <span class="tool-text">
-                    <span>{PENS[id].label}</span>
-                    <span class="tool-size">{PENS[id].size}</span>
+                    <span>{p.name}</span>
+                    <span class="tool-size">{sizeLabel(p.tool.size)}</span>
                   </span>
                 </ToggleGroup.Item>
               )}
@@ -446,18 +585,7 @@ export function Editor(props: {
           </ToggleGroup>
           <Switch
             fallback={
-              <ToggleGroup
-                class="palette"
-                value={hex(colors()[pen()])}
-                onChange={(v) => v && setColors((c) => ({ ...c, [pen()]: parseInt(v.slice(1), 16) }))}
-                aria-label="Colors"
-              >
-                <For each={PALETTE}>
-                  {(rgb) => (
-                    <ToggleGroup.Item class="swatch" value={hex(rgb)} aria-label={hex(rgb)} style={{ background: hex(rgb) }} />
-                  )}
-                </For>
-              </ToggleGroup>
+              <Swatches value={pen()?.tool.rgb} onChange={(rgb) => editPen({ rgb })} />
             }
           >
             <Match when={tool() === "eraser"}>
@@ -493,6 +621,19 @@ export function Editor(props: {
               </ToggleGroup>
             </Match>
           </Switch>
+          <Popover open={editing()} onOpenChange={setEditing} anchorRef={() => penButtons.get(penId())} placement="right-start" gutter={12}>
+            <Popover.Portal>
+              <Popover.Content
+                class="pen-editor"
+                aria-label="Pen editor"
+                // The tap on the pen that opened the editor focuses that pen
+                // afterwards; that focus stays with the editor open.
+                onFocusOutside={(e) => e.target === penButtons.get(penId()) && e.preventDefault()}
+              >
+                <Show when={pen()}>{(p) => <PenEditor pen={p()} onChange={editPen} />}</Show>
+              </Popover.Content>
+            </Popover.Portal>
+          </Popover>
         </aside>
         <div class="canvas-area" ref={area}>
           <canvas

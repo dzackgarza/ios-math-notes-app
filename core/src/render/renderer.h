@@ -48,6 +48,7 @@ struct LiveInk {
   size_t page = 0;
   std::vector<Polyline> outline;
   Rgb color;
+  double opacity = 1;
 };
 
 // The selection tools' marks on one page, drawn over the pages: the lasso or

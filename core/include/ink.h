@@ -151,12 +151,34 @@ typedef enum InkBrush {
   INK_BRUSH_HIGHLIGHTER = 2
 } InkBrush;
 
-/* The tool that new pen input uses. */
+/* The tool that new pen input uses. A stroke keeps the brush, color, opacity
+   and size it was drawn with. */
 typedef struct InkToolSettings {
   uint32_t brush; /* InkBrush */
   uint32_t rgb;   /* 0xRRGGBB */
   float size;     /* pt */
+  float opacity;  /* (0, 1]: the stroke's fill-opacity */
 } InkToolSettings;
+
+/* ---- Pen presets ------------------------------------------------------ */
+
+/* One preset of Notes/.pens.json (docs/FORMAT.md, Other files). */
+typedef struct InkPen {
+  const char *id;
+  const char *name;
+  InkToolSettings tool;
+} InkPen;
+
+/* The bytes of the default .pens.json, which the host writes on first use.
+   `*json` stays valid until the next ink_pens_* call. */
+InkStatus ink_pens_default(const uint8_t **json, size_t *size);
+/* The presets of a .pens.json, in toolbar order. `*pens` and its strings stay
+   valid until the next ink_pens_* call. INK_ERROR_PARSE when the file is not
+   a pen list. */
+InkStatus ink_pens_read(const uint8_t *json, size_t size, const InkPen **pens, size_t *count);
+/* The .pens.json of `pens`. `*json` stays valid until the next ink_pens_*
+   call. */
+InkStatus ink_pens_write(const InkPen *pens, size_t count, const uint8_t **json, size_t *size);
 
 #ifdef __EMSCRIPTEN__
 /* A canvas on `document` that draws into the WebGL2 canvas element matched
@@ -269,7 +291,8 @@ typedef enum InkStruct {
   INK_STRUCT_PEN_SAMPLE = 0,
   INK_STRUCT_TOOL_SETTINGS = 1,
   INK_STRUCT_FILE = 2,
-  INK_STRUCT_SELECTION_INFO = 3
+  INK_STRUCT_SELECTION_INFO = 3,
+  INK_STRUCT_PEN = 4
 } InkStruct;
 
 /* The struct's size, then the offset of each field in declaration order,
@@ -300,7 +323,8 @@ static_assert(sizeof(InkPenSample) == 64);
 static_assert(offsetof(InkToolSettings, brush) == 0);
 static_assert(offsetof(InkToolSettings, rgb) == 4);
 static_assert(offsetof(InkToolSettings, size) == 8);
-static_assert(sizeof(InkToolSettings) == 12);
+static_assert(offsetof(InkToolSettings, opacity) == 12);
+static_assert(sizeof(InkToolSettings) == 16);
 
 /* Pointer-sized fields: 4 bytes on wasm32, 8 on arm64. */
 static_assert(offsetof(InkFile, path) == 0);
@@ -308,6 +332,11 @@ static_assert(offsetof(InkFile, bytes) == sizeof(void *));
 static_assert(offsetof(InkFile, size) == 2 * sizeof(void *));
 static_assert(offsetof(InkFile, kind) == 3 * sizeof(void *));
 static_assert(sizeof(InkFile) == 4 * sizeof(void *));
+
+static_assert(offsetof(InkPen, id) == 0);
+static_assert(offsetof(InkPen, name) == sizeof(void *));
+static_assert(offsetof(InkPen, tool) == 2 * sizeof(void *));
+static_assert(sizeof(InkPen) == 2 * sizeof(void *) + sizeof(InkToolSettings));
 
 static_assert(offsetof(InkSelectionInfo, count) == 0);
 static_assert(offsetof(InkSelectionInfo, page) == 4);

@@ -42,14 +42,15 @@ export const PEN_SAMPLE = {
   predicted: 58,
   reserved: 59,
 } as const;
-export const TOOL_SETTINGS = { byteLength: 12, brush: 0, rgb: 4, size: 8 } as const;
+export const TOOL_SETTINGS = { byteLength: 16, brush: 0, rgb: 4, size: 8, opacity: 12 } as const;
+export const INK_PEN = { byteLength: 24, id: 0, name: 4, tool: 8 } as const;
 export const INK_FILE = { byteLength: 16, path: 0, bytes: 4, size: 8, kind: 12 } as const;
 export const SELECTION_INFO = { byteLength: 40, count: 0, page: 4, x: 8, y: 16, width: 24, height: 32 } as const;
 export const FileKind = { write: 0, delete: 1 } as const;
 export const PageSize = { a4: 0, letter: 1, custom: 2 } as const;
 
 // InkStruct ids of ink_struct_layout.
-export const Struct = { penSample: 0, toolSettings: 1, file: 2, selectionInfo: 3 } as const;
+export const Struct = { penSample: 0, toolSettings: 1, file: 2, selectionInfo: 3, pen: 4 } as const;
 
 export interface PenSample {
   x: number;
@@ -77,6 +78,31 @@ export interface ToolSettings {
   brush: number;
   rgb: number;
   size: number;
+  // (0, 1]: the strokes' fill-opacity
+  opacity: number;
+}
+
+// A preset of Notes/.pens.json (docs/FORMAT.md, Other files).
+export interface Pen {
+  id: string;
+  name: string;
+  tool: ToolSettings;
+}
+
+function writeTool(view: DataView, at: number, tool: ToolSettings): void {
+  view.setUint32(at + TOOL_SETTINGS.brush, tool.brush, true);
+  view.setUint32(at + TOOL_SETTINGS.rgb, tool.rgb, true);
+  view.setFloat32(at + TOOL_SETTINGS.size, tool.size, true);
+  view.setFloat32(at + TOOL_SETTINGS.opacity, tool.opacity, true);
+}
+
+function readTool(view: DataView, at: number): ToolSettings {
+  return {
+    brush: view.getUint32(at + TOOL_SETTINGS.brush, true),
+    rgb: view.getUint32(at + TOOL_SETTINGS.rgb, true),
+    size: view.getFloat32(at + TOOL_SETTINGS.size, true),
+    opacity: view.getFloat32(at + TOOL_SETTINGS.opacity, true),
+  };
 }
 
 // The selection: how many elements, their page, and the selection rectangle
@@ -231,6 +257,69 @@ export class Engine {
       const n = view.getUint32(count, true);
       return Array.from({ length: n }, (_, i) => view.getUint32(out + 4 * i, true));
     });
+  }
+
+  // The bytes of the default Notes/.pens.json.
+  defaultPens(): Uint8Array<ArrayBuffer> {
+    return this.withScratch(8, (out) => {
+      this.check(this.module._ink_pens_default(out, out + 4));
+      const view = this.view();
+      const at = view.getUint32(out, true);
+      return this.heap().slice(at, at + view.getUint32(out + 4, true));
+    });
+  }
+
+  // The presets of a .pens.json. Throws EngineError with Status.parse when the
+  // file is not a pen list.
+  readPens(json: Uint8Array): Pen[] {
+    const bytes = this.copyIn(json);
+    try {
+      return this.withScratch(8, (out) => {
+        this.check(this.module._ink_pens_read(bytes, json.length, out, out + 4));
+        const view = this.view();
+        const pens = view.getUint32(out, true);
+        return Array.from({ length: view.getUint32(out + 4, true) }, (_, i) => {
+          const at = pens + i * INK_PEN.byteLength;
+          return {
+            id: this.readCString(view.getUint32(at + INK_PEN.id, true)),
+            name: this.readCString(view.getUint32(at + INK_PEN.name, true)),
+            tool: readTool(view, at + INK_PEN.tool),
+          };
+        });
+      });
+    } finally {
+      this.free(bytes);
+    }
+  }
+
+  // The .pens.json of `pens`.
+  writePens(pens: readonly Pen[]): Uint8Array<ArrayBuffer> {
+    const strings: number[] = [];
+    const cString = (text: string) => {
+      const bytes = encoder.encode(`${text}\0`);
+      strings.push(this.copyIn(bytes));
+      return strings[strings.length - 1];
+    };
+    const array = this.malloc(Math.max(pens.length, 1) * INK_PEN.byteLength);
+    try {
+      pens.forEach((pen, i) => {
+        const at = array + i * INK_PEN.byteLength;
+        const id = cString(pen.id), name = cString(pen.name);
+        const view = this.view();
+        view.setUint32(at + INK_PEN.id, id, true);
+        view.setUint32(at + INK_PEN.name, name, true);
+        writeTool(view, at + INK_PEN.tool, pen.tool);
+      });
+      return this.withScratch(8, (out) => {
+        this.check(this.module._ink_pens_write(array, pens.length, out, out + 4));
+        const view = this.view();
+        const at = view.getUint32(out, true);
+        return this.heap().slice(at, at + view.getUint32(out + 4, true));
+      });
+    } finally {
+      strings.forEach((s) => this.free(s));
+      this.free(array);
+    }
   }
 
   builtinTemplates(): string[] {
@@ -471,10 +560,7 @@ export class Canvas {
   setTool(tool: ToolSettings): void {
     const e = this.engine;
     e.withScratch(TOOL_SETTINGS.byteLength, (at) => {
-      const view = e.view();
-      view.setUint32(at + TOOL_SETTINGS.brush, tool.brush, true);
-      view.setUint32(at + TOOL_SETTINGS.rgb, tool.rgb, true);
-      view.setFloat32(at + TOOL_SETTINGS.size, tool.size, true);
+      writeTool(e.view(), at, tool);
       e.check(e.module._ink_canvas_set_tool(this.pointer, at));
     });
   }

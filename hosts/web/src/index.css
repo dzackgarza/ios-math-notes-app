@@ -1082,3 +1082,75 @@ button {
   color: var(--accent);
   font-weight: 600;
 }
+
+/* Pen editor (#25): a popover beside the selected pen */
+
+.pen-editor {
+  width: 15rem;
+  padding: 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-small);
+  background: var(--panel);
+  color: var(--text);
+  box-shadow: 0 8px 24px rgb(16 24 40 / 12%);
+  z-index: 10;
+}
+
+.pen-editor-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.pen-editor-title {
+  font-weight: 600;
+}
+
+.brush-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.hex-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.size-slider {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.slider-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.slider-track {
+  position: relative;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border);
+}
+
+.slider-fill {
+  position: absolute;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--accent);
+}
+
+.slider-thumb {
+  display: block;
+  top: -7px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--panel);
+  border: 2px solid var(--accent);
+  cursor: pointer;
+}

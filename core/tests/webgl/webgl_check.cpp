@@ -53,7 +53,7 @@ std::unique_ptr<Scene> MakeScene(std::optional<Document> document = std::nullopt
 }
 
 void SetTool(InkCanvas *canvas, InkBrush brush, float size) {
-  InkToolSettings tool{uint32_t(brush), 0x1A1A1A, size};
+  InkToolSettings tool{uint32_t(brush), 0x1A1A1A, size, 1};
   ink_canvas_set_tool(canvas, &tool);
 }
 

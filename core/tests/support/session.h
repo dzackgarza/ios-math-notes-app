@@ -32,8 +32,9 @@ struct Session {
   std::unique_ptr<InkCanvas> canvas;
 };
 
-inline void SetTool(InkCanvas *canvas, InkBrush brush, uint32_t rgb, float size) {
-  InkToolSettings tool{uint32_t(brush), rgb, size};
+inline void SetTool(InkCanvas *canvas, InkBrush brush, uint32_t rgb, float size,
+                    float opacity = 1) {
+  InkToolSettings tool{uint32_t(brush), rgb, size, opacity};
   ink_canvas_set_tool(canvas, &tool);
 }
 
