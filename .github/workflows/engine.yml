@@ -108,15 +108,14 @@ jobs:
 
       - uses: oven-sh/setup-bun@v2
 
-      - name: WebGL2 check in Chromium, Firefox and WebKit
+      - name: WebGL2 check in Chromium
         working-directory: core/tests/webgl
         env:
           WEBGL_CHECK_DIR: ${{ github.workspace }}/core/build/wasm/tests/webgl
         run: |
           bun install --frozen-lockfile
-          bunx playwright install --with-deps chromium firefox webkit
-          sudo apt-get install -y xvfb libgl1-mesa-dri
-          xvfb-run -a bunx playwright test -c playwright.config.mjs --project chromium --project firefox --project webkit
+          bunx playwright install --with-deps chromium
+          bunx playwright test -c playwright.config.mjs --project chromium
 
       # Node 24 runs the .ts test files directly (type stripping).
       - uses: actions/setup-node@v7

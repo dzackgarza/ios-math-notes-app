@@ -264,9 +264,7 @@ a notebook directory (send, archive, download).
 | Host | Access to the notebook root |
 | --- | --- |
 | iPad | Files folder picker (`UIDocumentPickerViewController` for folders). A File Provider works when it supports folder picking; Dropbox has since May 2024. The app keeps a `.minimalBookmark` bookmark, created while access is started, and refreshes it when stale. Reads and writes go through `NSFileCoordinator`; a page is written with `Data.write(options: .atomic)`. One `NSFilePresenter` on the root reports external changes. |
-| Web, Chromium | `showDirectoryPicker({mode: "readwrite"})`; the directory handle is kept in IndexedDB and re-permitted on launch through a "Reconnect folder" button. Writes use `createWritable({mode: "exclusive"})`. Scans skip `*.crswap` files. Renaming or moving a directory copies it, then removes the original: the API has no directory move. |
-| Web, Firefox and Safari | A WebDAV server on localhost that serves the root: `rclone serve webdav ~/Notes --addr 127.0.0.1:31415 --allow-origin http://localhost --dir-cache-time 0s`. A write is a PUT to a temporary name in the same directory, then a MOVE over the target. WebDAV has no change events, so the app rescans on focus. |
-| Web, read-only | A notebook directory on any static web server opens by URL of its `notebook.json`. |
+| Web, Chrome | `showDirectoryPicker({mode: "readwrite"})`; the directory handle is kept in IndexedDB and re-permitted on launch through a "Reconnect folder" button. Writes use `createWritable({mode: "exclusive"})`. Scans skip `*.crswap` files. Renaming or moving a directory copies it, then removes the original: the API has no directory move. |
 
 OPFS and IndexedDB hold only caches, never notes.
 

@@ -15,7 +15,7 @@ setup:
     {{emsdk}}/emsdk install 4.0.7 && {{emsdk}}/emsdk activate 4.0.7
     [ -d {{vcpkg}} ] || git clone -q https://github.com/microsoft/vcpkg {{vcpkg}}
     {{vcpkg}}/bootstrap-vcpkg.sh -disableMetrics
-    cd core/tests/webgl && bun install --frozen-lockfile && bunx playwright install chromium chromium-headless-shell firefox
+    cd core/tests/webgl && bun install --frozen-lockfile && bunx playwright install chromium chromium-headless-shell
 
 engine-wasm:
     cmake -S core -B {{build}} -G Ninja -DCMAKE_BUILD_TYPE=Release \
@@ -27,7 +27,7 @@ engine-wasm:
 engine-test: engine-wasm
     cd {{build}} && ctest --output-on-failure
     qpdf --check {{build}}/tests/a4.pdf
-    cd core/tests/webgl && bun install --frozen-lockfile && WEBGL_CHECK_DIR=$PWD/../../build/wasm/tests/webgl bunx playwright test -c playwright.config.mjs --project chromium --project firefox
+    cd core/tests/webgl && bun install --frozen-lockfile && WEBGL_CHECK_DIR=$PWD/../../build/wasm/tests/webgl bunx playwright test -c playwright.config.mjs --project chromium
 
 test-commit:
     uvx yamllint -s -d '{extends: relaxed, rules: {line-length: disable}}' project.yml .github/workflows/ios.yml .github/workflows/engine.yml .github/workflows/web.yml
@@ -80,13 +80,9 @@ web-build: engine-module
 web-deploy: web-build
     rsync -a --delete hosts/web/dist/ /var/www/math-notes/
 
-# Vitest Browser Mode in Chromium and Firefox, WebKit in the Playwright container (its Linux
-# build needs Ubuntu libraries), then Playwright against the deployment.
+# Vitest Browser Mode in Chromium, then Playwright against the deployment.
 web-test: web-deploy
-    cd hosts/web && bunx vitest run --project chromium --project firefox
-    docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -e PLAYWRIGHT_BROWSERS_PATH=/ms-playwright \
-      -v "$PWD/hosts/web":/web -w /web mcr.microsoft.com/playwright:v1.63.0-noble \
-      node node_modules/vitest/vitest.mjs run --project webkit
+    cd hosts/web && bunx vitest run
     cd hosts/web && bunx playwright test
 
 # Stylus Labs Write fork with the replay harness (dzackgarza/Write, branch replay-harness).
