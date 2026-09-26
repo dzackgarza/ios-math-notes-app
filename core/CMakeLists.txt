@@ -77,6 +77,8 @@ if(EMSCRIPTEN)
     _ink_document_create_from_template
     _ink_canvas_create_webgl _ink_canvas_set_view _ink_canvas_set_surface_size
     _ink_canvas_set_tool _ink_canvas_set_eraser _ink_canvas_set_utc_offset _ink_canvas_free _ink_canvas_page_at
+    _ink_canvas_set_selector _ink_canvas_selection _ink_canvas_select_all _ink_canvas_clear_selection
+    _ink_canvas_delete_selection _ink_canvas_copy_selection _ink_canvas_paste _ink_canvas_duplicate_selection
     _ink_input _ink_input_update _ink_render _ink_undo _ink_redo _ink_document_page_rect _ink_struct_layout
     _malloc _free)
   list(JOIN INK_EXPORTS "," INK_EXPORTS_FLAG)

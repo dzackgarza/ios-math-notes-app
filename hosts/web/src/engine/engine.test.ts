@@ -8,6 +8,7 @@ import {
   EngineError,
   INK_FILE,
   PEN_SAMPLE,
+  SELECTION_INFO,
   Status,
   Struct,
   TOOL_SETTINGS,
@@ -70,6 +71,7 @@ test("the wrapper's struct layouts are the ones C exports", () => {
   assert.deepEqual(engine.structLayout(Struct.penSample), offsets(PEN_SAMPLE));
   assert.deepEqual(engine.structLayout(Struct.toolSettings), offsets(TOOL_SETTINGS));
   assert.deepEqual(engine.structLayout(Struct.file), offsets(INK_FILE));
+  assert.deepEqual(engine.structLayout(Struct.selectionInfo), offsets(SELECTION_INFO));
 });
 
 test("bad page bytes give a parse error and its message", () => {
