@@ -27,47 +27,6 @@ SkColor ToSkColor(Rgb rgb, double opacity = 1) {
   return SkColorSetARGB(uint8_t(std::lround(opacity * 255)), rgb.r, rgb.g, rgb.b);
 }
 
-// Open polylines: ruling lines and arrow shapes.
-SkPath OpenPath(const std::vector<Polyline> &polylines) {
-  SkPathBuilder builder;
-  for (const Polyline &line : polylines) {
-    if (line.empty()) continue;
-    builder.moveTo(float(line[0].x), float(line[0].y));
-    for (size_t i = 1; i < line.size(); ++i) builder.lineTo(float(line[i].x), float(line[i].y));
-  }
-  return builder.detach();
-}
-
-SkPath ShapePath(const Shape &shape) {
-  auto point = [&](size_t i) {
-    return i < shape.points.size() ? SkPoint::Make(float(shape.points[i].x), float(shape.points[i].y))
-                                   : SkPoint::Make(0, 0);
-  };
-  SkPathBuilder builder;
-  switch (shape.kind) {
-    case ShapeKind::kLine:
-      builder.moveTo(point(0)).lineTo(point(1));
-      break;
-    case ShapeKind::kPolygon:
-      for (size_t i = 0; i < shape.points.size(); ++i) {
-        i == 0 ? builder.moveTo(point(i)) : builder.lineTo(point(i));
-      }
-      builder.close();
-      break;
-    case ShapeKind::kRect:
-      builder.addRect(SkRect::MakeXYWH(point(0).x(), point(0).y(), point(1).x(), point(1).y()));
-      break;
-    case ShapeKind::kEllipse: {
-      SkPoint c = point(0), r = point(1);
-      builder.addOval(SkRect::MakeLTRB(c.x() - r.x(), c.y() - r.y(), c.x() + r.x(), c.y() + r.y()));
-      break;
-    }
-    case ShapeKind::kPath:
-      return OpenPath(shape.path);
-  }
-  return builder.detach();
-}
-
 // SVG stroke defaults: butt caps, miter joins, miter limit 4.
 SkPaint StrokePaint(Rgb color, double width) {
   SkPaint paint(SkColor4f::FromColor(ToSkColor(color)));

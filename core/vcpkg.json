@@ -4,6 +4,7 @@
   "builtin-baseline": "10541e317a660f4165ba4ac2851ab54a8d4577b1",
   "dependencies": [
     "abseil",
+    "boost-icl",
     "fast-float",
     "immer",
     "libtess2",

@@ -9,7 +9,11 @@
 
 #include "ink/brush/stock_brushes.h"
 #include "ink/color/color.h"
+#include "ink/geometry/affine_transform.h"
+#include "ink/geometry/intersects.h"
+#include "ink/geometry/segment.h"
 #include "ink/strokes/stroke.h"
+#include "geometry/hit_shapes.h"
 #include "layout/layout.h"
 #include "strokes/clip.h"
 #include "strokes/outline.h"
@@ -73,6 +77,53 @@ bool ReplaceStroke(Elements &elements, const std::string &id, const Stroke &repl
   return false;
 }
 
+
+constexpr uint32_t kEraserButtons = 32;  // PointerEvent.buttons bit of a pen's eraser end
+
+// The id of a stroke or shape, the elements the erasers act on; null otherwise.
+const std::string *ErasableId(const Element &element) {
+  if (const auto *s = std::get_if<Stroke>(&element.value)) return &s->id;
+  if (const auto *s = std::get_if<Shape>(&element.value)) return &s->id;
+  return nullptr;
+}
+
+const Transform &ElementTransform(const Element &element) {
+  if (const auto *s = std::get_if<Shape>(&element.value)) return s->transform;
+  return std::get<Stroke>(element.value).transform;
+}
+
+// Whether the box of the segment from-to, padded by `pad`, meets the page-space
+// box of an element's ink: a stroke's outline, a shape's geometry and half its
+// stroke width.
+bool NearInk(const Element &element, Point from, Point to, double pad) {
+  const Transform &m = ElementTransform(element);
+  double left = 1e300, top = 1e300, right = -1e300, bottom = -1e300;
+  auto add = [&](Point p) {
+    double x = m.a * p.x + m.c * p.y + m.e, y = m.b * p.x + m.d * p.y + m.f;
+    left = std::min(left, x), right = std::max(right, x);
+    top = std::min(top, y), bottom = std::max(bottom, y);
+  };
+  if (const auto *stroke = std::get_if<Stroke>(&element.value)) {
+    for (const Polyline &line : stroke->outline) for (Point p : line) add(p);
+  } else {
+    const Shape &shape = std::get<Shape>(element.value);
+    pad += shape.stroke_width / 2;
+    const std::vector<Point> &p = shape.points;
+    if (shape.kind == ShapeKind::kEllipse && p.size() == 2) {  // center and radii
+      add({p[0].x - p[1].x, p[0].y - p[1].y});
+      add({p[0].x + p[1].x, p[0].y + p[1].y});
+    } else if (shape.kind == ShapeKind::kRect && p.size() == 2) {  // origin and size
+      add(p[0]);
+      add({p[0].x + p[1].x, p[0].y + p[1].y});
+    } else {
+      for (Point q : p) add(q);
+      for (const Polyline &line : shape.path) for (Point q : line) add(q);
+    }
+  }
+  return std::max(from.x, to.x) >= left - pad && std::min(from.x, to.x) <= right + pad &&
+         std::max(from.y, to.y) >= top - pad && std::min(from.y, to.y) <= bottom + pad;
+}
+
 }  // namespace
 
 const char *BrushName(InkBrush brush) {
@@ -81,6 +132,12 @@ const char *BrushName(InkBrush brush) {
     case INK_BRUSH_HIGHLIGHTER: return "highlighter";
     default: return "pressure-pen";
   }
+}
+
+InkBrush BrushFromName(std::string_view name) {
+  if (name == "marker") return INK_BRUSH_MARKER;
+  if (name == "highlighter") return INK_BRUSH_HIGHLIGHTER;
+  return INK_BRUSH_PRESSURE_PEN;
 }
 
 ink::Brush MakeBrush(const Pen &pen) {
@@ -134,6 +191,17 @@ ink::StrokeInputBatch Editor::Batch(const std::vector<InkPenSample> &samples, do
 }
 
 void Editor::Input(const InkPenSample *samples, size_t count) {
+  // A batch that begins with eraser input starts an erase gesture, which takes
+  // the samples until its end.
+  bool erasing = erase_.has_value();
+  for (size_t i = 0; i < count && !erasing && !live_; ++i) {
+    const InkPenSample &s = samples[i];
+    if (s.tool == INK_TOOL_TOUCH || s.phase == INK_PHASE_HOVER) continue;
+    erasing = s.phase == INK_PHASE_BEGIN && Erases(s);
+    break;
+  }
+  if (erasing) return EraseInput(samples, count);
+
   std::vector<InkPenSample> real, predicted;
   bool ended = false, cancelled = false;
   for (size_t i = 0; i < count; ++i) {
@@ -220,6 +288,176 @@ void Editor::Commit() {
   }
   next.pages = next.pages.set(page_, immer::box<Page>(std::move(page)));
   history_->Push(std::move(next));
+}
+
+bool Editor::Erases(const InkPenSample &s) const {
+  if (s.tool == INK_TOOL_TOUCH) return false;
+  return s.tool == INK_TOOL_ERASER || (s.buttons & kEraserButtons) || eraser_active_;
+}
+
+void Editor::EraseInput(const InkPenSample *samples, size_t count) {
+  for (size_t i = 0; i < count; ++i) {
+    const InkPenSample &s = samples[i];
+    if (s.tool == INK_TOOL_TOUCH || s.phase == INK_PHASE_HOVER || s.predicted) continue;
+    if (s.phase == INK_PHASE_BEGIN) {
+      Point at = ToContent(view_, s.x, s.y);
+      const std::vector<PagePlacement> layout = LayoutPages(document());
+      const PagePlacement *placement = PageAt(layout, at.y);
+      if (!placement) continue;
+      double scale = std::sqrt(std::abs(view_.a * view_.d - view_.b * view_.c));
+      erase_.emplace(EraseGesture{.kind = eraser_kind_,
+                                  .tool = InkTool(s.tool),
+                                  .page = placement->page,
+                                  .origin = {placement->x, placement->y},
+                                  .last = {at.x - placement->x, at.y - placement->y},
+                                  .radius = kEraserRadius / scale,
+                                  .time = IsoTime(s.time + utc_offset_ms_),
+                                  .shown = document()});
+      EraseAlong(erase_->last, erase_->last);
+      continue;
+    }
+    if (!erase_ || s.tool != erase_->tool) continue;
+    if (s.phase == INK_PHASE_CANCEL) {
+      erase_.reset();
+      return;
+    }
+    InkPenSample page = ToPage(s, erase_->origin);
+    Point at{page.x, page.y};
+    EraseAlong(erase_->last, at);
+    erase_->last = at;
+    if (s.phase == INK_PHASE_END) {
+      CommitErase();
+      return;
+    }
+  }
+}
+
+const std::vector<ink::Stroke> &Editor::HitStrokes(const std::string &id, const Element &element) {
+  auto [it, added] = erase_->meshes.try_emplace(id);
+  if (!added) return it->second;
+  if (const auto *stroke = std::get_if<Stroke>(&element.value)) {
+    it->second.push_back(InkStroke(*stroke));
+  } else if (const auto *shape = std::get_if<Shape>(&element.value)) {
+    for (const Stroke &s : ShapeStrokes(*shape, erase_->time)) it->second.push_back(InkStroke(s));
+  }
+  return it->second;
+}
+
+void Editor::EraseAlong(Point from, Point to) {
+  EraseGesture &g = *erase_;
+  const Document &doc = document();
+  const Page &page = *doc.pages[g.page];
+  ink::Quad quad =
+      EraserQuad({{float(from.x), float(from.y)}, {float(to.x), float(to.y)}}, float(g.radius));
+  bool changed = false;
+  for (size_t l = 0; l < page.layers.size(); ++l) {
+    const LayerContent &layer = page.layers[l];
+    auto meta = std::find_if(doc.notebook.layers.begin(), doc.notebook.layers.end(),
+                             [&](const Layer &m) { return m.id == layer.layer_id; });
+    if (meta != doc.notebook.layers.end() && (meta->hidden || meta->locked)) continue;
+    for (const immer::box<Element> &box : layer.elements) {
+      const Element &element = *box;
+      const std::string *id = ErasableId(element);
+      if (!id || g.hit.contains(*id) || !NearInk(element, from, to, g.radius)) continue;
+
+      if (g.kind == INK_ERASER_STROKE) {
+        // google/ink Intersects(PartitionedMesh, AffineTransform, Quad)
+        // (ink/geometry/intersects.h:35-88), as in Google's Cahier sample
+        // DrawingCanvasViewModel.kt; the element transform maps the mesh to the page.
+        const Transform &m = ElementTransform(element);
+        ink::AffineTransform to_page(float(m.a), float(m.c), float(m.e), float(m.b), float(m.d),
+                                     float(m.f));
+        for (const ink::Stroke &s : HitStrokes(*id, element)) {
+          if (!ink::Intersects(s.GetShape(), to_page, quad)) continue;
+          g.hit.insert(*id);
+          changed = true;
+          break;
+        }
+        continue;
+      }
+
+      auto found = g.free.find(*id);
+      if (found == g.free.end()) {
+        // A shape becomes pen strokes along its geometry, which are then cut.
+        FreeErased candidate;
+        if (const auto *stroke = std::get_if<Stroke>(&element.value)) {
+          candidate.strokes = {*stroke};
+        } else {
+          candidate.strokes = ShapeStrokes(std::get<Shape>(element.value), g.time);
+        }
+        candidate.erased.resize(candidate.strokes.size());
+        found = g.free.emplace(*id, std::move(candidate)).first;
+      }
+      FreeErased &f = found->second;
+      for (size_t k = 0; k < f.strokes.size(); ++k) {
+        ErasedSections before = f.erased[k];
+        EraseCapsule(PagePath(f.strokes[k]), from, to, g.radius, f.erased[k]);
+        f.stale = f.stale || f.erased[k] != before;
+      }
+      if (f.stale) {
+        changed = true;
+      } else if (std::all_of(f.erased.begin(), f.erased.end(), [](const auto &e) { return e.empty(); })) {
+        g.free.erase(found);
+      }
+    }
+  }
+  if (changed) UpdateShown();
+}
+
+Page Editor::ErasedPage(IdGenerator *ids) const {
+  const EraseGesture &g = *erase_;
+  Page page = *document().pages[g.page];
+  for (LayerContent &layer : page.layers) {
+    Elements kept;
+    for (const immer::box<Element> &box : layer.elements) {
+      const std::string *id = ErasableId(*box);
+      if (id && g.hit.contains(*id)) continue;
+      auto found = id ? g.free.find(*id) : g.free.end();
+      if (found == g.free.end()) {
+        kept = std::move(kept).push_back(box);
+        continue;
+      }
+      // The pieces take the original's z-position (Write element.cpp:396-446
+      // getEraseSubPaths, scribblearea.cpp:1989-2017).
+      for (Stroke piece : found->second.pieces) {
+        if (ids) piece.id = ids->StrokeId();
+        kept = std::move(kept).push_back(immer::box<Element>(Element{std::move(piece)}));
+      }
+    }
+    layer.elements = std::move(kept);
+  }
+  return page;
+}
+
+void Editor::UpdateShown() {
+  // Each remaining section becomes a stroke with the same brush and time
+  // (Xournal++ ErasableStroke::getStrokes, Stroke::cloneSection).
+  for (auto &[id, f] : erase_->free) {
+    if (!f.stale) continue;
+    f.stale = false;
+    f.pieces.clear();
+    for (size_t k = 0; k < f.strokes.size(); ++k) {
+      const Stroke &base = f.strokes[k];
+      for (auto [from, to] : RemainingSections(base.samples.size(), f.erased[k])) {
+        Stroke piece = base;
+        piece.samples = SectionSamples(base.samples, from, to);
+        RebuildOutline(piece);
+        f.pieces.push_back(std::move(piece));
+      }
+    }
+  }
+  Document shown = document();
+  shown.pages = shown.pages.set(erase_->page, immer::box<Page>(ErasedPage(nullptr)));
+  erase_->shown = std::move(shown);
+}
+
+void Editor::CommitErase() {
+  if (!erase_->hit.empty() || !erase_->free.empty()) {
+    Document next = document();
+    next.pages = next.pages.set(erase_->page, immer::box<Page>(ErasedPage(&history_->ids())));
+    history_->Push(std::move(next));
+  }
+  erase_.reset();
 }
 
 Stroke Editor::MakeElement(const std::string &id, const ink::Stroke &ink_stroke, const Pen &pen,

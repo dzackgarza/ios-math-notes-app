@@ -21,4 +21,10 @@ std::vector<Polyline> LiveOutline(const ink::InProgressStroke &stroke);
 
 SkPath OutlinePath(const std::vector<Polyline> &outline);
 
+// Open polylines: ruling lines and arrow shapes.
+SkPath OpenPath(const std::vector<Polyline> &polylines);
+
+// A shape element's geometry in its local coordinates, as SVG draws it.
+SkPath ShapePath(const Shape &shape);
+
 }  // namespace ink_engine

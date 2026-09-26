@@ -26,15 +26,23 @@ bool CheckEdge(double p, double q, double &t1, double &t2) {
   return true;
 }
 
-// The parameter interval of segment a-b inside `rect`, if any.
 bool ClipSegment(const InkPenSample &a, const InkPenSample &b, const Rect &rect, double &t1,
                  double &t2) {
+  return ClipParameters(a.x, a.y, b.x, b.y, rect, t1, t2);
+}
+
+}  // namespace
+
+bool ClipParameters(double ax, double ay, double bx, double by, const Rect &rect, double &t1,
+                    double &t2) {
   t1 = 0;
   t2 = 1;
-  double dx = b.x - a.x, dy = b.y - a.y;
-  return CheckEdge(-dx, a.x - rect.left, t1, t2) && CheckEdge(dx, rect.right - a.x, t1, t2) &&
-         CheckEdge(-dy, a.y - rect.top, t1, t2) && CheckEdge(dy, rect.bottom - a.y, t1, t2);
+  double dx = bx - ax, dy = by - ay;
+  return CheckEdge(-dx, ax - rect.left, t1, t2) && CheckEdge(dx, rect.right - ax, t1, t2) &&
+         CheckEdge(-dy, ay - rect.top, t1, t2) && CheckEdge(dy, rect.bottom - ay, t1, t2);
 }
+
+namespace {
 
 float Lerp(float a, float b, double t) { return float(a + (b - a) * t); }
 

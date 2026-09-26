@@ -180,6 +180,15 @@ InkStatus ink_canvas_set_view(InkCanvas *canvas, double a, double b, double c, d
 InkStatus ink_canvas_set_surface_size(InkCanvas *canvas, int32_t width, int32_t height,
                                       float pixel_ratio);
 InkStatus ink_canvas_set_tool(InkCanvas *canvas, const InkToolSettings *tool);
+typedef enum InkEraser {
+  INK_ERASER_STROKE = 0, /* deletes each stroke or shape it touches */
+  INK_ERASER_FREE = 1    /* removes only the touched parts, splitting strokes */
+} InkEraser;
+
+/* The eraser that pen eraser input (INK_TOOL_ERASER, or `buttons` bit 32)
+   uses. With `active` 1 the eraser tool is selected: pen and mouse input
+   erase too. The radius is 7 view units. One gesture is one history step. */
+InkStatus ink_canvas_set_eraser(InkCanvas *canvas, InkEraser kind, int32_t active);
 /* UTC ms since the Unix epoch minus the host's sample clock, for mn:time. */
 InkStatus ink_canvas_set_utc_offset(InkCanvas *canvas, double utc_minus_host_ms);
 InkStatus ink_canvas_free(InkCanvas *canvas);

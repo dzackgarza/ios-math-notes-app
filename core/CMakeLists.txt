@@ -21,6 +21,7 @@ find_package(pugixml CONFIG REQUIRED)
 find_package(FastFloat CONFIG REQUIRED)
 find_package(Immer CONFIG REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
+find_package(boost_icl CONFIG REQUIRED)
 include(third_party/ink.cmake)
 
 add_library(ink STATIC
@@ -34,13 +35,14 @@ add_library(ink STATIC
   src/strokes/clip.cpp
   src/strokes/outline.cpp
   src/editor/editor.cpp
+  src/editor/erase.cpp
   src/editor/history.cpp
   src/layout/layout.cpp
   src/render/renderer.cpp)
 target_include_directories(ink PUBLIC include src)
 target_compile_definitions(ink PRIVATE INK_VERSION="${PROJECT_VERSION}")
 target_link_libraries(ink PUBLIC Skia::skia inkcore pugixml::pugixml FastFloat::fast_float immer
-  nlohmann_json::nlohmann_json)
+  nlohmann_json::nlohmann_json Boost::icl)
 
 if(EMSCRIPTEN)
   target_sources(ink PRIVATE src/render/webgl_surface.cpp)
@@ -71,7 +73,7 @@ if(EMSCRIPTEN)
     _ink_builtin_template_count _ink_builtin_template_name _ink_builtin_template_create
     _ink_document_create_from_template
     _ink_canvas_create_webgl _ink_canvas_set_view _ink_canvas_set_surface_size
-    _ink_canvas_set_tool _ink_canvas_set_utc_offset _ink_canvas_free _ink_canvas_page_at
+    _ink_canvas_set_tool _ink_canvas_set_eraser _ink_canvas_set_utc_offset _ink_canvas_free _ink_canvas_page_at
     _ink_input _ink_input_update _ink_render _ink_undo _ink_redo _ink_document_page_rect _ink_struct_layout
     _malloc _free)
   list(JOIN INK_EXPORTS "," INK_EXPORTS_FLAG)

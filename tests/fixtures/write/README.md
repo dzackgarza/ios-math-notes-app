@@ -28,6 +28,7 @@ One directory per case:
 | `insspace-negative-erase` | Ruled insert space dragged to the left: the strokes in the swept range are deleted, and the rest of the line moves left. |
 | `stroke-erase` | Stroke erase (mode 14) over five strokes drawn on a blank page: two gestures delete three strokes, one passes beside a stroke. |
 | `free-erase` | Free erase (mode 16) over five strokes: one cut, two cuts in one gesture, a trimmed end, an untouched stroke, and a stroke erased whole. |
+| `free-erase-document` | Free erase over the three strokes of `input.html`: a wave cut once, a line cut once, an L that loses its vertical arm. |
 
 The upstream cases also cover free erase (`test11`, `test12`), stroke erase
 (`test8`, `test15`), lasso select (`test6`), ruled select (`test6`, `test8`),
