@@ -53,9 +53,10 @@ class LassoPath {
   size_t simplify_start_ = 0;
 };
 
-// An element's ink extent in page coordinates: a stroke's outline, a shape's
-// geometry widened by half its stroke width, an image's box, a group's
-// children. Empty (left > right) for an empty group.
+// An element's bounds in page coordinates, as Write computes them: a
+// stroke's centerline widened by half its size, a shape's geometry widened by
+// half its stroke width, an image's box, a group's children. Empty
+// (left > right) for an empty group.
 Rect ElementBounds(const Element &element);
 
 Rect Union(const Rect &a, const Rect &b);

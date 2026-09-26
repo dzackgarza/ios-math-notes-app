@@ -1,5 +1,5 @@
-# Rectangle select (mode 18), resize, select all (cmd 102), scale through a negative factor, and
-# rotate, after upstream test12 and test14. The scale drags hold the pen button (modifier 2): Write
+# Rectangle select (mode 18), resize, select all (cmd 102), rotate, and scale through a negative
+# factor, after upstream test12 and test14. The scale drags hold the pen button (modifier 2): Write
 # then scales stroke widths with the ink, as the engine does.
 # Four strokes: the rectangle holds the first two; the third crosses its right edge.
 ie 200.0 180.0 0.5 2 1 0 1000
@@ -70,17 +70,17 @@ ie 378.3 241.9 0.5 2 0 2 4070
 ie 390.0 250.0 0.5 2 0 2 4080
 ie 0 0 0 2 -1 2 4090
 cmd 102
-# the top-left handle, dragged past the right edge: a negative x scale
-ie 199.0 148.5 0.5 2 1 2 4590
-ie 244.2 148.5 0.5 2 0 2 4600
-ie 289.3 148.5 0.5 2 0 2 4610
-ie 334.5 148.5 0.5 2 0 2 4620
-ie 379.7 148.5 0.5 2 0 2 4630
-ie 424.8 148.5 0.5 2 0 2 4640
-ie 470.0 148.5 0.5 2 0 2 4650
-ie 0 0 0 2 -1 2 4660
 # the rotate handle, above the middle of the top edge
-ie 435.8 124.5 0.5 2 1 0 5160
-ie 460.8 144.5 0.5 2 0 0 5170
-ie 490.8 174.5 0.5 2 0 0 5180
-ie 0 0 0 2 -1 0 5190
+ie 300.2 124.5 0.5 2 1 0 4590
+ie 325.2 144.5 0.5 2 0 0 4600
+ie 355.2 174.5 0.5 2 0 0 4610
+ie 0 0 0 2 -1 0 4620
+# the top-left handle, dragged past the right edge: a negative x scale
+ie 206.4 115.6 0.5 2 1 2 5120
+ie 247.0 115.6 0.5 2 0 2 5130
+ie 287.6 115.6 0.5 2 0 2 5140
+ie 328.1 115.6 0.5 2 0 2 5150
+ie 368.7 115.6 0.5 2 0 2 5160
+ie 409.3 115.6 0.5 2 0 2 5170
+ie 449.8 115.6 0.5 2 0 2 5180
+ie 0 0 0 2 -1 2 5190

@@ -117,8 +117,16 @@ Rect ElementBounds(const Element &element) {
   }
   const Transform &m = LocalTransform(element);
   if (const auto *stroke = std::get_if<Stroke>(&element.value)) {
-    for (const Polyline &line : stroke->outline) {
-      for (Point p : line) Add(bounds, Apply(m, p));
+    // Write SvgPainter::_bounds(const SvgPath *) (usvg/svgpainter.cpp:626-646):
+    // the transformed centerline's box, padded by half the width times the
+    // transform's average scale (ulib/geom.cpp:249-252 Transform2D::avgScale).
+    // The centerline is the samples, which google/ink's smoothing keeps the
+    // outline within.
+    for (const Sample &s : stroke->samples) Add(bounds, Apply(m, {s.x, s.y}));
+    double scale = std::sqrt(std::hypot(m.a, m.c) * std::hypot(m.b, m.d));
+    double half = stroke->size / 2 * scale;
+    if (!IsEmpty(bounds)) {
+      bounds = {bounds.left - half, bounds.top - half, bounds.right + half, bounds.bottom + half};
     }
   } else if (const auto *shape = std::get_if<Shape>(&element.value)) {
     SkMatrix to_page = SkMatrix::MakeAll(float(m.a), float(m.c), float(m.e), float(m.b),

@@ -18,24 +18,27 @@ namespace ink_test {
 inline constexpr double kWritePt = 0.48;
 
 struct WriteEvent {
-  enum Kind { kInput, kMode } kind = kInput;
+  enum Kind { kInput, kMode, kCommand } kind = kInput;
   double x = 0, y = 0, pressure = 0, time = 0;  // ie: page units, ms
   int ev = 0;                                   // ie: 1 press, 0 move, -1 release
   int mode = 0;                                 // mode: scribblemode.h number
+  int command = 0;                              // cmd: scribblemode.h ID_* number
 };
 
-// The `ie` and `mode` lines of trace.txt. `view 0 0 0` and `screen` only set
+// The `ie`, `mode` and `cmd` lines of trace.txt. `view 0 0 0` and `screen` only set
 // up Write's view; any other command is an error, since replaying it is the
 // job of a later unit.
 std::vector<WriteEvent> ReadWriteTrace(const std::string &path);
 
 struct WriteElement {
   int id = 0;
+  ink_engine::Transform transform;  // translation converted to points
   std::vector<std::vector<ink_engine::Point>> pen_points;  // pt, page coordinates
 };
 
 struct WriteExpected {
   std::vector<WriteElement> elements;  // page 0, document order
+  std::set<int> selected;
   std::set<int> deleted;
 };
 
@@ -55,8 +58,10 @@ ink_engine::Document WithStrokes(ink_engine::Document document,
                                  const std::vector<std::vector<ink_engine::Point>> &lines);
 
 // Replays a trace on page 0 at zoom 1: view units are Write units. Modes 14
-// and 16 turn on the stroke and free eraser for the next gesture only (Write
-// modes other than 12 last one gesture). Returns the ids of the strokes each
+// and 16 turn on the stroke and free eraser, 18 and 20 the rectangle and
+// lasso selector, for the next gesture only (Write modes other than 12 last
+// one gesture). Commands: 100 undo, 101 redo, 102 select all, 123 duplicate.
+// The pen button modifier is not replayed. Returns the ids of the strokes each
 // drawing gesture committed, in order.
 std::vector<std::string> ReplayWriteTrace(InkCanvas *canvas, const std::vector<WriteEvent> &trace);
 
