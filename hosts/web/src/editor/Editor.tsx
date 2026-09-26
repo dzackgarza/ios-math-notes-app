@@ -1,10 +1,10 @@
 import { Button } from "@kobalte/core/button";
 import { DropdownMenu } from "@kobalte/core/dropdown-menu";
 import { ToggleGroup } from "@kobalte/core/toggle-group";
-import { ChevronDown, ChevronLeft, ChevronRight, Ellipsis, Grip, Highlighter, PenLine, Plus, Redo2, Undo2, X } from "lucide-solid";
-import { For, createEffect, createResource, createSignal, onCleanup, onMount } from "solid-js";
+import { ChevronDown, ChevronLeft, ChevronRight, Ellipsis, Eraser as EraserIcon, Grip, Highlighter, PenLine, Plus, Redo2, Undo2, X } from "lucide-solid";
+import { For, Show, createEffect, createResource, createSignal, onCleanup, onMount } from "solid-js";
 
-import { Brush, PageSize, type Canvas } from "../engine/engine.ts";
+import { Brush, Eraser, PageSize, type Canvas } from "../engine/engine.ts";
 import { ViewController, type View } from "../input/gestures.ts";
 import { browserEngine, capabilities, penSamples } from "../input/pointer.ts";
 import { listTemplates } from "../storage/folder.ts";
@@ -22,6 +22,11 @@ const PENS = {
   highlighter: { label: "Highlighter", brush: Brush.highlighter, size: 8, rgb: 0xf5d547 },
 } as const;
 type PenId = keyof typeof PENS;
+type ToolId = PenId | "eraser";
+
+// The eraser's two kinds (#23); the pen's eraser end uses the selected one.
+const ERASERS = { stroke: { label: "Whole stroke", kind: Eraser.stroke }, free: { label: "Partial", kind: Eraser.free } } as const;
+type EraserId = keyof typeof ERASERS;
 
 // The 15 swatches of the mockup's palette, three per row.
 export const PALETTE = [
@@ -56,7 +61,14 @@ export function Editor(props: {
   const { document: doc, saver, root } = props.notebook;
   const [templates] = createResource(() => listTemplates(root));
   const [template, setTemplate] = createSignal(props.notebook.template);
+  const [tool, setTool] = createSignal<ToolId>("pen");
+  // The pen the palette colors: the selected pen, or the last one before the eraser.
   const [pen, setPen] = createSignal<PenId>("pen");
+  const [eraser, setEraser] = createSignal<EraserId>("stroke");
+  const selectTool = (id: ToolId) => {
+    setTool(id);
+    if (id !== "eraser") setPen(id);
+  };
   const [colors, setColors] = createSignal<Record<PenId, number>>({ pen: PENS.pen.rgb, highlighter: PENS.highlighter.rgb });
   const [view, setView] = createSignal<View>({ scale: 1, x: 0, y: 0 });
   const [pages, setPages] = createSignal(doc.pageCount());
@@ -210,6 +222,7 @@ export function Editor(props: {
       const { brush, size } = PENS[pen()];
       canvas?.setTool({ brush, rgb: colors()[pen()], size });
     });
+    createEffect(() => canvas?.setEraser(ERASERS[eraser()].kind, tool() === "eraser"));
     const observer = new ResizeObserver(resize);
     observer.observe(area);
     resize();
@@ -318,7 +331,7 @@ export function Editor(props: {
       </header>
       <div class="editor-body">
         <aside class="tool-rail" aria-label="Tools">
-          <ToggleGroup class="tools" value={pen()} onChange={(v) => v && setPen(v as PenId)} aria-label="Pens">
+          <ToggleGroup class="tools" value={tool()} onChange={(v) => v && selectTool(v as ToolId)} aria-label="Pens">
             <For each={Object.keys(PENS) as PenId[]}>
               {(id) => (
                 <ToggleGroup.Item class="tool" value={id} aria-label={PENS[id].label}>
@@ -330,19 +343,46 @@ export function Editor(props: {
                 </ToggleGroup.Item>
               )}
             </For>
+            <ToggleGroup.Item class="tool" value="eraser" aria-label="Eraser">
+              <EraserIcon size={20} />
+              <span class="tool-text">
+                <span>Eraser</span>
+                <span class="tool-size">{ERASERS[eraser()].label}</span>
+              </span>
+            </ToggleGroup.Item>
           </ToggleGroup>
-          <ToggleGroup
-            class="palette"
-            value={hex(colors()[pen()])}
-            onChange={(v) => v && setColors((c) => ({ ...c, [pen()]: parseInt(v.slice(1), 16) }))}
-            aria-label="Colors"
+          <Show
+            when={tool() === "eraser"}
+            fallback={
+              <ToggleGroup
+                class="palette"
+                value={hex(colors()[pen()])}
+                onChange={(v) => v && setColors((c) => ({ ...c, [pen()]: parseInt(v.slice(1), 16) }))}
+                aria-label="Colors"
+              >
+                <For each={PALETTE}>
+                  {(rgb) => (
+                    <ToggleGroup.Item class="swatch" value={hex(rgb)} aria-label={hex(rgb)} style={{ background: hex(rgb) }} />
+                  )}
+                </For>
+              </ToggleGroup>
+            }
           >
-            <For each={PALETTE}>
-              {(rgb) => (
-                <ToggleGroup.Item class="swatch" value={hex(rgb)} aria-label={hex(rgb)} style={{ background: hex(rgb) }} />
-              )}
-            </For>
-          </ToggleGroup>
+            <ToggleGroup
+              class="tools eraser-kinds"
+              value={eraser()}
+              onChange={(v) => v && setEraser(v as EraserId)}
+              aria-label="Eraser"
+            >
+              <For each={Object.keys(ERASERS) as EraserId[]}>
+                {(id) => (
+                  <ToggleGroup.Item class="tool" value={id}>
+                    {ERASERS[id].label}
+                  </ToggleGroup.Item>
+                )}
+              </For>
+            </ToggleGroup>
+          </Show>
         </aside>
         <div class="canvas-area" ref={area}>
           <canvas
