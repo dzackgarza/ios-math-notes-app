@@ -1,10 +1,12 @@
 // Paper-style tiles: page 1 of a template notebook in Notes/.templates/, shown
 // as an image. Page files are standalone SVG (docs/FORMAT.md, invariant 1), so
-// the browser draws the tile from the file itself. A card cover is the tile
-// of its first page's template until ink thumbnails exist (#26).
-import { createResource, Show } from "solid-js";
+// the browser draws the tile from the file itself. Note covers are page 1 as
+// the engine draws it, with the paper tile while it loads.
+import { createMemo, createResource, onCleanup, Show } from "solid-js";
 
 import { readTemplatePage } from "../storage/folder.ts";
+import type { Note } from "../storage/library.ts";
+import { lastThumbnail } from "../storage/thumbnails.ts";
 
 const urls = new WeakMap<FileSystemDirectoryHandle, Map<string, Promise<string>>>();
 
@@ -38,3 +40,27 @@ export function paperLabel(template: string): string {
   const name = names[kind] ?? template;
   return spacing ? `${name}, ${spacing}` : name;
 }
+
+// A note's cover: its page 1 as the engine draws it (src/storage/thumbnails.ts),
+// or the paper of its template until that loads or when it has no page.
+export function NoteCover(props: { root: FileSystemDirectoryHandle; note: Note; thumbnail: Thumbnails; class?: string }) {
+  const [png] = createResource(() => props.note, props.thumbnail, { initialValue: lastThumbnail(props.note) ?? null });
+  const url = createMemo(() => {
+    const blob = png.latest;
+    if (!blob) return undefined;
+    const src = URL.createObjectURL(blob);
+    onCleanup(() => URL.revokeObjectURL(src));
+    return src;
+  });
+  return (
+    <Show when={url()} fallback={<PaperTile root={props.root} template={props.note.template} class={props.class} />}>
+      {(src) => (
+        <div class={`paper-tile ${props.class ?? ""}`}>
+          <img src={src()} alt="" draggable={false} />
+        </div>
+      )}
+    </Show>
+  );
+}
+
+export type Thumbnails = (note: Note) => Promise<Blob | null>;

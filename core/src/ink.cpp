@@ -1,6 +1,7 @@
 #include "ink.h"
 
 #include <algorithm>
+#include <cmath>
 #include <exception>
 #include <optional>
 #include <string>
@@ -15,7 +16,10 @@
 #include "geometry/affine.h"
 #include "layout/layout.h"
 #include "include/core/SkData.h"
+#include "include/core/SkColorSpace.h"
+#include "include/core/SkStream.h"
 #include "include/core/SkSurface.h"
+#include "include/encode/SkPngEncoder.h"
 
 namespace {
 
@@ -663,6 +667,40 @@ InkStatus ink_document_page_rect(InkDocument *document, size_t index, double *x,
     if (index >= layout.size()) return BadPageIndex();
     const ink_engine::PagePlacement &p = layout[index];
     *x = p.x, *y = p.y, *width = p.width, *height = p.height;
+    return INK_OK;
+  });
+}
+
+InkStatus ink_document_page_png(InkDocument *document, size_t index, int32_t width,
+                                const uint8_t **png, size_t *size) {
+  return Call([&] {
+    if (!document) return NullArgument("document");
+    if (!png || !size) return NullArgument("png or size");
+    if (width <= 0) return Fail(INK_ERROR_ARGUMENT, "non-positive width");
+    const ink_engine::Document &current = document->history.current();
+    std::vector<ink_engine::PagePlacement> layout = ink_engine::LayoutPages(current);
+    if (index >= layout.size()) return BadPageIndex();
+    const ink_engine::PagePlacement &p = layout[index];
+    // The page alone in a raster view, as test_render.cpp's RenderPage draws
+    // it, scaled to `width` pixels.
+    double scale = width / p.width;
+    int height = std::max(1, int(std::lround(p.height * scale)));
+    ink_engine::View view{{scale, 0, 0, scale, -p.x * scale, -p.y * scale}, 1, width, height};
+    ink_engine::Renderer renderer(nullptr, document->assets);
+    renderer.Update(current, view, false);
+    sk_sp<SkSurface> surface =
+        SkSurfaces::Raster(SkImageInfo::MakeN32Premul(width, height, SkColorSpace::MakeSRGB()));
+    renderer.Draw(surface->getCanvas(), nullptr, nullptr);
+    SkPixmap pixels;
+    if (!surface->peekPixels(&pixels)) return Fail(INK_ERROR_INTERNAL, "no raster pixels");
+    SkDynamicMemoryWStream out;
+    if (!SkPngEncoder::Encode(&out, pixels, {})) {
+      return Fail(INK_ERROR_INTERNAL, "PNG encoding failed");
+    }
+    document->png.resize(out.bytesWritten());
+    out.copyTo(document->png.data());
+    *png = reinterpret_cast<const uint8_t *>(document->png.data());
+    *size = document->png.size();
     return INK_OK;
   });
 }

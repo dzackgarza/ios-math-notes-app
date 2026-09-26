@@ -284,6 +284,11 @@ InkStatus ink_redo(InkDocument *document, int32_t *moved, int32_t *page);
 /* A listed page's rectangle in content coordinates (pt). */
 InkStatus ink_document_page_rect(InkDocument *document, size_t index, double *x, double *y,
                                  double *width, double *height);
+/* A PNG of listed page `index`, `width` pixels wide, its height in the page's
+   proportion: the library's thumbnail. Needs no canvas. `*png` stays valid
+   until the next call of this function on the document. */
+InkStatus ink_document_page_png(InkDocument *document, size_t index, int32_t width,
+                                const uint8_t **png, size_t *size);
 
 /* ---- Layout check ----------------------------------------------------- */
 

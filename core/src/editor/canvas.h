@@ -24,6 +24,8 @@ struct InkDocument {
   std::vector<std::pair<std::string, std::string>> dirty;
   std::vector<std::string> dirty_removed;
   std::vector<InkFile> dirty_view;
+  // The last ink_document_page_png result.
+  std::string png;
 };
 
 struct InkCanvas {

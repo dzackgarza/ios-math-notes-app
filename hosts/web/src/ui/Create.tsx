@@ -47,10 +47,10 @@ function FolderSelect(props: { label: string; folders: Folder[]; value: string[]
 }
 
 export function NewNotebook(
-  props: SidebarProps & { onCancel: () => void; onCreate: (parent: string[], title: string) => void },
+  props: SidebarProps & { parent: string[]; onCancel: () => void; onCreate: (parent: string[], title: string) => void },
 ) {
   const [title, setTitle] = createSignal("");
-  const [parent, setParent] = createSignal<string[]>([]);
+  const [parent, setParent] = createSignal<string[]>(props.parent);
   const locations = createMemo((): Folder[] => props.folders.map((f) => (f.path.length === 0 ? { ...f, name: `${MY_NOTES} (top level)` } : f)));
   const create = () => title().trim() && props.onCreate(parent(), title().trim());
   return (

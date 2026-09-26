@@ -511,6 +511,17 @@ export class InkDocument {
   }
 
   // Listed page `index`'s rectangle in content coordinates (pt).
+  // A PNG of listed page `index`, `width` pixels wide: the library thumbnail.
+  pagePng(index: number, width: number): Uint8Array<ArrayBuffer> {
+    const e = this.engine;
+    return e.withScratch(8, (out) => {
+      e.check(e.module._ink_document_page_png(this.pointer, index, width, out, out + 4));
+      const view = e.view();
+      const png = view.getUint32(out, true);
+      return e.heap().slice(png, png + view.getUint32(out + 4, true));
+    });
+  }
+
   pageRect(index: number): { x: number; y: number; width: number; height: number } {
     const e = this.engine;
     return e.withScratch(32, (out) => {
