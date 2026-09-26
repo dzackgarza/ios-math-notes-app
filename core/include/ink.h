@@ -67,6 +67,9 @@ InkStatus ink_document_load_page(InkDocument *document, const char *file, const 
 /* An image file the pages reference, e.g. "assets/p0017.png". */
 InkStatus ink_document_load_asset(InkDocument *document, const char *path, const uint8_t *bytes,
                                   size_t size);
+/* Reads an asset already loaded or created by this document. */
+InkStatus ink_document_asset(InkDocument *document, const char *path,
+                             const uint8_t **bytes, size_t *size);
 /* The files that changed since the last save. `*files` stays valid until the
    next call on the document. */
 InkStatus ink_document_dirty_files(InkDocument *document, const InkFile **files, size_t *count);
@@ -214,6 +217,8 @@ InkStatus ink_canvas_figure_scene(InkCanvas *canvas, const uint8_t **json, size_
 InkStatus ink_canvas_figure_complete(InkCanvas *canvas, const uint8_t *scene, size_t scene_size,
                                      const uint8_t *tikz, size_t tikz_size,
                                      const uint8_t **figure_id, size_t *id_size);
+/* ID of the one selected figure; empty when selection is not one figure. */
+InkStatus ink_canvas_selected_figure(InkCanvas *canvas, const uint8_t **id, size_t *size);
 typedef enum InkEraser {
   INK_ERASER_STROKE = 0, /* deletes each stroke or shape it touches */
   INK_ERASER_FREE = 1    /* removes only the touched parts, splitting strokes */

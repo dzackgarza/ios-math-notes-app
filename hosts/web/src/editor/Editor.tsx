@@ -18,6 +18,7 @@ import {
 } from "ionicons/icons";
 import {
   Brush as BrushIcon,
+  DraftingCompass,
   Eraser as EraserIcon,
   Highlighter,
   Image as ImageIcon,
@@ -26,6 +27,8 @@ import {
   Type as TextIcon,
 } from "lucide-solid";
 import { For, type JSX, Show, createEffect, createResource, createSignal, onCleanup, onMount } from "solid-js";
+import { deserializeScene, sceneBounds, type Geometry, type Scene } from "@dzackgarza/freetikz/scene";
+import { generateTikz } from "@dzackgarza/freetikz/tikz";
 
 import { Brush, Eraser, PageSize, Selector, type Canvas, type Pen, type SelectionInfo, type ToolSettings } from "../engine/engine.ts";
 import { ViewController, type View } from "../input/gestures.ts";
@@ -41,6 +44,7 @@ import { applyTemplate, type OpenNotebook } from "./notebook.ts";
 // How far past the last page, in CSS px, a pull must go to add a page.
 const PULL_THRESHOLD = 96;
 const WHEEL_RELEASE_MS = 250;
+const utf8 = new TextDecoder();
 
 // The pen editor's brush list: the stock brushes of a pen set, as in Google
 // Cahier DrawingToolbox.kt:483-505 (android/cahier 209db71). A highlighter
@@ -83,6 +87,37 @@ export const PALETTE = [
 const hex = (rgb: number) => `#${rgb.toString(16).padStart(6, "0").toUpperCase()}`;
 // A size in pt as .pens.json writes it: at most 2 decimals.
 const sizeLabel = (size: number) => String(Math.round(size * 100) / 100);
+
+function geometryPreview(geometry: Geometry): JSX.Element {
+  switch (geometry.kind) {
+    case "rawStroke":
+      return <polyline points={geometry.points.map((p) => `${p.x},${p.y}`).join(" ")} fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />;
+    case "point":
+      return <circle cx={geometry.x} cy={geometry.y} r="2" fill="currentColor" />;
+    case "segment":
+      return <line x1={geometry.start.x} y1={geometry.start.y} x2={geometry.end.x} y2={geometry.end.y} stroke="currentColor" stroke-width="1.5" />;
+    case "circle":
+      return <circle cx={geometry.center.x} cy={geometry.center.y} r={geometry.radius} fill="none" stroke="currentColor" stroke-width="1.5" />;
+    case "label":
+      return <text x={geometry.position.x} y={geometry.position.y} fill="currentColor" font-size="10">{geometry.tex}</text>;
+  }
+}
+
+function FigurePreview(props: { scene: Scene }) {
+  const frame = () => {
+    const bounds = sceneBounds(props.scene);
+    if (!bounds) return "0 0 100 60";
+    const width = Math.max(20, bounds.maxX - bounds.minX);
+    const height = Math.max(20, bounds.maxY - bounds.minY);
+    const pad = 12;
+    return `${bounds.minX - pad} ${bounds.minY - pad} ${width + 2 * pad} ${height + 2 * pad}`;
+  };
+  return (
+    <svg class="figure-preview-svg" viewBox={frame()} role="img" aria-label="Drawing scene preview">
+      <For each={props.scene.objects}>{(item) => geometryPreview(item.geometry)}</For>
+    </svg>
+  );
+}
 
 function Swatches(props: { value: number | undefined; onChange: (rgb: number) => void; children?: JSX.Element }) {
   return (
@@ -341,6 +376,13 @@ export function Editor(props: {
   const [eraser, setEraser] = createSignal<EraserId>("stroke");
   const [selector, setSelector] = createSignal<SelectorId>("lasso");
   const [selection, setSelection] = createSignal<SelectionInfo | null>(null);
+  const [drawing, setDrawing] = createSignal(false);
+  const [figureScene, setFigureScene] = createSignal<Scene | null>(null);
+  const [figureTikz, setFigureTikz] = createSignal("");
+  const [figureId, setFigureId] = createSignal("");
+  const [figurePanel, setFigurePanel] = createSignal(false);
+  const [figurePage, setFigurePage] = createSignal(0);
+  const [figureOverlay, setFigureOverlay] = createSignal(false);
   const selectTool = (id: ToolId) => {
     setTool(id);
     if (id !== ERASER && id !== SELECT && id !== TEXT) setPenId(id);
@@ -420,6 +462,10 @@ export function Editor(props: {
   // Releasing past the threshold adds a page after the last one; the pull
   // springs back either way.
   const releasePull = () => {
+    if (drawing()) {
+      setPull(0);
+      return;
+    }
     const add = pull() >= PULL_THRESHOLD;
     setPull(0);
     if (add) edit(() => doc.insertPage(doc.pageCount()));
@@ -480,14 +526,98 @@ export function Editor(props: {
       element.setPointerCapture(e.pointerId);
       setSelection(null); // the actions return where the gesture leaves the selection
     }
-    canvas.input(penSamples(e, at, capabilities(e.pointerType), ids));
+    try {
+      canvas.input(penSamples(e, at, capabilities(e.pointerType), ids));
+    } catch (error) {
+      void toast(error instanceof Error ? error.message : "Drawing input failed.", "danger");
+      return;
+    }
     if (e.type === "pointerup" || e.type === "pointercancel") {
       refreshSelection();
       saver.schedule();
+      if (drawing()) refreshFigurePreview();
     }
   };
 
-  const refreshSelection = () => setSelection(canvas?.selection() ?? null);
+  const refreshFigurePreview = () => {
+    if (!canvas || !drawing()) return;
+    try {
+      const scene = deserializeScene(canvas.figureScene());
+      setFigureScene(scene);
+      setFigureTikz(generateTikz(scene).source);
+    } catch (error) {
+      void toast(error instanceof Error ? error.message : "Could not preview drawing.", "danger");
+    }
+  };
+
+  const toggleDrawing = () => {
+    if (!canvas) return;
+    try {
+      if (!drawing()) {
+        const page = currentPage();
+        canvas.beginFigure(page);
+        setFigurePage(page);
+        setFigureOverlay(true);
+        setDrawing(true);
+        setFigureId("");
+        setFigurePanel(true);
+        selectTool(penId());
+        refreshFigurePreview();
+        return;
+      }
+      const scene = deserializeScene(canvas.figureScene());
+      const source = generateTikz(scene).source;
+      const id = canvas.completeFigure(JSON.stringify(scene), source);
+      setDrawing(false);
+      setFigureScene(scene.objects.length ? scene : null);
+      setFigureTikz(scene.objects.length ? source : "");
+      setFigureId(id);
+      setFigurePanel(Boolean(id));
+      setFigureOverlay(Boolean(id));
+      edit(() => {});
+      refreshSelection();
+    } catch (error) {
+      void toast(error instanceof Error ? error.message : "Could not complete drawing.", "danger");
+    }
+  };
+
+  const refreshSelection = () => {
+    const selected = canvas?.selection() ?? null;
+    setSelection(selected);
+    if (!canvas || drawing() || !selected) return;
+    try {
+      const id = canvas.selectedFigure();
+      if (!id) return;
+      setFigureOverlay(false);
+      if (id === figureId()) return;
+      const scene = deserializeScene(utf8.decode(doc.asset(`assets/${id}.scene.json`)));
+      const source = utf8.decode(doc.asset(`assets/${id}.tikz`));
+      setFigureScene(scene);
+      setFigureTikz(source);
+      setFigureId(id);
+      setFigurePage(selected.page);
+      setFigureOverlay(false);
+      setFigurePanel(true);
+    } catch (error) {
+      void toast(error instanceof Error ? error.message : "Could not open figure.", "danger");
+    }
+  };
+
+  const figureBox = () => {
+    if (!figureOverlay()) return null;
+    const scene = figureScene();
+    const bounds = scene && sceneBounds(scene);
+    if (!bounds) return null;
+    const page = doc.pageRect(figurePage());
+    const { scale, x, y } = view();
+    const inset = 3 * scale;
+    return {
+      left: `${x + (page.x + bounds.minX) * scale - inset}px`,
+      top: `${y + (page.y + bounds.minY) * scale - inset}px`,
+      width: `${Math.max(2 * inset, (bounds.maxX - bounds.minX) * scale + 2 * inset)}px`,
+      height: `${Math.max(2 * inset, (bounds.maxY - bounds.minY) * scale + 2 * inset)}px`,
+    };
+  };
 
   // A wheel or trackpad scroll has no release event: the pull is released
   // when no wheel event has come for WHEEL_RELEASE_MS.
@@ -525,11 +655,19 @@ export function Editor(props: {
   };
   // Pastes at the middle of the view.
   const paste = (svg: string) => {
+    if (drawing()) {
+      void toast("Complete the drawing before pasting.");
+      return;
+    }
     const target = canvas;
     if (!target || !svg) return;
     edit(() => target.paste(svg, element.clientWidth / 2, element.clientHeight / 2));
   };
   const insertImage = async (file: File) => {
+    if (drawing()) {
+      await toast("Complete the drawing before inserting an image.");
+      return;
+    }
     if (file.type !== "image/png" && file.type !== "image/jpeg") {
       await toast("Choose a PNG or JPEG image", "danger");
       return;
@@ -576,12 +714,20 @@ export function Editor(props: {
 
   // Puts the top of page `index` at the top of the view.
   const goToPage = (index: number) => {
+    if (drawing()) {
+      void toast("Complete the drawing before changing pages.");
+      return;
+    }
     if (index < 0 || index >= doc.pageCount()) return;
     const { scale, x } = controller.view;
     controller.set({ scale, x, y: -doc.pageRect(index).y * scale });
   };
 
   const history = (step: "undo" | "redo") => {
+    if (drawing()) {
+      void toast("Complete the drawing before changing history.");
+      return;
+    }
     const moved = step === "undo" ? doc.undo() : doc.redo();
     if (!moved) return;
     edit(() => showPage(moved.page));
@@ -649,6 +795,10 @@ export function Editor(props: {
 
   // Saves and frees the notebook, then `next` moves to another screen.
   const leave = async (next: () => void) => {
+    if (drawing()) {
+      await toast("Complete the drawing before leaving this note.");
+      return;
+    }
     await saver.save();
     if (penWrite) await writePensNow();
     await penWritePending;
@@ -662,7 +812,11 @@ export function Editor(props: {
   const zoomLabel = () => (element ? `${Math.round((view().scale / fitScale()) * 100)}%` : "100%");
   const tagColor = (name: string) => props.allTags.find((t) => t.name === name)?.color ?? "#8A8F98";
 
-  const pageMenu = (e: Event) =>
+  const pageMenu = (e: Event) => {
+    if (drawing()) {
+      void toast("Complete the drawing before changing pages.");
+      return;
+    }
     void presentPopover(e, (dismiss) => (
       <IonList lines="full">
         <MenuItem label="Paste" dismiss={dismiss} onSelect={() => void navigator.clipboard.readText().then(paste)} />
@@ -683,6 +837,7 @@ export function Editor(props: {
         <MenuItem label="Page size: Letter" dismiss={dismiss} onSelect={() => edit(() => doc.setPageSize(PageSize.letter))} />
       </IonList>
     ));
+  };
 
   const titleMenu = (e: Event) =>
     void presentPopover(e, (dismiss) => (
@@ -819,8 +974,9 @@ export function Editor(props: {
             </For>
             <ToolItem label="Eraser" detail={ERASERS[eraser()].label} selected={tool() === ERASER} icon={<EraserIcon size={22} />} onSelect={() => selectTool(ERASER)} />
             <ToolItem label="Lasso" detail={SELECTORS[selector()].label} selected={tool() === SELECT} icon={<Lasso size={22} />} onSelect={() => selectTool(SELECT)} />
-            <ToolItem label="Image" selected={false} icon={<ImageIcon size={22} />} onSelect={() => imageInput.click()} />
-            <ToolItem label="Text" selected={tool() === TEXT} icon={<TextIcon size={22} />} onSelect={() => selectTool(TEXT)} />
+            <ToolItem label="Drawing" detail={drawing() ? "Tap to complete" : "TikZ figure"} selected={drawing()} icon={<DraftingCompass size={22} />} onSelect={toggleDrawing} />
+            <ToolItem label="Image" selected={false} icon={<ImageIcon size={22} />} onSelect={() => drawing() ? void toast("Complete the drawing before inserting an image.") : imageInput.click()} />
+            <ToolItem label="Text" selected={tool() === TEXT} icon={<TextIcon size={22} />} onSelect={() => drawing() ? void toast("Complete the drawing before adding page text.") : selectTool(TEXT)} />
           </IonList>
           <input ref={imageInput} type="file" accept="image/png,image/jpeg" hidden onChange={(event) => {
             const file = event.currentTarget.files?.[0];
@@ -858,6 +1014,7 @@ export function Editor(props: {
             onWheel={onWheel}
             onContextMenu={(e) => e.preventDefault()}
           />
+          <Show when={figureBox()}>{(box) => <div class="figure-page-bounds" style={box()} aria-label={drawing() ? "Drawing bounds" : `Figure ${figureId()} bounds`} />}</Show>
           <div class="page-tags" aria-label="Tags">
             <For each={props.tags}>
               {(tag) => (
@@ -945,12 +1102,16 @@ export function Editor(props: {
                       label={paperLabel(name)}
                       checked={template() === name}
                       dismiss={dismiss}
-                      onSelect={() =>
+                      onSelect={() => {
+                        if (drawing()) {
+                          void toast("Complete the drawing before changing paper.");
+                          return;
+                        }
                         void applyTemplate(root, doc, name).then(() => {
                           setTemplate(name);
                           edit(() => {});
-                        })
-                      }
+                        });
+                      }}
                     />
                   )}
                 </For>
@@ -970,6 +1131,35 @@ export function Editor(props: {
             </div>
           </div>
         </div>
+        <Show when={figurePanel()}>
+          <aside class="figure-sidebar" aria-label="TikZ drawing preview">
+            <div class="figure-sidebar-header">
+              <div>
+                <h2>{drawing() ? "Drawing mode" : "TikZ figure"}</h2>
+                <p>{drawing() ? "Draw on this page, then complete the figure." : "Figure saved with this note."}</p>
+              </div>
+              <Show when={!drawing()}>
+                <IonButton fill="clear" size="small" aria-label="Close figure preview" onClick={() => setFigurePanel(false)}>
+                  <IonIcon slot="icon-only" icon={close} />
+                </IonButton>
+              </Show>
+            </div>
+            <div class="figure-sidebar-content">
+              <h3>Approximate preview</h3>
+              <div class="figure-preview">
+                <Show when={figureScene()?.objects.length} fallback={<p class="figure-empty">Draw with a pen to start the figure.</p>}>
+                  <FigurePreview scene={figureScene()!} />
+                </Show>
+              </div>
+              <div class="figure-source-title">
+                <h3>TikZ source</h3>
+                <IonButton fill="clear" size="small" disabled={!figureTikz()} onClick={() => void navigator.clipboard.writeText(figureTikz())}>Copy</IonButton>
+              </div>
+              <textarea class="figure-source" aria-label="Generated TikZ source" readOnly value={figureTikz()} spellcheck={false} />
+              <p class="figure-preview-note">The preview shows scene geometry. It does not compile TeX.</p>
+            </div>
+          </aside>
+        </Show>
       </div>
     </div>
   );

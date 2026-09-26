@@ -418,6 +418,16 @@ export class InkDocument {
     });
   }
 
+  asset(path: string): Uint8Array<ArrayBuffer> {
+    const e = this.engine;
+    return e.withCString(path, (name) => e.withScratch(8, (out) => {
+      e.check(e.module._ink_document_asset(this.pointer, name, out, out + 4));
+      const view = e.view();
+      const at = view.getUint32(out, true);
+      return e.heap().slice(at, at + view.getUint32(out + 4, true));
+    }));
+  }
+
   dirtyFiles(): FileChange[] {
     const e = this.engine;
     return e.withScratch(8, (out) => {
@@ -605,6 +615,39 @@ export class Canvas {
     this.engine.check(this.engine.module._ink_canvas_set_selector(this.pointer, kind, active ? 1 : 0));
   }
 
+  beginFigure(page: number, layer = 0): void {
+    this.engine.check(this.engine.module._ink_canvas_figure_begin(this.pointer, page, layer));
+  }
+
+  figureScene(): string {
+    const e = this.engine;
+    return e.withScratch(8, (out) => {
+      e.check(e.module._ink_canvas_figure_scene(this.pointer, out, out + 4));
+      const view = e.view();
+      const at = view.getUint32(out, true);
+      return decoder.decode(e.heap().subarray(at, at + view.getUint32(out + 4, true)));
+    });
+  }
+
+  completeFigure(scene: string, tikz: string): string {
+    const e = this.engine;
+    const sceneBytes = encoder.encode(scene), tikzBytes = encoder.encode(tikz);
+    const sceneAt = e.copyIn(sceneBytes), tikzAt = e.copyIn(tikzBytes);
+    try {
+      return e.withScratch(8, (out) => {
+        e.check(e.module._ink_canvas_figure_complete(
+          this.pointer, sceneAt, sceneBytes.length, tikzAt, tikzBytes.length, out, out + 4,
+        ));
+        const view = e.view();
+        const at = view.getUint32(out, true);
+        return decoder.decode(e.heap().subarray(at, at + view.getUint32(out + 4, true)));
+      });
+    } finally {
+      e.free(sceneAt);
+      e.free(tikzAt);
+    }
+  }
+
   // The selection, or null when nothing is selected.
   selection(): SelectionInfo | null {
     const e = this.engine;
@@ -622,6 +665,16 @@ export class Canvas {
         width: view.getFloat64(at + o.width, true),
         height: view.getFloat64(at + o.height, true),
       };
+    });
+  }
+
+  selectedFigure(): string {
+    const e = this.engine;
+    return e.withScratch(8, (out) => {
+      e.check(e.module._ink_canvas_selected_figure(this.pointer, out, out + 4));
+      const view = e.view();
+      const at = view.getUint32(out, true);
+      return decoder.decode(e.heap().subarray(at, at + view.getUint32(out + 4, true)));
     });
   }
 

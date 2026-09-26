@@ -113,6 +113,42 @@ test("a pen stroke is saved, byte for byte as the engine wrote it, and renders a
   expect(Math.min(pr, pg, pb)).toBeGreaterThan(240); // paper
 });
 
+test("Drawing mode saves a bounded TikZ figure and reopens its scene after reload", async ({ page }, testInfo) => {
+  await startEmpty(page);
+  await newNote(page, "Figure");
+  const box = (await page.locator("#ink-canvas").boundingBox())!;
+  await page.getByRole("button", { name: "Drawing", exact: true }).click();
+  await drawWithPen(page, Array.from({ length: 20 }, (_, i) => ({
+    x: box.x + 150 + i * 8,
+    y: box.y + 110 + 4 * Math.sin(i / 3),
+  })));
+  await expect(page.getByRole("textbox", { name: "Generated TikZ source" })).toHaveValue(/\\draw/);
+  await page.getByRole("button", { name: "Drawing", exact: true }).click();
+  await expect(page.locator(".figure-page-bounds")).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("completed-figure.png") });
+  await expect.poll(async () => Buffer.from(await readOpfsFile(page, "Figure/pages/0001.svg"), "base64").toString(), { timeout: 5000 }).toContain('class="mn-figure"');
+  const saved = Buffer.from(await readOpfsFile(page, "Figure/pages/0001.svg"), "base64").toString();
+  const id = saved.match(/id="(f-[a-z2-7]+)" class="mn-figure"/)?.[1];
+  expect(id).toBeTruthy();
+  const scene = Buffer.from(await readOpfsFile(page, `Figure/assets/${id}.scene.json`), "base64").toString();
+  const source = Buffer.from(await readOpfsFile(page, `Figure/assets/${id}.tikz`), "base64").toString();
+  expect(JSON.parse(scene).objects).toHaveLength(1);
+  expect(source).toContain("\\begin{tikzpicture}");
+
+  await page.reload();
+  await openNote(page, "Figure");
+  await page.getByRole("button", { name: "Lasso", exact: true }).click();
+  const loop = [
+    ...Array.from({ length: 10 }, (_, i) => ({ x: 130 + i * 22, y: 75 })),
+    ...Array.from({ length: 5 }, (_, i) => ({ x: 350, y: 75 + i * 18 })),
+    ...Array.from({ length: 10 }, (_, i) => ({ x: 350 - i * 22, y: 165 })),
+    ...Array.from({ length: 5 }, (_, i) => ({ x: 130, y: 165 - i * 18 })),
+  ].map((p) => ({ x: box.x + p.x, y: box.y + p.y }));
+  await drawWithPen(page, loop);
+  await expect(page.getByRole("complementary", { name: "TikZ drawing preview" })).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "Generated TikZ source" })).toHaveValue(source);
+});
+
 test("nginx serves the engine as application/wasm", async ({ page }) => {
   const wasm = page.waitForResponse((r) => r.url().endsWith(".wasm"));
   await page.goto(APP);

@@ -193,6 +193,19 @@ InkStatus ink_document_load_asset(InkDocument *document, const char *path, const
   });
 }
 
+InkStatus ink_document_asset(InkDocument *document, const char *path,
+                             const uint8_t **bytes, size_t *size) {
+  return Call([&] {
+    if (!document) return NullArgument("document");
+    if (!path || !bytes || !size) return NullArgument("path, bytes or size");
+    const auto found = document->assets.find(path);
+    if (found == document->assets.end()) return Fail(INK_ERROR_ARGUMENT, std::string("asset is missing: ") + path);
+    *bytes = static_cast<const uint8_t *>(found->second->data());
+    *size = found->second->size();
+    return INK_OK;
+  });
+}
+
 InkStatus ink_document_dirty_files(InkDocument *document, const InkFile **files, size_t *count) {
   return Call([&] {
     if (!document) return NullArgument("document");
@@ -488,6 +501,26 @@ InkStatus ink_canvas_figure_complete(InkCanvas *canvas, const uint8_t *scene, si
     }
     *figure_id = reinterpret_cast<const uint8_t *>(canvas->figure_id.data());
     *id_size = canvas->figure_id.size();
+    return INK_OK;
+  });
+}
+
+InkStatus ink_canvas_selected_figure(InkCanvas *canvas, const uint8_t **id, size_t *size) {
+  return Call([&] {
+    if (!canvas) return NullArgument("canvas");
+    if (!id || !size) return NullArgument("id or size");
+    canvas->figure_id.clear();
+    const ink_engine::Selection *selection = canvas->editor.CurrentSelection();
+    if (selection && selection->items.size() == 1) {
+      const ink_engine::ElementRef &item = selection->items[0];
+      const ink_engine::Element &element =
+          *selection->value->layers[item.layer].elements[item.index];
+      if (const auto *figure = std::get_if<ink_engine::Figure>(&element.value)) {
+        canvas->figure_id = figure->id;
+      }
+    }
+    *id = reinterpret_cast<const uint8_t *>(canvas->figure_id.data());
+    *size = canvas->figure_id.size();
     return INK_OK;
   });
 }

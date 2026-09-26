@@ -81,7 +81,7 @@ if(EMSCRIPTEN)
   set(INK_EXPORTS
     _ink_version _ink_last_error
     _ink_document_create _ink_document_load_notebook _ink_document_load_page
-    _ink_document_load_asset _ink_document_dirty_files _ink_document_mark_saved
+    _ink_document_load_asset _ink_document_asset _ink_document_dirty_files _ink_document_mark_saved
     _ink_document_free _ink_document_content_size
     _ink_document_page_count _ink_document_insert_page _ink_document_delete_page
     _ink_document_move_page _ink_document_set_page_size _ink_document_set_template
@@ -89,7 +89,7 @@ if(EMSCRIPTEN)
     _ink_document_create_from_template _ink_export_pdf
     _ink_canvas_create_webgl _ink_canvas_set_view _ink_canvas_set_surface_size
     _ink_pens_default _ink_pens_read _ink_pens_write
-    _ink_canvas_set_tool _ink_canvas_figure_begin _ink_canvas_figure_scene _ink_canvas_figure_complete
+    _ink_canvas_set_tool _ink_canvas_figure_begin _ink_canvas_figure_scene _ink_canvas_figure_complete _ink_canvas_selected_figure
     _ink_canvas_set_eraser _ink_canvas_set_utc_offset _ink_canvas_free _ink_canvas_page_at
     _ink_canvas_set_selector _ink_canvas_selection _ink_canvas_select_all _ink_canvas_clear_selection
     _ink_canvas_delete_selection _ink_canvas_copy_selection _ink_canvas_paste _ink_canvas_duplicate_selection

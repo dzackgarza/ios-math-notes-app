@@ -148,6 +148,15 @@ TEST_CASE("A duplicated figure has its own scene and TikZ files") {
   const auto dirty = DirtyFiles(session.document);
   CHECK(dirty.at("assets/" + second.id + ".scene.json") == scene_bytes);
   CHECK(dirty.at("assets/" + second.id + ".tikz") == tikz);
+  const uint8_t *selected = nullptr;
+  size_t selected_size = 0;
+  REQUIRE(ink_canvas_selected_figure(session.get(), &selected, &selected_size) == INK_OK);
+  CHECK(std::string(reinterpret_cast<const char *>(selected), selected_size) == second.id);
+  const uint8_t *asset = nullptr;
+  size_t asset_size = 0;
+  REQUIRE(ink_document_asset(session.document, ("assets/" + second.id + ".tikz").c_str(),
+                             &asset, &asset_size) == INK_OK);
+  CHECK(std::string(reinterpret_cast<const char *>(asset), asset_size) == tikz);
 }
 
 TEST_CASE("An empty drawing session leaves the page and assets unchanged") {
