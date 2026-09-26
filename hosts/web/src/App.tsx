@@ -1,5 +1,5 @@
 import { Button } from "@kobalte/core/button";
-import { createResource, createSignal, Match, onCleanup, onMount, Show, Switch } from "solid-js";
+import { createEffect, createResource, createSignal, Match, onCleanup, onMount, Show, Switch } from "solid-js";
 
 import { Editor, type Tab } from "./editor/Editor.tsx";
 import { createNotebook, openNotebook, type OpenNotebook } from "./editor/notebook.ts";
@@ -117,6 +117,16 @@ export function App() {
     onCleanup(() => window.removeEventListener("focus", rescan));
   });
 
+  // The open folder is gone after a scan (moved by another program): the
+  // library opens its nearest remaining ancestor.
+  createEffect(() => {
+    const folders = library()?.folders;
+    if (!folders) return;
+    let path = selected();
+    while (path.length > 0 && !folders.some((f) => pathKey(f.path) === pathKey(path))) path = path.slice(0, -1);
+    if (path.length !== selected().length) setSelected(path);
+  });
+
   const inside = (path: readonly string[], dir: readonly string[]) =>
     path.length >= dir.length && dir.every((part, i) => path[i] === part);
   // Renames, moves or trashes the notebook or folder at `path`. Its notes
@@ -211,6 +221,7 @@ export function App() {
               <Match when={screen().kind === "new-notebook"}>
                 <NewNotebook
                   {...sidebar()}
+                  parent={selected()}
                   onCancel={() => setScreen({ kind: "library" })}
                   onCreate={(parent, title) =>
                     run(async () => {

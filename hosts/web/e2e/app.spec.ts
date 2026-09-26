@@ -50,7 +50,12 @@ async function readOpfsFile(page: Page, path: string): Promise<string> {
   }, path.split("/"));
 }
 
-// New Note from the library: in the selected folder, "My Notes" by default.
+// Opens a folder of the path to the open folder ("My Notes" is the root).
+async function openFolder(page: Page, name: string): Promise<void> {
+  await page.getByRole("navigation", { name: "Folder path" }).getByRole("button", { name, exact: true }).click();
+}
+
+// New Note from the library: in the open folder, the root by default.
 async function newNote(page: Page, title: string, paper = "Plain Paper"): Promise<void> {
   await page.getByRole("button", { name: "New Note", exact: true }).click();
   await page.getByRole("textbox", { name: "Title" }).fill(title);
@@ -161,6 +166,7 @@ test("a note created in a new folder with the dotted template is listed in its f
   });
   const notes = page.getByRole("list", { name: "Notes" });
   for (const phase of ["before reload", "after reload"]) {
+    await openFolder(page, "My Notes");
     await expect(card, phase).toContainText("1 note");
     await card.getByRole("button", { name: "Topology", exact: true }).click();
     await expect(notes.getByRole("listitem"), phase).toHaveCount(1);
@@ -464,7 +470,7 @@ async function focusWindow(page: Page): Promise<void> {
 
 // Chooses `item` in the ⋯ menu of the note or folder `name`.
 async function entryMenu(page: Page, name: string, item: string): Promise<void> {
-  await page.getByRole("button", { name: `${name} actions` }).click();
+  await page.getByRole("button", { name: `${name} actions` }).first().click();
   await page.getByRole("menuitem", { name: item }).click();
 }
 
@@ -521,6 +527,7 @@ test("rename, move and delete from the ⋯ menus change the notebook and folder 
   await page.getByRole("button", { name: "My Notes" }).last().click();
   await expect.poll(() => directoriesExist(page, ["Braids/pages", "Topology/Braids"])).toEqual([true, false]);
 
+  await openFolder(page, "My Notes");
   await entryMenu(page, "Topology", "Rename…");
   await page.getByRole("textbox", { name: "Name" }).fill("Geometry");
   await page.getByRole("button", { name: "Rename" }).click();
@@ -597,4 +604,114 @@ test("a thumbnail shows page 1's ink and is rendered again only when page 1's fi
   });
   await focusWindow(page);
   await expect.poll(async () => (await stats()).renders).toBe(2);
+});
+
+// Copies directory `from` to `to` (paths from the notes root) in the
+// origin-private file system, as another program would.
+async function copyDirectory(page: Page, from: string, to: string): Promise<void> {
+  await page.evaluate(
+    async ([source, target]) => {
+      const copy = async (from: FileSystemDirectoryHandle, to: FileSystemDirectoryHandle) => {
+        for await (const [name, handle] of from.entries()) {
+          if (handle.kind === "directory") {
+            await copy(handle, await to.getDirectoryHandle(name, { create: true }));
+            continue;
+          }
+          const writable = await (await to.getFileHandle(name, { create: true })).createWritable();
+          await writable.write(await handle.getFile());
+          await writable.close();
+        }
+      };
+      const at = async (path: string, create: boolean) => {
+        let dir = await navigator.storage.getDirectory();
+        for (const part of path.split("/")) dir = await dir.getDirectoryHandle(part, { create });
+        return dir;
+      };
+      await copy(await at(source, false), await at(target, true));
+    },
+    [from, to],
+  );
+}
+
+test("folders open into their subfolders and notebooks, and the path leads back", async ({ page }) => {
+  await startEmpty(page);
+  await expect(page.getByRole("button", { name: "New Note", exact: true })).toBeEnabled(); // templates written
+  // Algebra/Rings/ holds notebook Ideals; Algebra/ holds notebook Groups.
+  await copyDirectory(page, ".templates/blank", "Algebra/Groups");
+  await copyDirectory(page, ".templates/blank", "Algebra/Rings/Ideals");
+  await focusWindow(page);
+  const grid = page.getByRole("list", { name: "Notebooks" });
+  const path = page.getByRole("navigation", { name: "Folder path" });
+
+  await grid.getByRole("button", { name: "Algebra", exact: true }).click();
+  await expect(path).toHaveText(/My Notes.*Algebra/);
+  await expect(grid.getByRole("button", { name: "Rings", exact: true })).toBeVisible();
+  await expect(grid.getByRole("button", { name: "Groups", exact: true })).toBeVisible();
+  await expect(grid).not.toContainText("Ideals");
+
+  await grid.getByRole("button", { name: "Rings", exact: true }).click();
+  await expect(grid.getByRole("button", { name: "Ideals", exact: true })).toBeVisible();
+  await expect(grid).not.toContainText("Groups");
+
+  await openFolder(page, "Algebra");
+  await expect(grid.getByRole("button", { name: "Groups", exact: true })).toBeVisible();
+  await openFolder(page, "My Notes");
+  await expect(grid.getByRole("button", { name: "Algebra", exact: true })).toBeVisible();
+  await expect(grid).not.toContainText("Groups");
+});
+
+test("a thumbnail is rendered again when an image that page 1 shows changes", async ({ page }) => {
+  await startEmpty(page);
+  await expect(page.getByRole("button", { name: "New Note", exact: true })).toBeEnabled();
+  await copyDirectory(page, ".templates/blank", "Scan");
+  // A full-page image in page 1's background, as an imported PDF page is
+  // stored (docs/FORMAT.md, Background), in one color.
+  const setImage = (color: string) =>
+    page.evaluate(async (fill) => {
+      const canvas = new OffscreenCanvas(8, 8);
+      const context = canvas.getContext("2d")!;
+      context.fillStyle = fill;
+      context.fillRect(0, 0, 8, 8);
+      const note = await (await navigator.storage.getDirectory()).getDirectoryHandle("Scan");
+      const assets = await note.getDirectoryHandle("assets", { create: true });
+      const writable = await (await assets.getFileHandle("p0001.png", { create: true })).createWritable();
+      await writable.write(await canvas.convertToBlob({ type: "image/png" }));
+      await writable.close();
+    }, color);
+  await setImage("#FF0000");
+  await page.evaluate(async () => {
+    const pages = await (await (await navigator.storage.getDirectory()).getDirectoryHandle("Scan")).getDirectoryHandle("pages");
+    const handle = await pages.getFileHandle("0001.svg");
+    const svg = (await (await handle.getFile()).text()).replace(
+      /(<g id="background"[^>]*>\s*<rect[^>]*\/>)/,
+      '$1\n    <image href="../assets/p0001.png" x="0" y="0" width="595.28" height="841.89"/>',
+    );
+    const writable = await handle.createWritable();
+    await writable.write(svg);
+    await writable.close();
+  });
+  // The color at the middle of the cached thumbnail.
+  const cachedColor = () =>
+    page.evaluate(async () => {
+      const cache = await (await navigator.storage.getDirectory()).getDirectoryHandle(".thumbnail-cache");
+      for await (const [, entry] of cache.entries()) {
+        for await (const [, file] of (entry as FileSystemDirectoryHandle).entries()) {
+          const bitmap = await createImageBitmap(await (file as FileSystemFileHandle).getFile());
+          const context = new OffscreenCanvas(bitmap.width, bitmap.height).getContext("2d")!;
+          context.drawImage(bitmap, 0, 0);
+          return Array.from(context.getImageData(bitmap.width / 2, bitmap.height / 2, 1, 1).data.slice(0, 3));
+        }
+      }
+      return null;
+    });
+  const stats = () => page.evaluate(() => ({ ...window.mathNotesThumbnails! }));
+
+  await focusWindow(page);
+  await expect.poll(async () => (await stats()).renders).toBe(1);
+  expect(await cachedColor()).toEqual([255, 0, 0]);
+
+  await setImage("#0000FF");
+  await focusWindow(page);
+  await expect.poll(async () => (await stats()).renders).toBe(2);
+  expect(await cachedColor()).toEqual([0, 0, 255]);
 });

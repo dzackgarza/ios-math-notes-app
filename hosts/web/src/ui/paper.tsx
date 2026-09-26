@@ -6,6 +6,7 @@ import { createMemo, createResource, onCleanup, Show } from "solid-js";
 
 import { readTemplatePage } from "../storage/folder.ts";
 import type { Note } from "../storage/library.ts";
+import { lastThumbnail } from "../storage/thumbnails.ts";
 
 const urls = new WeakMap<FileSystemDirectoryHandle, Map<string, Promise<string>>>();
 
@@ -43,7 +44,7 @@ export function paperLabel(template: string): string {
 // A note's cover: its page 1 as the engine draws it (src/storage/thumbnails.ts),
 // or the paper of its template until that loads or when it has no page.
 export function NoteCover(props: { root: FileSystemDirectoryHandle; note: Note; thumbnail: Thumbnails; class?: string }) {
-  const [png] = createResource(() => props.note, props.thumbnail);
+  const [png] = createResource(() => props.note, props.thumbnail, { initialValue: lastThumbnail(props.note) ?? null });
   const url = createMemo(() => {
     const blob = png.latest;
     if (!blob) return undefined;

@@ -10,8 +10,10 @@ import { ToggleGroup } from "@kobalte/core/toggle-group";
 import {
   BookOpen,
   ChevronDown,
+  ChevronRight,
   Clock,
   Ellipsis,
+  Folder as FolderIcon,
   FolderOpen,
   LayoutGrid,
   List,
@@ -293,24 +295,64 @@ function FolderCover(props: { folder: Folder; view: View; class: string }) {
   );
 }
 
-function FolderCards(props: View) {
+// The folders directly inside folder `parent`.
+function subfolders(folders: readonly Folder[], parent: readonly string[]): Folder[] {
+  const key = pathKey(parent);
+  return folders.filter((f) => f.path.length === parent.length + 1 && pathKey(f.path.slice(0, -1)) === key);
+}
+
+const lastName = (path: readonly string[]) => (path.length === 0 ? MY_NOTES : path[path.length - 1]);
+
+// The path from the root to the open folder; each step opens its folder.
+function Breadcrumb(props: View) {
+  const steps = () => [[], ...props.selected.map((_, i) => props.selected.slice(0, i + 1))];
+  return (
+    <nav class="breadcrumb" aria-label="Folder path">
+      <For each={steps()}>
+        {(path, i) => (
+          <>
+            <Show when={i() > 0}>
+              <ChevronRight size={16} class="breadcrumb-separator" />
+            </Show>
+            <Button
+              class="breadcrumb-step"
+              aria-current={i() === steps().length - 1 ? "page" : undefined}
+              onClick={() => props.onSelect(path)}
+            >
+              {lastName(path)}
+            </Button>
+          </>
+        )}
+      </For>
+    </nav>
+  );
+}
+
+// The open folder as GoodNotes and Noteful show one: its subfolders, then its
+// notes, in one grid. A folder opens on a tap; a note opens in the editor.
+function FolderView(props: View) {
   const [query, setQuery] = createSignal("");
   const [layout, setLayout] = createSignal<"grid" | "list">("grid");
-  const shown = createMemo(() => {
-    const q = query().trim().toLowerCase();
-    // "My Notes" shows only when notes sit at the top level.
-    const folders = props.folders.filter((f) => (f.path.length > 0 || f.notes.length > 0) && f.name.toLowerCase().includes(q));
-    return folders.sort(compareBy(props.sort));
+  const matches = (name: string) => name.toLowerCase().includes(query().trim().toLowerCase());
+  const folders = createMemo(() => subfolders(props.folders, props.selected).filter((f) => matches(lastName(f.path))).sort(compareBy(props.sort)));
+  const notes = createMemo(() => {
+    const here = props.folders.find((f) => pathKey(f.path) === pathKey(props.selected))?.notes ?? [];
+    return here.filter((n) => matches(n.name)).sort(compareBy(props.sort));
   });
   const folderTags = (folder: Folder) => [
     ...new Set(folder.notes.flatMap((n) => props.metadata.notes[pathKey(n.path)]?.tags ?? [])),
   ];
+  const folderMeta = (folder: Folder) => {
+    const inner = subfolders(props.folders, folder.path).length;
+    return inner > 0 ? `${noteCount(folder.notes.length)} · ${inner} ${inner === 1 ? "folder" : "folders"}` : noteCount(folder.notes.length);
+  };
   return (
     <>
+      <Breadcrumb {...props} />
       <div class="filters">
         <TextField value={query()} onChange={setQuery} class="search">
           <Search size={16} />
-          <TextField.Input class="search-input" placeholder="Search notebooks…" aria-label="Search notebooks" />
+          <TextField.Input class="search-input" placeholder="Search this folder…" aria-label="Search this folder" />
         </TextField>
         <DropdownMenu>
           <DropdownMenu.Trigger class="select-button" aria-label="Sort">
@@ -339,14 +381,16 @@ function FolderCards(props: View) {
         </ToggleGroup>
       </div>
       <ul class={layout() === "grid" ? "cards" : "cards list"} aria-label="Notebooks">
-        <For each={shown()}>
+        <For each={folders()}>
           {(folder) => (
-            <li class="card" aria-current={pathKey(props.selected) === pathKey(folder.path) ? "true" : undefined}>
-              <Button class="card-open" aria-label={folder.name} onClick={() => props.onSelect(folder.path)}>
+            <li class="card folder-card">
+              <Button class="card-open" aria-label={lastName(folder.path)} onClick={() => props.onSelect(folder.path)}>
                 <FolderCover folder={folder} view={props} class="card-cover" />
                 <span class="card-text">
-                  <span class="card-title">{folder.name}</span>
-                  <span class="card-meta">{noteCount(folder.notes.length)}</span>
+                  <span class="card-title">
+                    <FolderIcon size={15} class="folder-mark" /> {lastName(folder.path)}
+                  </span>
+                  <span class="card-meta">{folderMeta(folder)}</span>
                   <Show when={folder.modified > 0}>
                     <span class="card-meta">Modified {ago(folder.modified)}</span>
                   </Show>
@@ -354,21 +398,39 @@ function FolderCards(props: View) {
               </Button>
               <div class="card-footer">
                 <TagChips metadata={props.metadata} tags={folderTags(folder)} />
-                <Show when={folder.path.length > 0}>
-                  <DropdownMenu>
-                    <MenuTrigger name={folder.name} />
-                    <DropdownMenu.Portal>
-                      <DropdownMenu.Content class="menu">
-                        <EntryItems path={folder.path} folder view={props} />
-                      </DropdownMenu.Content>
-                    </DropdownMenu.Portal>
-                  </DropdownMenu>
-                </Show>
+                <DropdownMenu>
+                  <MenuTrigger name={lastName(folder.path)} />
+                  <DropdownMenu.Portal>
+                    <DropdownMenu.Content class="menu">
+                      <EntryItems path={folder.path} folder view={props} />
+                    </DropdownMenu.Content>
+                  </DropdownMenu.Portal>
+                </DropdownMenu>
+              </div>
+            </li>
+          )}
+        </For>
+        <For each={notes()}>
+          {(note) => (
+            <li class="card">
+              <Button class="card-open" aria-label={note.name} onClick={() => props.onOpen(note)}>
+                <NoteCover root={props.root} note={note} thumbnail={props.thumbnail} class="card-cover" />
+                <span class="card-text">
+                  <span class="card-title">{note.name}</span>
+                  <span class="card-meta">Modified {ago(note.modified)}</span>
+                </span>
+              </Button>
+              <div class="card-footer">
+                <TagChips metadata={props.metadata} tags={props.metadata.notes[pathKey(note.path)]?.tags ?? []} />
+                <NoteMenu note={note} view={props} />
               </div>
             </li>
           )}
         </For>
       </ul>
+      <Show when={folders().length === 0 && notes().length === 0}>
+        <p class="empty">{query().trim() ? "Nothing matches." : "This folder is empty."}</p>
+      </Show>
     </>
   );
 }
@@ -381,7 +443,7 @@ function DetailPane(props: View) {
       {(f) => (
         <aside class="detail" aria-label={`${f().name} notes`}>
           <FolderCover folder={f()} view={props} class="detail-cover" />
-          <h2 class="detail-title">{f().name}</h2>
+          <h2 class="detail-title">{lastName(f().path)}</h2>
           <div class="detail-meta">
             {noteCount(f().notes.length)}
             <Show when={f().modified > 0}> · Modified {ago(f().modified)}</Show>
@@ -397,7 +459,7 @@ function DetailPane(props: View) {
             </For>
           </ul>
           <Button class="button new-in" onClick={() => props.onNewNote(f().path)}>
-            <Plus size={16} /> New Note in {f().name}
+            <Plus size={16} /> New Note in {lastName(f().path)}
           </Button>
         </aside>
       )}
@@ -562,7 +624,7 @@ export function Library(props: LibraryProps) {
         </header>
         <Switch>
           <Match when={props.section === "library"}>
-            <FolderCards {...view} />
+            <FolderView {...view} />
           </Match>
           <Match when={props.section === "search"}>
             <NoteTable view={view} title="Search results" notes={notes()} search />

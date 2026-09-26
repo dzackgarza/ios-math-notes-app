@@ -25,11 +25,21 @@ await page.evaluate(async () => {
 });
 await page.goto(new URL("?root=opfs", base).href);
 
-for (const folder of ["Algebraic Geometry", "Seminar Notes", "Derived Categories"]) {
+const toRoot = () => page.getByRole("navigation", { name: "Folder path" }).getByRole("button", { name: "My Notes", exact: true }).click();
+const newFolder = async (name: string) => {
   await page.getByRole("button", { name: "New Notebook" }).click();
-  await page.getByRole("textbox", { name: "Notebook Title" }).fill(folder);
+  await page.getByRole("textbox", { name: "Notebook Title" }).fill(name);
   await page.getByRole("button", { name: "Create Notebook" }).click();
+};
+// Three top-level folders, and Moduli inside Algebraic Geometry.
+for (const folder of ["Algebraic Geometry", "Seminar Notes", "Derived Categories"]) {
+  await toRoot();
+  await newFolder(folder);
 }
+await toRoot();
+await page.getByRole("button", { name: "Algebraic Geometry", exact: true }).click();
+await newFolder("Moduli");
+await toRoot();
 await page.getByRole("button", { name: "New Notebook" }).click();
 await page.getByRole("textbox", { name: "Notebook Title" }).fill("Minimal Models");
 await page.screenshot({ path: `${out}/new-notebook.png` });
@@ -70,8 +80,12 @@ await page.evaluate(async () => {
   await writable.close();
 });
 await page.reload();
+await page.waitForFunction(() => Array.from(document.querySelectorAll<HTMLImageElement>('img[src^="blob:"]')).filter((i) => i.complete && i.naturalWidth > 0).length === 1);
+await page.evaluate(() => Promise.all(Array.from(document.images).map((i) => i.decode())));
+await page.screenshot({ path: `${out}/library-root.png` });
 await page.getByRole("button", { name: "Algebraic Geometry", exact: true }).click();
 // The covers are page 1 as the engine draws it, loaded after the scan.
-await page.waitForFunction(() => document.querySelectorAll('img[src^="blob:"]').length === 3);
+await page.waitForFunction(() => Array.from(document.querySelectorAll<HTMLImageElement>('img[src^="blob:"]')).filter((i) => i.complete && i.naturalWidth > 0).length === 3);
+await page.evaluate(() => Promise.all(Array.from(document.images).map((i) => i.decode())));
 await page.screenshot({ path: `${out}/library.png` });
 await browser.close();

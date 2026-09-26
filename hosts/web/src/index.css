@@ -1211,3 +1211,42 @@ button {
 .move-target:hover {
   background: var(--accent-soft);
 }
+
+/* Folder navigation */
+
+.breadcrumb {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.2rem;
+  margin: 0.2rem 0 0.8rem -0.5rem;
+}
+
+.breadcrumb-step {
+  padding: 0.25rem 0.5rem;
+  border: none;
+  border-radius: var(--radius-small);
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  cursor: pointer;
+}
+
+.breadcrumb-step:hover {
+  background: var(--accent-soft);
+}
+
+.breadcrumb-step[aria-current="page"] {
+  color: var(--text);
+  font-weight: 600;
+  cursor: default;
+}
+
+.breadcrumb-separator {
+  color: var(--muted);
+}
+
+.folder-mark {
+  vertical-align: -2px;
+  color: var(--accent);
+}
