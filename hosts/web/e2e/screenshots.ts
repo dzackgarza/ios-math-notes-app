@@ -47,34 +47,24 @@ for (let line = 0; line < 4; line++) {
   await drawWithPen(page, Array.from({ length: 40 }, (_, i) => ({ x: box.x + 80 + i * 10, y: y + 6 * Math.sin(i / 2) })));
 }
 await page.screenshot({ path: `${out}/editor.png` });
-await page.getByRole("button", { name: "Library" }).click();
-await page.getByRole("button", { name: "Algebraic Geometry", exact: true }).click();
 
-// Kobalte un-hides the app a frame after a dialog or menu closes (TRAPS.md).
-const appShown = () => page.locator("#root:not([aria-hidden])").waitFor();
-for (const tag of ["Research", "AG"]) {
-  await page.getByRole("button", { name: "Add tag", exact: true }).click();
-  await page.getByRole("textbox", { name: "Name" }).fill(tag);
-  await page.getByRole("button", { name: "Add Tag", exact: true }).click();
-  await appShown();
-}
-const actions = page.getByRole("button", { name: "Minimal Models in Dimension Three actions" });
-// Checkbox items leave the menu open: Escape closes it.
-const closeMenu = async () => {
-  await page.keyboard.press("Escape");
-  await appShown();
-};
-await actions.click();
-await page.getByRole("menuitemcheckbox", { name: "Favorite" }).click();
-await closeMenu();
-// The Tags submenu by keyboard: Playwright's click on it lands on the page behind it.
-for (const [i, tag] of ["Research", "AG"].entries()) {
-  await actions.click();
-  await page.getByRole("menuitem", { name: "Tags" }).focus();
-  await page.keyboard.press("ArrowRight");
-  for (let k = 0; k < i; k++) await page.keyboard.press("ArrowDown");
-  await page.getByRole("menuitemcheckbox", { name: tag }).press("Enter");
-  await closeMenu();
-}
+// Tags and a favorite, written to the library metadata file (src/storage/metadata.ts).
+await page.evaluate(async () => {
+  const root = await navigator.storage.getDirectory();
+  const folder = await root.getDirectoryHandle("Algebraic Geometry");
+  const notes: Record<string, { favorite: boolean; tags: string[]; description: string }> = {};
+  for await (const name of folder.keys()) notes[`Algebraic Geometry/${name}`] = { favorite: true, tags: ["Research", "AG"], description: "" };
+  const metadata = {
+    format: "math-notes-library",
+    version: 1,
+    tags: [{ name: "Research", color: "#2F6FEB" }, { name: "AG", color: "#3FA35B" }],
+    notes,
+  };
+  const writable = await (await root.getFileHandle(".library.json", { create: true })).createWritable();
+  await writable.write(`${JSON.stringify(metadata, null, 2)}\n`);
+  await writable.close();
+});
+await page.reload();
+await page.getByRole("button", { name: "Algebraic Geometry", exact: true }).click();
 await page.screenshot({ path: `${out}/library.png` });
 await browser.close();
