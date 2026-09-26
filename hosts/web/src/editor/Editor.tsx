@@ -23,7 +23,6 @@ import {
   Image as ImageIcon,
   Lasso,
   PenLine,
-  Shapes,
   Type as TextIcon,
 } from "lucide-solid";
 import { For, type JSX, Show, createEffect, createResource, createSignal, onCleanup, onMount } from "solid-js";
@@ -34,7 +33,7 @@ import { capabilities, penSamples } from "../input/pointer.ts";
 import { listTemplates } from "../storage/folder.ts";
 import type { Tag } from "../storage/metadata.ts";
 import { readPens, writePens } from "../storage/pens.ts";
-import { notImplemented, presentModal, presentPopover, toast } from "../ui/ionic.ts";
+import { presentModal, presentPopover, toast } from "../ui/ionic.ts";
 import { AppMark, MenuItem, noteCount } from "../ui/Library.tsx";
 import { paperLabel } from "../ui/paper.tsx";
 import { applyTemplate, type OpenNotebook } from "./notebook.ts";
@@ -272,6 +271,34 @@ function TextSheet(props: { initial: string; dismiss: () => Promise<void>; onSav
       <IonContent class="sheet">
         <h1>Text</h1>
         <IonTextarea aria-label="Page text" value={value()} rows={6} autofocus on:ionInput={(e) => setValue(String(e.detail.value ?? ""))} />
+      </IonContent>
+    </>
+  );
+}
+
+function PdfExportSheet(props: { pages: number; dismiss: () => Promise<void>; onExport: (first: number, count: number) => void }) {
+  const [from, setFrom] = createSignal(1);
+  const [through, setThrough] = createSignal(props.pages);
+  const valid = () => Number.isInteger(from()) && Number.isInteger(through()) && from() >= 1 && from() <= through() && through() <= props.pages;
+  const save = () => {
+    if (!valid()) return;
+    props.onExport(from() - 1, through() - from() + 1);
+    void props.dismiss();
+  };
+  return (
+    <>
+      <IonHeader>
+        <IonToolbar>
+          <IonButtons slot="start"><IonButton onClick={() => void props.dismiss()}>Cancel</IonButton></IonButtons>
+          <IonButtons slot="end"><IonButton disabled={!valid()} onClick={save}>Export PDF</IonButton></IonButtons>
+        </IonToolbar>
+      </IonHeader>
+      <IonContent class="sheet">
+        <h1>Export PDF</h1>
+        <p>Choose pages from this note. The PDF keeps each page's size, paper, and ink.</p>
+        <IonInput label="From page" labelPlacement="stacked" aria-label="From page" type="number" min="1" max={props.pages} value={from()} on:ionInput={(e) => setFrom(Number(e.detail.value))} />
+        <IonInput label="Through page" labelPlacement="stacked" aria-label="Through page" type="number" min="1" max={props.pages} value={through()} on:ionInput={(e) => setThrough(Number(e.detail.value))} />
+        <Show when={!valid()}><IonNote color="danger">Choose pages from 1 to {props.pages}.</IonNote></Show>
       </IonContent>
     </>
   );
@@ -699,6 +726,22 @@ export function Editor(props: {
       { cssClass: "form-sheet" },
     );
 
+  const exportPdf = (first: number, count: number) => {
+    try {
+      const pdf = doc.exportPdf(props.notebook.name, first, count);
+      const url = URL.createObjectURL(new Blob([pdf], { type: "application/pdf" }));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${props.notebook.name}.pdf`;
+      link.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 10_000);
+    } catch (error) {
+      void toast(error instanceof Error ? error.message : "PDF export failed.", "danger");
+    }
+  };
+
+  const share = () => void presentModal((dismiss) => <PdfExportSheet pages={doc.pageCount()} dismiss={dismiss} onExport={exportPdf} />, { cssClass: "form-sheet" });
+
   return (
     <div class="editor ion-page">
       <IonHeader class="editor-header">
@@ -750,7 +793,7 @@ export function Editor(props: {
             </IonButton>
           </div>
           <IonButtons slot="end">
-            <IonButton aria-label="Share" onClick={() => notImplemented(29)}>
+            <IonButton aria-label="Share" onClick={share}>
               <IonIcon slot="icon-only" icon={shareOutline} />
             </IonButton>
             <IonButton aria-label="Page actions" onClick={pageMenu}>
@@ -776,7 +819,6 @@ export function Editor(props: {
             </For>
             <ToolItem label="Eraser" detail={ERASERS[eraser()].label} selected={tool() === ERASER} icon={<EraserIcon size={22} />} onSelect={() => selectTool(ERASER)} />
             <ToolItem label="Lasso" detail={SELECTORS[selector()].label} selected={tool() === SELECT} icon={<Lasso size={22} />} onSelect={() => selectTool(SELECT)} />
-            <ToolItem label="Shapes" selected={false} icon={<Shapes size={22} />} onSelect={() => notImplemented(10)} />
             <ToolItem label="Image" selected={false} icon={<ImageIcon size={22} />} onSelect={() => imageInput.click()} />
             <ToolItem label="Text" selected={tool() === TEXT} icon={<TextIcon size={22} />} onSelect={() => selectTool(TEXT)} />
           </IonList>

@@ -9,6 +9,7 @@
 #include <nlohmann/json.hpp>
 
 #include "editor/canvas.h"
+#include "export/pdf.h"
 #include "document/templates.h"
 #include "format/notebook.h"
 #include "format/page_svg.h"
@@ -754,6 +755,37 @@ InkStatus ink_document_page_png(InkDocument *document, size_t index, int32_t wid
   });
 }
 
+InkStatus ink_export_pdf(InkDocument *document, const char *title,
+                         const InkPdfExportSpec *spec, const uint8_t **pdf, size_t *size) {
+  return Call([&] {
+    if (!document) return NullArgument("document");
+    if (!title) return NullArgument("title");
+    if (!spec || !pdf || !size) return NullArgument("spec, pdf or size");
+    if (!*title) return Fail(INK_ERROR_ARGUMENT, "empty PDF title");
+    if (spec->include_links) return Fail(INK_ERROR_ARGUMENT, "PDF link annotations are not supported");
+    const ink_engine::Document &current = document->history.current();
+    if (!spec->page_count || spec->first_page >= current.pages.size() ||
+        spec->page_count > current.pages.size() - spec->first_page) {
+      return Fail(INK_ERROR_ARGUMENT, "PDF page range out of bounds");
+    }
+    for (size_t index = spec->first_page; index < spec->first_page + spec->page_count; ++index) {
+      const ink_engine::Page &page = *current.pages[index];
+      if (page.error) return Fail(INK_ERROR_PARSE, page.file + ": " + *page.error);
+      if (!(page.width > 0 && page.height > 0)) {
+        return Fail(INK_ERROR_ARGUMENT, page.file + ": non-positive page size");
+      }
+    }
+    if (!ink_engine::ExportPdf(current, document->assets, title, spec->first_page,
+                               spec->page_count, spec->include_hidden_layers != 0,
+                               &document->pdf)) {
+      return Fail(INK_ERROR_INTERNAL, "PDF export failed");
+    }
+    *pdf = reinterpret_cast<const uint8_t *>(document->pdf.data());
+    *size = document->pdf.size();
+    return INK_OK;
+  });
+}
+
 // ---- Layout check --------------------------------------------------------
 
 InkStatus ink_struct_layout(InkStruct which, uint32_t *out, size_t capacity, size_t *count) {
@@ -797,6 +829,11 @@ InkStatus ink_struct_layout(InkStruct which, uint32_t *out, size_t capacity, siz
       case INK_STRUCT_PEN:
         layout = {sizeof(InkPen), offsetof(InkPen, id), offsetof(InkPen, name),
                   offsetof(InkPen, tool)};
+        break;
+      case INK_STRUCT_PDF_EXPORT_SPEC:
+        layout = {sizeof(InkPdfExportSpec), offsetof(InkPdfExportSpec, first_page),
+                  offsetof(InkPdfExportSpec, page_count), offsetof(InkPdfExportSpec, include_links),
+                  offsetof(InkPdfExportSpec, include_hidden_layers)};
         break;
       default:
         return Fail(INK_ERROR_ARGUMENT, "unknown struct");

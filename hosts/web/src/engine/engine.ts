@@ -46,11 +46,12 @@ export const TOOL_SETTINGS = { byteLength: 16, brush: 0, rgb: 4, size: 8, opacit
 export const INK_PEN = { byteLength: 24, id: 0, name: 4, tool: 8 } as const;
 export const INK_FILE = { byteLength: 16, path: 0, bytes: 4, size: 8, kind: 12 } as const;
 export const SELECTION_INFO = { byteLength: 40, count: 0, page: 4, x: 8, y: 16, width: 24, height: 32 } as const;
+export const PDF_EXPORT_SPEC = { byteLength: 16, firstPage: 0, pageCount: 4, includeLinks: 8, includeHiddenLayers: 12 } as const;
 export const FileKind = { write: 0, delete: 1 } as const;
 export const PageSize = { a4: 0, letter: 1, custom: 2 } as const;
 
 // InkStruct ids of ink_struct_layout.
-export const Struct = { penSample: 0, toolSettings: 1, file: 2, selectionInfo: 3, pen: 4 } as const;
+export const Struct = { penSample: 0, toolSettings: 1, file: 2, selectionInfo: 3, pen: 4, pdfExportSpec: 5 } as const;
 
 export interface PenSample {
   x: number;
@@ -446,6 +447,23 @@ export class InkDocument {
       e.check(e.module._ink_document_page_count(this.pointer, out));
       return e.view().getUint32(out, true);
     });
+  }
+
+  exportPdf(title: string, firstPage: number, pageCount: number): Uint8Array<ArrayBuffer> {
+    const e = this.engine;
+    return e.withCString(title, (name) => e.withScratch(PDF_EXPORT_SPEC.byteLength + 8, (scratch) => {
+      const view = e.view();
+      view.setUint32(scratch + PDF_EXPORT_SPEC.firstPage, firstPage, true);
+      view.setUint32(scratch + PDF_EXPORT_SPEC.pageCount, pageCount, true);
+      view.setUint32(scratch + PDF_EXPORT_SPEC.includeLinks, 0, true);
+      view.setUint32(scratch + PDF_EXPORT_SPEC.includeHiddenLayers, 0, true);
+      const out = scratch + PDF_EXPORT_SPEC.byteLength;
+      e.check(e.module._ink_export_pdf(this.pointer, name, scratch, out, out + 4));
+      const result = e.view();
+      const bytes = result.getUint32(out, true);
+      const size = result.getUint32(out + 4, true);
+      return e.heap().slice(bytes, bytes + size);
+    }));
   }
 
   // Before page `index`; the page count appends.

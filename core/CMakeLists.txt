@@ -49,6 +49,7 @@ add_library(ink STATIC
   src/editor/erase.cpp
   src/editor/select.cpp
   src/editor/history.cpp
+  src/export/pdf.cpp
   src/layout/layout.cpp
   src/render/renderer.cpp
   src/render/text_font.cpp
@@ -85,7 +86,7 @@ if(EMSCRIPTEN)
     _ink_document_page_count _ink_document_insert_page _ink_document_delete_page
     _ink_document_move_page _ink_document_set_page_size _ink_document_set_template
     _ink_builtin_template_count _ink_builtin_template_name _ink_builtin_template_create
-    _ink_document_create_from_template
+    _ink_document_create_from_template _ink_export_pdf
     _ink_canvas_create_webgl _ink_canvas_set_view _ink_canvas_set_surface_size
     _ink_pens_default _ink_pens_read _ink_pens_write
     _ink_canvas_set_tool _ink_canvas_set_eraser _ink_canvas_set_utc_offset _ink_canvas_free _ink_canvas_page_at

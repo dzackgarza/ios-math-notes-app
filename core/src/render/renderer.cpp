@@ -236,7 +236,15 @@ void Renderer::Redraw(const SkRegion &region) {
   screen_stale_ = true;
 }
 
-void Renderer::DrawPage(SkCanvas *canvas, const Page &page, const SkRect &cull) {
+void Renderer::DrawPageForExport(SkCanvas *canvas, const Document &document, const Page &page,
+                                 bool include_hidden_layers) {
+  document_ = document;
+  DrawPage(canvas, page, SkRect::MakeWH(float(page.width), float(page.height)),
+           include_hidden_layers);
+}
+
+void Renderer::DrawPage(SkCanvas *canvas, const Page &page, const SkRect &cull,
+                        bool include_hidden_layers) {
   const Background &bg = page.background;
   // g#background in file order: the paper, the imported page image, the ruling.
   canvas->drawRect(SkRect::MakeWH(float(page.width), float(page.height)), FillPaint(bg.fill));
@@ -267,7 +275,7 @@ void Renderer::DrawPage(SkCanvas *canvas, const Page &page, const SkRect &cull) 
   for (const LayerContent &content : page.layers) {
     auto layer = std::find_if(layers.begin(), layers.end(),
                               [&](const Layer &l) { return l.id == content.layer_id; });
-    if (layer != layers.end() && layer->hidden) continue;
+    if (!include_hidden_layers && layer != layers.end() && layer->hidden) continue;
     DrawElements(canvas, page, content.elements, cull);
   }
 }

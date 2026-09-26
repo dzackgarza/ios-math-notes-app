@@ -26,6 +26,8 @@ struct InkDocument {
   std::vector<InkFile> dirty_view;
   // The last ink_document_page_png result.
   std::string png;
+  // The last ink_export_pdf result.
+  std::string pdf;
 };
 
 struct InkCanvas {

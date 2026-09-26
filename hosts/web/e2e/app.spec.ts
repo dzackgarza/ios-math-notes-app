@@ -1,7 +1,8 @@
 // The deployed web app in Chromium: pen input through CDP, saving to the
 // origin-private file system (?root=opfs), reload, and offline start.
 /// <reference path="../src/window.d.ts" />
-import { expect, type Locator, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
+import { readFile } from "node:fs/promises";
 
 const APP = "?root=opfs";
 
@@ -953,46 +954,53 @@ test("a thumbnail is rendered again when an image that page 1 shows changes", as
   expect(await cachedColor()).toEqual([0, 0, 255]);
 });
 
-// Every file under the notes root, with its size and modification time.
-async function notesFolderState(page: Page): Promise<string[]> {
-  return page.evaluate(async () => {
-    const files: string[] = [];
-    const walk = async (dir: FileSystemDirectoryHandle, prefix: string) => {
-      for await (const [name, handle] of dir.entries()) {
-        if (handle.kind === "directory") {
-          await walk(handle, `${prefix}${name}/`);
-          continue;
-        }
-        const file = await handle.getFile();
-        files.push(`${prefix}${name} ${file.size} ${file.lastModified}`);
-      }
-    };
-    await walk(await navigator.storage.getDirectory(), "");
-    return files.sort();
-  });
-}
-
-// Clicks each control, which is placed from the mockups before its feature
-// lands (#57): each shows a toast naming the issue that implements it, and
-// the notes folder is unchanged.
-async function expectStubs(page: Page, controls: [Locator, number][]): Promise<void> {
-  const before = await notesFolderState(page);
-  for (const [control, issue] of controls) {
-    await control.click();
-    await expect(page.locator("ion-toast")).toHaveCount(1);
-    await expect(page.getByText(`Not implemented yet (#${issue})`, { exact: true })).toBeVisible();
-    await page.evaluate(() => Promise.all(Array.from(document.querySelectorAll<HTMLElement & { dismiss(): Promise<boolean> }>("ion-toast"), (t) => t.dismiss())));
-    await expect(page.locator("ion-toast")).toHaveCount(0);
-  }
-  expect(await notesFolderState(page)).toEqual(before);
-}
-
-test("each control whose feature has not landed names its issue and changes no file", async ({ page }) => {
+test("Share exports the open notebook as a PDF", async ({ page }) => {
   await startEmpty(page);
-  await newNote(page, "Stubs");
-  await expect.poll(async () => (await notesFolderState(page)).some((f) => f.startsWith(".pens.json ")), { timeout: 5000 }).toBe(true);
-  await expectStubs(page, [
-    [page.getByRole("button", { name: "Shapes", exact: true }), 10],
-    [page.getByRole("button", { name: "Share" }), 29],
+  await newNote(page, "Algebra");
+  await drawWithPen(page, [
+    { x: 300, y: 200 },
+    { x: 330, y: 210 },
+    { x: 360, y: 200 },
   ]);
+  await expect.poll(async () => {
+    const svg = Buffer.from(await readOpfsFile(page, "Algebra/pages/0001.svg"), "base64").toString();
+    return svg.includes('<path id="s-');
+  }).toBe(true);
+
+  await page.getByRole("button", { name: "Share" }).click();
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Export PDF" }).click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toBe("Algebra.pdf");
+  const pdf = await readFile((await download.path())!);
+  expect(pdf.subarray(0, 5).toString()).toBe("%PDF-");
+  expect(pdf.length).toBeGreaterThan(1000);
+});
+
+test("Share exports only the selected PDF page range", async ({ page }) => {
+  await startEmpty(page);
+  await newNote(page, "Range");
+  await drawWithPen(page, [
+    { x: 300, y: 200 },
+    { x: 330, y: 210 },
+    { x: 360, y: 200 },
+  ]);
+  await page.getByRole("button", { name: "Page actions" }).click();
+  await page.getByText("Insert page after", { exact: true }).click();
+  await expect(page.getByLabel("Page", { exact: true })).toHaveText(/\/ 2$/);
+
+  await page.getByRole("button", { name: "Share" }).click();
+  await page.getByLabel("From page").fill("2");
+  const secondDownload = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Export PDF" }).click();
+  const second = await readFile((await (await secondDownload).path())!);
+
+  await page.getByRole("button", { name: "Share" }).click();
+  await page.getByLabel("Through page").fill("1");
+  const firstDownload = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Export PDF" }).click();
+  const first = await readFile((await (await firstDownload).path())!);
+  expect(first.subarray(0, 5).toString()).toBe("%PDF-");
+  expect(second.subarray(0, 5).toString()).toBe("%PDF-");
+  expect(first).not.toEqual(second);
 });

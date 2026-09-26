@@ -304,6 +304,22 @@ InkStatus ink_document_page_rect(InkDocument *document, size_t index, double *x,
 InkStatus ink_document_page_png(InkDocument *document, size_t index, int32_t width,
                                 const uint8_t **png, size_t *size);
 
+/* A zero-based consecutive page range. `include_links` is reserved for link
+   annotations (#32) and must be zero. Hidden layers are omitted unless
+   `include_hidden_layers` is nonzero. */
+typedef struct InkPdfExportSpec {
+  size_t first_page;
+  size_t page_count;
+  uint32_t include_links;
+  uint32_t include_hidden_layers;
+} InkPdfExportSpec;
+
+/* Exports the range as PDF at each page's native point size. `title` is the
+   UTF-8 note title supplied by the host. The bytes stay valid until the next
+   export on this document or ink_document_free. */
+InkStatus ink_export_pdf(InkDocument *document, const char *title,
+                         const InkPdfExportSpec *spec, const uint8_t **pdf, size_t *size);
+
 /* ---- Layout check ----------------------------------------------------- */
 
 typedef enum InkStruct {
@@ -311,7 +327,8 @@ typedef enum InkStruct {
   INK_STRUCT_TOOL_SETTINGS = 1,
   INK_STRUCT_FILE = 2,
   INK_STRUCT_SELECTION_INFO = 3,
-  INK_STRUCT_PEN = 4
+  INK_STRUCT_PEN = 4,
+  INK_STRUCT_PDF_EXPORT_SPEC = 5
 } InkStruct;
 
 /* The struct's size, then the offset of each field in declaration order,
@@ -364,6 +381,12 @@ static_assert(offsetof(InkSelectionInfo, y) == 16);
 static_assert(offsetof(InkSelectionInfo, width) == 24);
 static_assert(offsetof(InkSelectionInfo, height) == 32);
 static_assert(sizeof(InkSelectionInfo) == 40);
+
+static_assert(offsetof(InkPdfExportSpec, first_page) == 0);
+static_assert(offsetof(InkPdfExportSpec, page_count) == sizeof(size_t));
+static_assert(offsetof(InkPdfExportSpec, include_links) == 2 * sizeof(size_t));
+static_assert(offsetof(InkPdfExportSpec, include_hidden_layers) == 2 * sizeof(size_t) + 4);
+static_assert(sizeof(InkPdfExportSpec) == 2 * sizeof(size_t) + 8);
 #endif
 
 #endif
