@@ -28,7 +28,7 @@ import { For, Match, Show, Switch, createEffect, createResource, createSignal, o
 
 import { Brush, Eraser, PageSize, Selector, type Canvas, type Pen, type SelectionInfo, type ToolSettings } from "../engine/engine.ts";
 import { ViewController, type View } from "../input/gestures.ts";
-import { browserEngine, capabilities, penSamples } from "../input/pointer.ts";
+import { capabilities, penSamples } from "../input/pointer.ts";
 import { listTemplates } from "../storage/folder.ts";
 import { readPens, writePens } from "../storage/pens.ts";
 import { AppMark } from "../ui/Library.tsx";
@@ -174,7 +174,6 @@ export function Editor(props: {
   let canvas: Canvas | undefined;
   let frame = 0;
   const ids = { next: 0 };
-  const engineName = browserEngine();
   const { document: doc, saver, root } = props.notebook;
   const [templates] = createResource(() => listTemplates(root));
   const [template, setTemplate] = createSignal(props.notebook.template);
@@ -308,7 +307,7 @@ export function Editor(props: {
       element.setPointerCapture(e.pointerId);
       setSelection(null); // the actions return where the gesture leaves the selection
     }
-    canvas.input(penSamples(e, at, capabilities(engineName, e.pointerType), ids));
+    canvas.input(penSamples(e, at, capabilities(e.pointerType), ids));
     if (e.type === "pointerup" || e.type === "pointercancel") {
       refreshSelection();
       saver.schedule();

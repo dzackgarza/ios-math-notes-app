@@ -1,5 +1,4 @@
-// Two-finger pan and pinch zoom on synthetic touch pointers, in Chromium,
-// Firefox and WebKit (vitest.config.ts).
+// Two-finger pan and pinch zoom on synthetic touch pointers, in Chromium (vitest.config.ts).
 import { expect, test } from "vitest";
 
 import { MAX_SCALE, ViewController, type View } from "./gestures.ts";

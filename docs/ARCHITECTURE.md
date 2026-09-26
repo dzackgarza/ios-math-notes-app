@@ -32,7 +32,7 @@ Work order and milestones: the GitHub issue tree rooted at
 
 | Host | Role |
 | --- | --- |
-| Web (WASM, PWA) | Built first. The product on Linux, Windows, and macOS. Chrome, Firefox, and Safari. |
+| Web (WASM, PWA) | Built first. The product on Linux, Windows, and macOS, in desktop Chrome. |
 | iPadOS (UIKit) | Built second. Native host, not a WKWebView. Needed for Pencil double tap, Pencil Pro squeeze and barrel roll, hover pose, haptics, and the shortest input-to-display path. |
 
 ## Rules
@@ -124,9 +124,8 @@ needs no COOP/COEP headers.
 | UI chrome (toolbars, library, panels) | SolidJS 1.9, [Kobalte](https://github.com/kobaltedev/kobalte) components | [#5](https://github.com/dzackgarza/math-notes-app/issues/5) |
 | Build, dev server, PWA | Vite 8 (run with `bunx --bun vite`), vite-plugin-pwa 1.3 | [#5](https://github.com/dzackgarza/math-notes-app/issues/5) |
 | Folder handle persistence (Chromium) | idb-keyval 6.3 | [#5](https://github.com/dzackgarza/math-notes-app/issues/5) |
-| WebDAV client (Firefox, Safari) | [webdav](https://github.com/perry-mitchell/webdav-client) 5.11 | [#27](https://github.com/dzackgarza/math-notes-app/issues/27) |
 | PDF page rasterizer | [mupdf](https://www.npmjs.com/package/mupdf) (Artifex's WASM build), in a Web Worker, loaded only at import | [#8](https://github.com/dzackgarza/math-notes-app/issues/8) |
-| Tests | Vitest 5 Browser Mode with the Playwright 1.63 provider (Chromium, Firefox, WebKit) | [#5](https://github.com/dzackgarza/math-notes-app/issues/5) |
+| Tests | Vitest 5 Browser Mode with the Playwright 1.63 provider (Chromium) | [#5](https://github.com/dzackgarza/math-notes-app/issues/5) |
 
 Pointer events go straight to the engine; no pen sample passes through Solid
 state.

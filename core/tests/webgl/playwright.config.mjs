@@ -14,9 +14,5 @@ export default defineConfig({
       name: "chromium-gpu",
       use: { ...devices["Desktop Chrome"], launchOptions: { args: ["--use-angle=gl", "--ignore-gpu-blocklist"] } },
     },
-    // Headless Firefox on a GPU-less runner finds no GL driver; CI runs it
-    // headed under Xvfb, where Mesa supplies GL.
-    { name: "firefox", use: { ...devices["Desktop Firefox"], headless: !process.env.CI } },
-    { name: "webkit", use: { ...devices["Desktop Safari"] } },
   ],
 });

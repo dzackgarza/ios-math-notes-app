@@ -25,14 +25,14 @@ jobs:
       - name: Install
         run: |
           bun install --frozen-lockfile
-          bunx playwright install --with-deps chromium firefox webkit
+          bunx playwright install --with-deps chromium
 
       - name: Type check and build
         run: |
           bunx tsc -b
           bunx --bun vite build
 
-      - name: Vitest Browser Mode in Chromium, Firefox and WebKit
+      - name: Vitest Browser Mode in Chromium
         run: bunx vitest run
 
       - name: Deploy to nginx
